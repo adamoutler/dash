@@ -87,7 +87,7 @@ async def fetch_forgejo_status(owner: str, repo: str, token: str, forgejo_url: s
                 "status": common_status,
                 "url": f"{forgejo_url}/{owner}/{repo}/actions/runs/{run.get('id', '')}",
                 "repo_url": f"{forgejo_url}/{owner}/{repo}",
-                "updated_at": run.get("updated_at", ""),
+                "updated_at": run.get("updated", run.get("updated_at", "")),
                 "commit_message": commit_msg
             }
     except Exception:
