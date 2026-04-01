@@ -69,7 +69,7 @@ async def fetch_forgejo_status(owner: str, repo: str, token: str, forgejo_url: s
             runs_data = runs_resp.json()
             commits_data = commits_resp.json()
             
-            run = runs_data.get("workflow_runs", [{}])[0] if runs_data.get("workflow_runs") else {}
+            run = runs_data.get("workflow_runs", [{}])[-1] if runs_data.get("workflow_runs") else {}
             commit_msg = commits_data[0].get("commit", {}).get("message", "No commit message").split("\n")[0] if commits_data else ""
             
             status = run.get("status", "unknown")
