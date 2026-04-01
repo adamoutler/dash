@@ -1,9 +1,9 @@
 import httpx
 import os
 
-def _error_result(owner, repo):
+def _error_result(provider, owner, repo):
     return {
-        "provider": "unknown",
+        "provider": provider,
         "owner": owner,
         "repo": repo,
         "status": "error",
@@ -23,7 +23,7 @@ async def fetch_github_status(owner: str, repo: str, token: str):
             commits_resp = await client.get(f"{base_url}/commits?per_page=1", headers=headers)
             
             if runs_resp.status_code != 200 or commits_resp.status_code != 200:
-                return _error_result(owner, repo)
+                return _error_result("github", owner, repo)
 
             runs_data = runs_resp.json()
             commits_data = commits_resp.json()
@@ -47,11 +47,11 @@ async def fetch_github_status(owner: str, repo: str, token: str):
                 "commit_message": commit_msg
             }
     except Exception:
-        return _error_result(owner, repo)
+        return _error_result("github", owner, repo)
 
 async def fetch_forgejo_status(owner: str, repo: str, token: str, forgejo_url: str):
     if not forgejo_url:
-        return _error_result(owner, repo)
+        return _error_result("forgejo", owner, repo)
     
     headers = {"Authorization": f"token {token}", "Accept": "application/json"} if token else {}
     base_url = f"{forgejo_url.rstrip('/')}/api/v1/repos/{owner}/{repo}"
@@ -64,7 +64,7 @@ async def fetch_forgejo_status(owner: str, repo: str, token: str, forgejo_url: s
             commits_resp = await client.get(f"{base_url}/commits?limit=1", headers=headers)
             
             if runs_resp.status_code != 200 or commits_resp.status_code != 200:
-                return _error_result(owner, repo)
+                return _error_result("forgejo", owner, repo)
 
             runs_data = runs_resp.json()
             commits_data = commits_resp.json()
@@ -91,4 +91,4 @@ async def fetch_forgejo_status(owner: str, repo: str, token: str, forgejo_url: s
                 "commit_message": commit_msg
             }
     except Exception:
-        return _error_result(owner, repo)
+        return _error_result("forgejo", owner, repo)
