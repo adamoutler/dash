@@ -43,15 +43,11 @@ This is especially useful for Forgejo instances that do not expose logs natively
 
 Upload logs using a POST request:
 ```bash
-curl -X POST "https://dash.hackedyour.info/api/logs" \
-     -H "Content-Type: application/json" \
-     -d '{
-           "provider": "forgejo",
-           "owner": "adamoutler",
-           "repo": "plane-mcp-rework",
-           "log_text": "Your raw log text content here..."
-         }'
+curl -X POST "https://dash.hackedyour.info/api/logs?provider=forgejo&owner=adamoutler&repo=plane-mcp-rework" \
+     -H "Content-Type: text/plain" \
+     --data-binary @job-logs.txt
 ```
+To prevent DDOS and memory exhaustion, the dashboard uses a cyclic buffer to keep only the final 2MB of any uploaded log. Anything larger is automatically truncated, keeping the tail.
 
 ## 5. Get Artifacts (Recommended for Forgejo/Gitea)
 Since Gitea/Forgejo APIs do not always natively support programmatic log downloading, it is highly recommended that LLMs and AI Agents update the repository's CI workflow file (e.g., `.forgejo/workflows/` or `.github/workflows/`) to **explicitly upload an artifact** (like a build output or test summary) via `actions/upload-artifact@v4`.
