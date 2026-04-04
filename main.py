@@ -26,6 +26,10 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 async def read_index():
     return FileResponse("static/index.html")
 
+@app.get("/llms.txt")
+async def read_llms_txt():
+    return FileResponse("static/llms.txt")
+
 @app.get("/api/logs")
 async def get_logs(provider: str, owner: str, repo: str):
     github_token = os.environ.get("GITHUB_TOKEN", "")

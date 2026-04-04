@@ -1,0 +1,44 @@
+# CI Dashboard API Instructions for LLMs
+
+This dashboard provides a REST API to monitor, fetch logs, and wait for CI/CD actions to complete on GitHub and Forgejo/Gitea.
+
+## 1. Read All Statuses
+Fetch the latest status of all tracked repositories:
+`curl -s https://dash.hackedyour.info/api/status`
+
+Returns a JSON array of objects:
+[
+  {
+    "provider": "github|forgejo",
+    "owner": "string",
+    "repo": "string",
+    "status": "success|failure|running|cancelled|error",
+    "url": "string (direct link to action)",
+    "repo_url": "string",
+    "updated_at": "ISO-8601 timestamp",
+    "commit_message": "string",
+    "custom_links": [{"name": "string", "url": "string"}]
+  }
+]
+
+## 2. Find Isolated/Targeted Information
+Combine `/api/status` with `jq` to target a specific repository:
+`curl -s https://dash.hackedyour.info/api/status | jq '.[] | select(.owner=="adamoutler" and .repo=="gemini-webui")'`
+
+To just extract the status:
+`curl -s https://dash.hackedyour.info/api/status | jq -r '.[] | select(.owner=="adamoutler" and .repo=="gemini-webui") | .status'`
+
+## 3. Get Logs for a Run
+Fetch the raw log output or a link to the log for the latest run:
+`curl -s "https://dash.hackedyour.info/api/logs?provider=github&owner=adamoutler&repo=gemini-webui"`
+
+Returns:
+{
+  "log": "Raw string content of the log or a message linking to the Web UI"
+}
+
+## 4. Wait for a Build (Long-Polling)
+Hold the connection open and wait until an in-progress build completes:
+`curl -N -s "https://dash.hackedyour.info/api/wait?provider=github&owner=adamoutler&repo=gemini-webui"`
+
+This streams "." characters while the build is "running", "in_progress", "queued", or "waiting", and outputs a final JSON block once the status is terminal (e.g. "success", "failure").
