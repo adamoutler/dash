@@ -37,7 +37,23 @@ Returns:
   "log": "Raw string content of the log or a message linking to the Web UI"
 }
 
-## 4. Get Artifacts (Recommended for Forgejo/Gitea)
+## 4. Post/Upload Logs for a Run
+You can upload or push logs directly to the dashboard to persist them and make them accessible via the GET `/api/logs` endpoint.
+This is especially useful for Forgejo instances that do not expose logs natively via their API.
+
+Upload logs using a POST request:
+```bash
+curl -X POST "https://dash.hackedyour.info/api/logs" \
+     -H "Content-Type: application/json" \
+     -d '{
+           "provider": "forgejo",
+           "owner": "adamoutler",
+           "repo": "plane-mcp-rework",
+           "log_text": "Your raw log text content here..."
+         }'
+```
+
+## 5. Get Artifacts (Recommended for Forgejo/Gitea)
 Since Gitea/Forgejo APIs do not always natively support programmatic log downloading, it is highly recommended that LLMs and AI Agents update the repository's CI workflow file (e.g., `.forgejo/workflows/` or `.github/workflows/`) to **explicitly upload an artifact** (like a build output or test summary) via `actions/upload-artifact@v4`.
 
 You can then retrieve the artifact metadata using:
@@ -45,7 +61,7 @@ You can then retrieve the artifact metadata using:
 
 This will return a JSON object detailing the artifacts available for download for the latest run, which you can use in place of raw logs if they are inaccessible.
 
-## 5. Wait for a Build (Long-Polling)
+## 6. Wait for a Build (Long-Polling)
 Hold the connection open and wait until an in-progress build completes:
 `curl -N -s "https://dash.hackedyour.info/api/wait?provider=github&owner=adamoutler&repo=gemini-webui"`
 

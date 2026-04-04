@@ -18,6 +18,15 @@ class RepoItem(BaseModel):
     repo: str
     custom_links: Optional[list] = None
 
+class LogPayload(BaseModel):
+    provider: str
+    owner: str
+    repo: str
+    log_text: str
+
+LOGS_DIR = os.environ.get("LOGS_DIR", "logs")
+os.makedirs(LOGS_DIR, exist_ok=True)
+
 # Mount static files
 os.makedirs("static", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -42,8 +51,33 @@ async def get_artifacts(provider: str, owner: str, repo: str):
         return await fetch_forgejo_artifacts(owner, repo, forgejo_token, forgejo_url)
     return {"error": "Unknown provider"}
 
+@app.post("/api/logs")
+async def post_logs(payload: LogPayload):
+    safe_provider = "".join(c for c in payload.provider if c.isalnum() or c in "-_")
+    safe_owner = "".join(c for c in payload.owner if c.isalnum() or c in "-_")
+    safe_repo = "".join(c for c in payload.repo if c.isalnum() or c in "-_")
+    
+    filename = f"{safe_provider}_{safe_owner}_{safe_repo}_latest.log"
+    filepath = os.path.join(LOGS_DIR, filename)
+    
+    with open(filepath, "w", encoding="utf-8") as f:
+        f.write(payload.log_text)
+        
+    return {"message": "Log saved successfully", "file": filename}
+
 @app.get("/api/logs")
 async def get_logs(provider: str, owner: str, repo: str):
+    safe_provider = "".join(c for c in provider if c.isalnum() or c in "-_")
+    safe_owner = "".join(c for c in owner if c.isalnum() or c in "-_")
+    safe_repo = "".join(c for c in repo if c.isalnum() or c in "-_")
+    
+    filename = f"{safe_provider}_{safe_owner}_{safe_repo}_latest.log"
+    filepath = os.path.join(LOGS_DIR, filename)
+    
+    if os.path.exists(filepath):
+        with open(filepath, "r", encoding="utf-8") as f:
+            return {"log": f.read()}
+
     github_token = os.environ.get("GITHUB_TOKEN", "")
     forgejo_token = os.environ.get("FORGEJO_TOKEN", "")
     forgejo_url = os.environ.get("FORGEJO_URL", "")

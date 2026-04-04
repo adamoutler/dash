@@ -7,9 +7,12 @@ services:
       FORGEJO_URL: "https://git.adamoutler.com"
       FORGEJO_TOKEN: "${FORGEJO_TOKEN}"
       GITHUB_TOKEN: "${GITHUB_TOKEN}"
+      LOGS_DIR: "/app/logs"
     volumes:
       - dashboard_data:/app/data
+      - dashboard_logs:/app/logs
     restart: unless-stopped
 
 volumes:
   dashboard_data:
+  dashboard_logs:
