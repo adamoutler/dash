@@ -4,6 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import os
 from pydantic import BaseModel
+from typing import Optional
 from api.storage import RepoStorage
 from api.git_providers import fetch_github_status, fetch_forgejo_status
 
@@ -14,6 +15,7 @@ class RepoItem(BaseModel):
     provider: str
     owner: str
     repo: str
+    ci_cd_url: Optional[str] = None
 
 # Mount static files
 os.makedirs("static", exist_ok=True)
@@ -38,11 +40,16 @@ async def get_status():
             tasks.append(fetch_forgejo_status(r["owner"], r["repo"], forgejo_token, forgejo_url))
 
     results = await asyncio.gather(*tasks)
+    
+    for i, r in enumerate(repos):
+        if i < len(results):
+            results[i]["ci_cd_url"] = r.get("ci_cd_url", "")
+
     return results
 
 @app.post("/api/repos")
 async def add_repo(item: RepoItem):
-    storage.add_repo(item.provider, item.owner, item.repo)
+    storage.add_repo(item.provider, item.owner, item.repo, item.ci_cd_url)
     return {"message": "added"}
 
 @app.delete("/api/repos")

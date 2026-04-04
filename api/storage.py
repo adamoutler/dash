@@ -19,12 +19,20 @@ class RepoStorage:
         with open(self.file_path, "w") as f:
             json.dump(repos, f, indent=2)
 
-    def add_repo(self, provider, owner, repo):
+    def add_repo(self, provider, owner, repo, ci_cd_url=None):
         repos = self.get_repos()
         new_repo = {"provider": provider, "owner": owner, "repo": repo}
-        if new_repo not in repos:
-            repos.append(new_repo)
-            self._save_repos(repos)
+        if ci_cd_url:
+            new_repo["ci_cd_url"] = ci_cd_url
+            
+        for i, r in enumerate(repos):
+            if r["provider"] == provider and r["owner"] == owner and r["repo"] == repo:
+                repos[i] = new_repo
+                self._save_repos(repos)
+                return
+                
+        repos.append(new_repo)
+        self._save_repos(repos)
 
     def remove_repo(self, provider, owner, repo):
         repos = self.get_repos()

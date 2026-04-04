@@ -27,8 +27,11 @@
         .time-text { color: #586069; font-size: 14px; margin-right: 30px; }
         .commit-msg { color: #586069; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 600px; }
         
-        .delete-btn { position: absolute; right: 15px; top: 15px; background: none; border: none; color: #cb2431; cursor: pointer; font-size: 18px; font-weight: bold; padding: 0; }
-        .delete-btn:hover { color: #9e1c23; }
+        .actions-container { position: absolute; right: 15px; top: 15px; display: flex; gap: 15px; }
+        .icon-btn { background: none; border: none; cursor: pointer; font-size: 18px; padding: 0; opacity: 0.6; transition: opacity 0.2s; font-weight: bold; }
+        .icon-btn:hover { opacity: 1; }
+        .delete-btn { color: #cb2431; }
+        .edit-btn { color: #0366d6; font-size: 20px; line-height: 18px; }
     </style>
 </head>
 <body>
@@ -45,7 +48,8 @@
         </select>
         <input type="text" id="owner" placeholder="Owner (e.g. adamoutler)" required>
         <input type="text" id="repo" placeholder="Repo (e.g. dashboard)" required>
-        <button class="add-btn" onclick="addRepo()">Add</button>
+        <input type="url" id="ci_cd_url" placeholder="CI/CD URL (e.g. Jenkins link)">
+        <button class="add-btn" id="submitBtn" onclick="addRepo()">Add</button>
     </div>
 
     <div class="repo-list" id="repoList">
@@ -55,26 +59,58 @@
 </div>
 
 <script>
-    function toggleForm() {
+    function toggleForm(isEdit = false, provider = 'github', owner = '', repo = '', ci_cd_url = '') {
         const form = document.getElementById('addForm');
-        form.style.display = form.style.display === 'block' ? 'none' : 'block';
+        
+        if (isEdit === true) {
+            document.getElementById('provider').value = provider;
+            document.getElementById('owner').value = owner;
+            document.getElementById('repo').value = repo;
+            document.getElementById('ci_cd_url').value = ci_cd_url || '';
+            document.getElementById('owner').readOnly = true;
+            document.getElementById('repo').readOnly = true;
+            document.getElementById('provider').disabled = true;
+            document.getElementById('submitBtn').innerText = 'Update';
+            form.style.display = 'block';
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        } else {
+            if (form.style.display === 'block' && document.getElementById('submitBtn').innerText !== 'Update') {
+                form.style.display = 'none';
+            } else {
+                document.getElementById('owner').readOnly = false;
+                document.getElementById('repo').readOnly = false;
+                document.getElementById('provider').disabled = false;
+                document.getElementById('owner').value = '';
+                document.getElementById('repo').value = '';
+                document.getElementById('ci_cd_url').value = '';
+                document.getElementById('submitBtn').innerText = 'Add';
+                form.style.display = 'block';
+            }
+        }
     }
 
     async function addRepo() {
         const provider = document.getElementById('provider').value;
         const owner = document.getElementById('owner').value;
         const repo = document.getElementById('repo').value;
+        const ci_cd_url = document.getElementById('ci_cd_url').value;
         if(!owner || !repo) return;
         
         await fetch('/api/repos', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({provider, owner, repo})
+            body: JSON.stringify({provider, owner, repo, ci_cd_url})
         });
         
         document.getElementById('owner').value = '';
         document.getElementById('repo').value = '';
-        toggleForm();
+        document.getElementById('ci_cd_url').value = '';
+        document.getElementById('submitBtn').innerText = 'Add';
+        document.getElementById('owner').readOnly = false;
+        document.getElementById('repo').readOnly = false;
+        document.getElementById('provider').disabled = false;
+        
+        document.getElementById('addForm').style.display = 'none';
         fetchStatuses();
     }
 
@@ -123,7 +159,10 @@
                     ${getStatusIcon(item.status)}
                 </a>
                 <div class="info-block">
-                    <button class="delete-btn" onclick="removeRepo('${item.provider}', '${item.owner}', '${item.repo}')">✕</button>
+                    <div class="actions-container">
+                        <button class="icon-btn edit-btn" onclick="toggleForm(true, '${item.provider}', '${item.owner}', '${item.repo}', '${item.ci_cd_url || ''}')" title="Edit">✎</button>
+                        <button class="icon-btn delete-btn" onclick="removeRepo('${item.provider}', '${item.owner}', '${item.repo}')" title="Remove">✕</button>
+                    </div>
                     <a href="${item.repo_url}" target="_blank" style="text-decoration: none; color: inherit;">
                         <div class="info-header">
                             <span class="repo-name">${item.owner}/${item.repo}</span>
@@ -131,6 +170,7 @@
                         </div>
                         <div class="commit-msg">${item.commit_message || 'No commit info'}</div>
                     </a>
+                    ${item.ci_cd_url ? `<div style="margin-top: 8px;"><a href="${item.ci_cd_url}" target="_blank" style="text-decoration: none; color: #0366d6; font-size: 13px; font-weight: bold;">🔗 Jenkins Pipeline</a></div>` : ''}
                 </div>
             </div>
         `).join('');
