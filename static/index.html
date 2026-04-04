@@ -32,6 +32,14 @@
         .icon-btn:hover { opacity: 1; }
         .delete-btn { color: #cb2431; }
         .edit-btn { color: #0366d6; font-size: 20px; line-height: 18px; }
+        
+        .link-row { display: flex; gap: 10px; margin-top: 10px; align-items: center; }
+        .link-row input { flex: 1; margin: 0; }
+        .remove-link-btn { background: none; border: none; color: #cb2431; cursor: pointer; font-size: 16px; font-weight: bold; padding: 0 5px; }
+        .add-link-btn { background: none; border: 1px dashed #d1d5da; color: #586069; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; margin-top: 10px; }
+        .custom-links-container { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 10px; }
+        .custom-link { text-decoration: none; color: #0366d6; font-size: 13px; font-weight: bold; background: #f1f8ff; padding: 2px 6px; border-radius: 10px; }
+        .custom-link:hover { background: #dbedff; }
     </style>
 </head>
 <body>
@@ -42,14 +50,21 @@
     </div>
 
     <div class="add-form" id="addForm">
-        <select id="provider">
-            <option value="github">GitHub</option>
-            <option value="forgejo">Forgejo / Gitea</option>
-        </select>
-        <input type="text" id="owner" placeholder="Owner (e.g. adamoutler)" required>
-        <input type="text" id="repo" placeholder="Repo (e.g. dashboard)" required>
-        <input type="url" id="ci_cd_url" placeholder="CI/CD URL (e.g. Jenkins link)">
-        <button class="add-btn" id="submitBtn" onclick="addRepo()">Add</button>
+        <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+            <select id="provider">
+                <option value="github">GitHub</option>
+                <option value="forgejo">Forgejo / Gitea</option>
+            </select>
+            <input type="text" id="owner" placeholder="Owner (e.g. adamoutler)" required>
+            <input type="text" id="repo" placeholder="Repo (e.g. dashboard)" required>
+        </div>
+        <div id="linksContainer">
+            <!-- Dynamic links go here -->
+        </div>
+        <button type="button" class="add-link-btn" onclick="addLinkRow()">+ Add custom link (e.g. Prod, Jenkins, Docs)</button>
+        <div style="margin-top: 15px;">
+            <button class="add-btn" id="submitBtn" onclick="addRepo()">Add</button>
+        </div>
     </div>
 
     <div class="repo-list" id="repoList">
@@ -59,18 +74,38 @@
 </div>
 
 <script>
-    function toggleForm(isEdit = false, provider = 'github', owner = '', repo = '', ci_cd_url = '') {
+    function addLinkRow(name = '', url = '') {
+        const container = document.getElementById('linksContainer');
+        const row = document.createElement('div');
+        row.className = 'link-row';
+        row.innerHTML = `
+            <input type="text" class="link-name" placeholder="Name (e.g. Prod)" value="${name}">
+            <input type="url" class="link-url" placeholder="URL (e.g. https://...)" value="${url}">
+            <button type="button" class="remove-link-btn" onclick="this.parentElement.remove()" title="Remove Link">✕</button>
+        `;
+        container.appendChild(row);
+    }
+
+    function toggleForm(isEdit = false, provider = 'github', owner = '', repo = '', customLinksRaw = '') {
         const form = document.getElementById('addForm');
+        document.getElementById('linksContainer').innerHTML = ''; // clear links
         
+        let customLinks = [];
+        try {
+            if (customLinksRaw) customLinks = JSON.parse(decodeURIComponent(customLinksRaw));
+        } catch(e) {}
+
         if (isEdit === true) {
             document.getElementById('provider').value = provider;
             document.getElementById('owner').value = owner;
             document.getElementById('repo').value = repo;
-            document.getElementById('ci_cd_url').value = ci_cd_url || '';
             document.getElementById('owner').readOnly = true;
             document.getElementById('repo').readOnly = true;
             document.getElementById('provider').disabled = true;
             document.getElementById('submitBtn').innerText = 'Update';
+            
+            customLinks.forEach(link => addLinkRow(link.name, link.url));
+            
             form.style.display = 'block';
             window.scrollTo({ top: 0, behavior: 'smooth' });
         } else {
@@ -82,7 +117,6 @@
                 document.getElementById('provider').disabled = false;
                 document.getElementById('owner').value = '';
                 document.getElementById('repo').value = '';
-                document.getElementById('ci_cd_url').value = '';
                 document.getElementById('submitBtn').innerText = 'Add';
                 form.style.display = 'block';
             }
@@ -93,22 +127,32 @@
         const provider = document.getElementById('provider').value;
         const owner = document.getElementById('owner').value;
         const repo = document.getElementById('repo').value;
-        const ci_cd_url = document.getElementById('ci_cd_url').value;
+        
+        const linkRows = document.querySelectorAll('.link-row');
+        const custom_links = [];
+        linkRows.forEach(row => {
+            const name = row.querySelector('.link-name').value.trim();
+            const url = row.querySelector('.link-url').value.trim();
+            if (name && url) {
+                custom_links.push({ name, url });
+            }
+        });
+        
         if(!owner || !repo) return;
         
         await fetch('/api/repos', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({provider, owner, repo, ci_cd_url})
+            body: JSON.stringify({provider, owner, repo, custom_links})
         });
         
         document.getElementById('owner').value = '';
         document.getElementById('repo').value = '';
-        document.getElementById('ci_cd_url').value = '';
         document.getElementById('submitBtn').innerText = 'Add';
         document.getElementById('owner').readOnly = false;
         document.getElementById('repo').readOnly = false;
         document.getElementById('provider').disabled = false;
+        document.getElementById('linksContainer').innerHTML = '';
         
         document.getElementById('addForm').style.display = 'none';
         fetchStatuses();
@@ -153,7 +197,15 @@
             return;
         }
 
-        list.innerHTML = data.map(item => `
+        list.innerHTML = data.map(item => {
+            const linksHtml = (item.custom_links && item.custom_links.length > 0) ? 
+                `<div class="custom-links-container">
+                    ${item.custom_links.map(link => `<a href="${link.url}" target="_blank" class="custom-link">🔗 ${link.name}</a>`).join('')}
+                </div>` : '';
+                
+            const customLinksEncoded = encodeURIComponent(JSON.stringify(item.custom_links || []));
+            
+            return `
             <div class="repo-item">
                 <a href="${item.url}" target="_blank" class="status-block ${getStatusClass(item.status)}">
                     ${getStatusIcon(item.status)}
@@ -166,7 +218,7 @@
                         <div style="display: flex; align-items: center; gap: 15px;">
                             <span class="time-text">${formatTime(item.updated_at)}</span>
                             <div class="actions-container">
-                                <button class="icon-btn edit-btn" onclick="toggleForm(true, '${item.provider}', '${item.owner}', '${item.repo}', '${item.ci_cd_url || ''}')" title="Edit">✎</button>
+                                <button class="icon-btn edit-btn" onclick="toggleForm(true, '${item.provider}', '${item.owner}', '${item.repo}', '${customLinksEncoded}')" title="Edit">✎</button>
                                 <button class="icon-btn delete-btn" onclick="removeRepo('${item.provider}', '${item.owner}', '${item.repo}')" title="Remove">✕</button>
                             </div>
                         </div>
@@ -174,10 +226,10 @@
                     <a href="${item.repo_url}" target="_blank" style="text-decoration: none; color: inherit;">
                         <div class="commit-msg">${item.commit_message || 'No commit info'}</div>
                     </a>
-                    ${item.ci_cd_url ? `<div style="margin-top: 8px;"><a href="${item.ci_cd_url}" target="_blank" style="text-decoration: none; color: #0366d6; font-size: 13px; font-weight: bold;">🔗 Jenkins Pipeline</a></div>` : ''}
+                    ${linksHtml}
                 </div>
             </div>
-        `).join('');
+        `}).join('');
     }
 
     // Initial fetch and poll every 30s

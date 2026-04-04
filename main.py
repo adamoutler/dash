@@ -15,7 +15,7 @@ class RepoItem(BaseModel):
     provider: str
     owner: str
     repo: str
-    ci_cd_url: Optional[str] = None
+    custom_links: Optional[list] = None
 
 # Mount static files
 os.makedirs("static", exist_ok=True)
@@ -43,13 +43,13 @@ async def get_status():
     
     for i, r in enumerate(repos):
         if i < len(results):
-            results[i]["ci_cd_url"] = r.get("ci_cd_url", "")
+            results[i]["custom_links"] = r.get("custom_links", [])
 
     return results
 
 @app.post("/api/repos")
 async def add_repo(item: RepoItem):
-    storage.add_repo(item.provider, item.owner, item.repo, item.ci_cd_url)
+    storage.add_repo(item.provider, item.owner, item.repo, item.custom_links)
     return {"message": "added"}
 
 @app.delete("/api/repos")
