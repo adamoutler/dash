@@ -122,7 +122,22 @@ async def get_status():
     
     for i, r in enumerate(repos):
         if i < len(results):
-            results[i]["custom_links"] = r.get("custom_links", [])
+            res = results[i]
+            res["custom_links"] = r.get("custom_links", [])
+            
+            # If the build is running, clear any old local log file
+            if res.get("status") in ["running", "in_progress", "queued", "waiting", "requested", "pending"]:
+                safe_provider = "".join(c for c in res.get("provider", "") if c.isalnum() or c in "-_")
+                safe_owner = "".join(c for c in res.get("owner", "") if c.isalnum() or c in "-_")
+                safe_repo = "".join(c for c in res.get("repo", "") if c.isalnum() or c in "-_")
+                
+                if safe_provider and safe_owner and safe_repo:
+                    filepath = os.path.join(LOGS_DIR, f"{safe_provider}_{safe_owner}_{safe_repo}_latest.log")
+                    if os.path.exists(filepath):
+                        try:
+                            os.remove(filepath)
+                        except Exception:
+                            pass
 
     return results
 
