@@ -38,3 +38,11 @@ class RepoStorage:
         repos = self.get_repos()
         repos = [r for r in repos if not (r["provider"] == provider and r["owner"] == owner and r["repo"] == repo)]
         self._save_repos(repos)
+
+    def update_repo_run_url(self, provider, owner, repo, run_url):
+        repos = self.get_repos()
+        for r in repos:
+            if r["provider"] == provider and r["owner"] == owner and r["repo"] == repo:
+                r["last_run_url"] = run_url
+                self._save_repos(repos)
+                return

@@ -125,8 +125,15 @@ async def get_status():
             res = results[i]
             res["custom_links"] = r.get("custom_links", [])
             
-            # If the build is running, clear any old local log file
-            if res.get("status") in ["running", "in_progress", "queued", "waiting", "requested", "pending"]:
+            # Detect if a completely new run has started
+            current_url = res.get("url")
+            saved_url = r.get("last_run_url")
+            
+            if current_url and current_url != "#" and current_url != saved_url:
+                # Update the stored last_run_url so we don't clear the log again for this run
+                storage.update_repo_run_url(res.get("provider"), res.get("owner"), res.get("repo"), current_url)
+                
+                # Clear any old local log file from previous runs
                 safe_provider = "".join(c for c in res.get("provider", "") if c.isalnum() or c in "-_")
                 safe_owner = "".join(c for c in res.get("owner", "") if c.isalnum() or c in "-_")
                 safe_repo = "".join(c for c in res.get("repo", "") if c.isalnum() or c in "-_")
