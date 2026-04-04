@@ -146,3 +146,47 @@ async def fetch_forgejo_logs(owner: str, repo: str, token: str, forgejo_url: str
             )
     except Exception as e:
         return f"Error fetching Forgejo logs: {str(e)}"
+
+async def fetch_github_artifacts(owner: str, repo: str, token: str):
+    headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github.v3+json"} if token else {}
+    base_url = f"https://api.github.com/repos/{owner}/{repo}"
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            runs_resp = await client.get(f"{base_url}/actions/runs?per_page=1", headers=headers)
+            if runs_resp.status_code != 200:
+                return {"error": f"Failed to fetch runs. HTTP {runs_resp.status_code}"}
+            run = runs_resp.json().get("workflow_runs", [{}])[0]
+            if not run.get('id'):
+                return {"error": "No runs found."}
+            
+            artifacts_resp = await client.get(f"{base_url}/actions/runs/{run['id']}/artifacts", headers=headers)
+            if artifacts_resp.status_code == 200:
+                return artifacts_resp.json()
+            return {"error": f"Failed to fetch artifacts. HTTP {artifacts_resp.status_code}"}
+    except Exception as e:
+        return {"error": f"Error fetching GitHub artifacts: {str(e)}"}
+
+async def fetch_forgejo_artifacts(owner: str, repo: str, token: str, forgejo_url: str):
+    if not forgejo_url:
+        return {"error": "Forgejo URL not configured."}
+    base_url = f"{forgejo_url.rstrip('/')}/api/v1/repos/{owner}/{repo}"
+    headers = {"Authorization": f"token {token}", "Accept": "application/json"} if token else {}
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            runs_resp = await client.get(f"{base_url}/actions/runs?limit=1", headers=headers)
+            if runs_resp.status_code != 200:
+                return {"error": f"Failed to fetch runs. HTTP {runs_resp.status_code}"}
+            
+            runs_data = runs_resp.json()
+            run = runs_data.get("workflow_runs", [{}])[-1] if runs_data.get("workflow_runs") else {}
+            if not run.get('id'):
+                return {"error": "No runs found."}
+            
+            artifacts_resp = await client.get(f"{base_url}/actions/runs/{run['id']}/artifacts", headers=headers)
+            if artifacts_resp.status_code == 200:
+                return artifacts_resp.json()
+            elif artifacts_resp.status_code == 404:
+                return {"error": "Artifacts API endpoint not found on this Forgejo version. Ensure actions/upload-artifact is configured and verify server version compatibility."}
+            return {"error": f"Failed to fetch artifacts. HTTP {artifacts_resp.status_code}"}
+    except Exception as e:
+        return {"error": f"Error fetching Forgejo artifacts: {str(e)}"}

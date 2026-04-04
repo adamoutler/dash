@@ -7,7 +7,7 @@ import os
 from pydantic import BaseModel
 from typing import Optional
 from api.storage import RepoStorage
-from api.git_providers import fetch_github_status, fetch_forgejo_status, fetch_github_logs, fetch_forgejo_logs
+from api.git_providers import fetch_github_status, fetch_forgejo_status, fetch_github_logs, fetch_forgejo_logs, fetch_github_artifacts, fetch_forgejo_artifacts
 
 app = FastAPI()
 storage = RepoStorage()
@@ -29,6 +29,18 @@ async def read_index():
 @app.get("/llms.txt")
 async def read_llms_txt():
     return FileResponse("static/llms.txt")
+
+@app.get("/api/artifacts")
+async def get_artifacts(provider: str, owner: str, repo: str):
+    github_token = os.environ.get("GITHUB_TOKEN", "")
+    forgejo_token = os.environ.get("FORGEJO_TOKEN", "")
+    forgejo_url = os.environ.get("FORGEJO_URL", "")
+    
+    if provider == "github":
+        return await fetch_github_artifacts(owner, repo, github_token)
+    elif provider == "forgejo":
+        return await fetch_forgejo_artifacts(owner, repo, forgejo_token, forgejo_url)
+    return {"error": "Unknown provider"}
 
 @app.get("/api/logs")
 async def get_logs(provider: str, owner: str, repo: str):
