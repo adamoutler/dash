@@ -22,12 +22,12 @@
         .status-error { background: #f6f8fa; color: #586069; }
         
         .info-block { flex-grow: 1; padding: 12px 15px; text-decoration: none; color: inherit; display: flex; flex-direction: column; justify-content: center; position: relative;}
-        .info-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+        .info-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
         .repo-name { font-weight: bold; font-size: 18px; color: #0366d6; }
-        .time-text { color: #586069; font-size: 14px; margin-right: 30px; }
+        .time-text { color: #586069; font-size: 14px; }
         .commit-msg { color: #586069; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 600px; }
         
-        .actions-container { position: absolute; right: 15px; top: 15px; display: flex; gap: 15px; }
+        .actions-container { display: flex; gap: 15px; align-items: center; }
         .icon-btn { background: none; border: none; cursor: pointer; font-size: 18px; padding: 0; opacity: 0.6; transition: opacity 0.2s; font-weight: bold; }
         .icon-btn:hover { opacity: 1; }
         .delete-btn { color: #cb2431; }
@@ -159,15 +159,19 @@
                     ${getStatusIcon(item.status)}
                 </a>
                 <div class="info-block">
-                    <div class="actions-container">
-                        <button class="icon-btn edit-btn" onclick="toggleForm(true, '${item.provider}', '${item.owner}', '${item.repo}', '${item.ci_cd_url || ''}')" title="Edit">✎</button>
-                        <button class="icon-btn delete-btn" onclick="removeRepo('${item.provider}', '${item.owner}', '${item.repo}')" title="Remove">✕</button>
+                    <div class="info-header">
+                        <a href="${item.repo_url}" target="_blank" style="text-decoration: none; color: inherit; flex-grow: 1;">
+                            <span class="repo-name">${item.owner}/${item.repo}</span>
+                        </a>
+                        <div style="display: flex; align-items: center; gap: 15px;">
+                            <span class="time-text">${formatTime(item.updated_at)}</span>
+                            <div class="actions-container">
+                                <button class="icon-btn edit-btn" onclick="toggleForm(true, '${item.provider}', '${item.owner}', '${item.repo}', '${item.ci_cd_url || ''}')" title="Edit">✎</button>
+                                <button class="icon-btn delete-btn" onclick="removeRepo('${item.provider}', '${item.owner}', '${item.repo}')" title="Remove">✕</button>
+                            </div>
+                        </div>
                     </div>
                     <a href="${item.repo_url}" target="_blank" style="text-decoration: none; color: inherit;">
-                        <div class="info-header">
-                            <span class="repo-name">${item.owner}/${item.repo}</span>
-                            <span class="time-text">${formatTime(item.updated_at)}</span>
-                        </div>
                         <div class="commit-msg">${item.commit_message || 'No commit info'}</div>
                     </a>
                     ${item.ci_cd_url ? `<div style="margin-top: 8px;"><a href="${item.ci_cd_url}" target="_blank" style="text-decoration: none; color: #0366d6; font-size: 13px; font-weight: bold;">🔗 Jenkins Pipeline</a></div>` : ''}
