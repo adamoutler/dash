@@ -6,7 +6,7 @@ import os
 from pydantic import BaseModel
 from typing import Optional
 from api.storage import RepoStorage
-from api.git_providers import fetch_github_status, fetch_forgejo_status
+from api.git_providers import fetch_github_status, fetch_forgejo_status, fetch_github_logs, fetch_forgejo_logs
 
 app = FastAPI()
 storage = RepoStorage()
@@ -24,6 +24,18 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 @app.get("/")
 async def read_index():
     return FileResponse("static/index.html")
+
+@app.get("/api/logs")
+async def get_logs(provider: str, owner: str, repo: str):
+    github_token = os.environ.get("GITHUB_TOKEN", "")
+    forgejo_token = os.environ.get("FORGEJO_TOKEN", "")
+    forgejo_url = os.environ.get("FORGEJO_URL", "")
+    
+    if provider == "github":
+        return {"log": await fetch_github_logs(owner, repo, github_token)}
+    elif provider == "forgejo":
+        return {"log": await fetch_forgejo_logs(owner, repo, forgejo_token, forgejo_url)}
+    return {"log": "Unknown provider"}
 
 @app.get("/api/status")
 async def get_status():

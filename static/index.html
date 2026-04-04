@@ -40,9 +40,22 @@
         .custom-links-container { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 10px; }
         .custom-link { text-decoration: none; color: #0366d6; font-size: 13px; font-weight: bold; background: #f1f8ff; padding: 2px 6px; border-radius: 10px; }
         .custom-link:hover { background: #dbedff; }
+        
+        .modal { display: none; position: fixed; z-index: 1; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.5); }
+        .modal-content { background-color: #fefefe; margin: 5% auto; padding: 20px; border: 1px solid #888; width: 80%; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.2); }
+        .close-modal { color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer; }
+        .close-modal:hover, .close-modal:focus { color: black; text-decoration: none; cursor: pointer; }
+        .log-container { background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 6px; height: 400px; overflow-y: scroll; font-family: monospace; white-space: pre-wrap; font-size: 13px; }
     </style>
 </head>
 <body>
+<div id="logModal" class="modal">
+  <div class="modal-content">
+    <span class="close-modal" onclick="document.getElementById('logModal').style.display='none'">&times;</span>
+    <h2 id="modalTitle" style="margin-top: 0;">Logs</h2>
+    <div id="logContent" class="log-container">Loading...</div>
+  </div>
+</div>
 <div class="container">
     <div class="header">
         <h1>CI Dashboard</h1>
@@ -218,6 +231,7 @@
                         <div style="display: flex; align-items: center; gap: 15px;">
                             <span class="time-text">${formatTime(item.updated_at)}</span>
                             <div class="actions-container">
+                                <button class="icon-btn" style="color: #6a737d;" onclick="fetchLogs('${item.provider}', '${item.owner}', '${item.repo}')" title="View Logs">📄</button>
                                 <button class="icon-btn edit-btn" onclick="toggleForm(true, '${item.provider}', '${item.owner}', '${item.repo}', '${customLinksEncoded}')" title="Edit">✎</button>
                                 <button class="icon-btn delete-btn" onclick="removeRepo('${item.provider}', '${item.owner}', '${item.repo}')" title="Remove">✕</button>
                             </div>
@@ -235,6 +249,38 @@
     // Initial fetch and poll every 30s
     fetchStatuses();
     setInterval(fetchStatuses, 30000);
+
+    async function fetchLogs(provider, owner, repo) {
+        document.getElementById('modalTitle').innerText = `Logs: ${owner}/${repo}`;
+        const logContent = document.getElementById('logContent');
+        logContent.innerHTML = 'Loading logs...';
+        document.getElementById('logModal').style.display = 'block';
+
+        try {
+            const res = await fetch(`/api/logs?provider=${encodeURIComponent(provider)}&owner=${encodeURIComponent(owner)}&repo=${encodeURIComponent(repo)}`);
+            const data = await res.json();
+            
+            // Format log message links for Forgejo
+            if (data.log && data.log.includes('href=')) {
+                logContent.innerHTML = data.log;
+            } else {
+                logContent.innerText = data.log || 'No logs returned.';
+            }
+            
+            // Scroll to bottom
+            setTimeout(() => { logContent.scrollTop = logContent.scrollHeight; }, 100);
+        } catch (e) {
+            logContent.innerText = 'Error fetching logs: ' + e.message;
+        }
+    }
+
+    // Close modal when clicking outside of it
+    window.onclick = function(event) {
+        const modal = document.getElementById('logModal');
+        if (event.target == modal) {
+            modal.style.display = "none";
+        }
+    }
 </script>
 </body>
 </html>
