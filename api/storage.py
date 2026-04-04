@@ -24,13 +24,13 @@ class RepoStorage:
         new_repo = {"provider": provider, "owner": owner, "repo": repo}
         if custom_links:
             new_repo["custom_links"] = custom_links
-            
+
         for i, r in enumerate(repos):
             if r["provider"] == provider and r["owner"] == owner and r["repo"] == repo:
                 repos[i] = new_repo
                 self._save_repos(repos)
                 return
-                
+
         repos.append(new_repo)
         self._save_repos(repos)
 

@@ -40,7 +40,7 @@ async def get_artifacts(provider: str, owner: str, repo: str):
     github_token = os.environ.get("GITHUB_TOKEN", "")
     forgejo_token = os.environ.get("FORGEJO_TOKEN", "")
     forgejo_url = os.environ.get("FORGEJO_URL", "")
-    
+
     if provider == "github":
         return await fetch_github_artifacts(owner, repo, github_token)
     elif provider == "forgejo":
@@ -52,16 +52,16 @@ async def post_logs(provider: str, owner: str, repo: str, request: Request):
     # To prevent DDOS from massive payloads, read the request stream in chunks
     # and buffer only the last MAX_LOG_SIZE bytes in a cyclic buffer
     buffer = bytearray()
-    
+
     async for chunk in request.stream():
         buffer.extend(chunk)
         if len(buffer) > MAX_LOG_SIZE * 2:
             # Keep the buffer from growing unboundedly, truncate to last MAX_LOG_SIZE
             buffer = buffer[-MAX_LOG_SIZE:]
-            
+
     # The final log text is the tail of the buffer
     log_text = buffer.decode('utf-8', errors='replace')
-        
+
     # Apply truncation to log_text if it exceeds the limit
     if len(log_text) > MAX_LOG_SIZE:
         log_text = "[TRUNCATED...]\n" + log_text[-MAX_LOG_SIZE:]
@@ -69,16 +69,16 @@ async def post_logs(provider: str, owner: str, repo: str, request: Request):
     safe_provider = "".join(c for c in provider if c.isalnum() or c in "-_")
     safe_owner = "".join(c for c in owner if c.isalnum() or c in "-_")
     safe_repo = "".join(c for c in repo if c.isalnum() or c in "-_")
-    
+
     if not safe_provider or not safe_owner or not safe_repo:
         raise HTTPException(status_code=400, detail="Invalid provider, owner, or repo.")
-    
+
     filename = f"{safe_provider}_{safe_owner}_{safe_repo}_latest.log"
     filepath = os.path.join(LOGS_DIR, filename)
-    
+
     with open(filepath, "w", encoding="utf-8") as f:
         f.write(log_text)
-        
+
     return {"message": "Log saved successfully", "file": filename}
 
 @app.get("/api/logs")
@@ -86,10 +86,10 @@ async def get_logs(provider: str, owner: str, repo: str):
     safe_provider = "".join(c for c in provider if c.isalnum() or c in "-_")
     safe_owner = "".join(c for c in owner if c.isalnum() or c in "-_")
     safe_repo = "".join(c for c in repo if c.isalnum() or c in "-_")
-    
+
     filename = f"{safe_provider}_{safe_owner}_{safe_repo}_latest.log"
     filepath = os.path.join(LOGS_DIR, filename)
-    
+
     if os.path.exists(filepath):
         with open(filepath, "r", encoding="utf-8") as f:
             return {"log": f.read()}
@@ -97,7 +97,7 @@ async def get_logs(provider: str, owner: str, repo: str):
     github_token = os.environ.get("GITHUB_TOKEN", "")
     forgejo_token = os.environ.get("FORGEJO_TOKEN", "")
     forgejo_url = os.environ.get("FORGEJO_URL", "")
-    
+
     if provider == "github":
         return {"log": await fetch_github_logs(owner, repo, github_token)}
     elif provider == "forgejo":
@@ -119,25 +119,25 @@ async def get_status():
             tasks.append(fetch_forgejo_status(r["owner"], r["repo"], forgejo_token, forgejo_url))
 
     results = await asyncio.gather(*tasks)
-    
+
     for i, r in enumerate(repos):
         if i < len(results):
             res = results[i]
             res["custom_links"] = r.get("custom_links", [])
-            
+
             # Detect if a completely new run has started
             current_url = res.get("url")
             saved_url = r.get("last_run_url")
-            
+
             if current_url and current_url != "#" and current_url != saved_url:
                 # Update the stored last_run_url so we don't clear the log again for this run
                 storage.update_repo_run_url(res.get("provider"), res.get("owner"), res.get("repo"), current_url)
-                
+
                 # Clear any old local log file from previous runs
                 safe_provider = "".join(c for c in res.get("provider", "") if c.isalnum() or c in "-_")
                 safe_owner = "".join(c for c in res.get("owner", "") if c.isalnum() or c in "-_")
                 safe_repo = "".join(c for c in res.get("repo", "") if c.isalnum() or c in "-_")
-                
+
                 if safe_provider and safe_owner and safe_repo:
                     filepath = os.path.join(LOGS_DIR, f"{safe_provider}_{safe_owner}_{safe_repo}_latest.log")
                     if os.path.exists(filepath):

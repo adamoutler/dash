@@ -1,4 +1,3 @@
-import pytest
 from unittest.mock import patch
 from fastapi.testclient import TestClient
 from main import app
@@ -14,7 +13,7 @@ def test_add_and_get_repos():
     # Test adding
     response = client.post("/api/repos", json={"provider": "github", "owner": "test", "repo": "testrepo"})
     assert response.status_code == 200
-    
+
     # Test getting statuses (mocking fetch)
     with patch("main.fetch_github_status") as mock_fetch:
         mock_fetch.return_value = {"status": "success"}
@@ -22,7 +21,7 @@ def test_add_and_get_repos():
         assert response.status_code == 200
         data = response.json()
         assert len(data) >= 1
-        
+
     # Test removing
     response = client.request("DELETE", "/api/repos", json={"provider": "github", "owner": "test", "repo": "testrepo"})
     assert response.status_code == 200
