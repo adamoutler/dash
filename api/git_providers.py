@@ -85,7 +85,7 @@ async def fetch_forgejo_status(owner: str, repo: str, token: str, forgejo_url: s
                 "owner": owner,
                 "repo": repo,
                 "status": common_status,
-                "url": f"{forgejo_url}/{owner}/{repo}/actions/runs/{run.get('id', '')}",
+                "url": f"{run.get('html_url', f'{forgejo_url}/{owner}/{repo}/actions/runs/{run.get('index_in_repo', run.get('id', ''))}')}/jobs/0/attempt/1",
                 "repo_url": f"{forgejo_url}/{owner}/{repo}",
                 "updated_at": run.get("updated", run.get("updated_at", "")),
                 "commit_message": commit_msg
@@ -138,11 +138,11 @@ async def fetch_forgejo_logs(owner: str, repo: str, token: str, forgejo_url: str
             if not run.get('id'):
                 return "No runs found."
             
-            run_url = f"{forgejo_url}/{owner}/{repo}/actions/runs/{run['id']}"
+            run_url = run.get('html_url', f"{forgejo_url}/{owner}/{repo}/actions/runs/{run.get('index_in_repo', run.get('id', ''))}")
             return (
                 "Forgejo/Gitea's API on this server does not expose an endpoint to fetch raw logs directly. "
                 "However, you can view the logs in the web interface here:\n\n"
-                f"{run_url}"
+                f"{run_url}/jobs/0/attempt/1"
             )
     except Exception as e:
         return f"Error fetching Forgejo logs: {str(e)}"
