@@ -1,7 +1,8 @@
 import asyncio
+import json
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 import os
 from pydantic import BaseModel
 from typing import Optional
@@ -68,3 +69,30 @@ async def add_repo(item: RepoItem):
 async def remove_repo(item: RepoItem):
     storage.remove_repo(item.provider, item.owner, item.repo)
     return {"message": "removed"}
+
+@app.get("/api/wait")
+async def wait_status(provider: str, owner: str, repo: str):
+    github_token = os.environ.get("GITHUB_TOKEN", "")
+    forgejo_token = os.environ.get("FORGEJO_TOKEN", "")
+    forgejo_url = os.environ.get("FORGEJO_URL", "")
+
+    async def event_stream():
+        yield "waiting for complete."
+        while True:
+            if provider == "github":
+                result = await fetch_github_status(owner, repo, github_token)
+            elif provider == "forgejo":
+                result = await fetch_forgejo_status(owner, repo, forgejo_token, forgejo_url)
+            else:
+                yield "\nError: Unknown provider\n"
+                break
+
+            status = result.get("status")
+            if status in ["running", "in_progress", "queued", "waiting", "requested", "pending"]:
+                yield "."
+                await asyncio.sleep(10)
+            else:
+                yield f"\nStatus changed to {status}\n{json.dumps(result)}\n"
+                break
+
+    return StreamingResponse(event_stream(), media_type="text/plain")
