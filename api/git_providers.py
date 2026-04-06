@@ -37,7 +37,7 @@ async def fetch_github_status(owner: str, repo: str, token: str):
             conclusion = run.get("conclusion")
             common_status = "running" if status in ["in_progress", "queued", "requested"] else (conclusion or "unknown")
 
-            expected_duration_sec = None
+            average_recent_duration = None
             started_at = run.get("run_started_at") or run.get("created_at", "")
 
             successful_runs = [r for r in runs if r.get("status") == "completed" and r.get("conclusion") == "success"]
@@ -56,7 +56,7 @@ async def fetch_github_status(owner: str, repo: str, token: str):
                         except Exception:
                             pass
                 if valid_runs > 0:
-                    expected_duration_sec = total_duration / valid_runs
+                    average_recent_duration = total_duration / valid_runs
 
             return {
                 "provider": "github",
@@ -68,7 +68,7 @@ async def fetch_github_status(owner: str, repo: str, token: str):
                 "updated_at": run.get("updated_at", ""),
                 "commit_message": commit_msg,
                 "started_at": started_at,
-                "expected_duration_sec": expected_duration_sec
+                "average_recent_duration": average_recent_duration
             }
     except Exception:
         return _error_result("github", owner, repo)
@@ -105,7 +105,7 @@ async def fetch_forgejo_status(owner: str, repo: str, token: str, forgejo_url: s
             elif common_status == "waiting":
                 common_status = "running"
 
-            expected_duration_sec = None
+            average_recent_duration = None
             started_at = run.get("started") or run.get("created", "")
 
             successful_runs = [r for r in reversed(runs) if r.get("status", "").lower() == "success"]
@@ -129,7 +129,7 @@ async def fetch_forgejo_status(owner: str, repo: str, token: str, forgejo_url: s
                             except Exception:
                                 pass
                 if valid_runs > 0:
-                    expected_duration_sec = total_duration / valid_runs
+                    average_recent_duration = total_duration / valid_runs
 
             return {
                 "provider": "forgejo",
@@ -141,7 +141,7 @@ async def fetch_forgejo_status(owner: str, repo: str, token: str, forgejo_url: s
                 "updated_at": run.get("updated", run.get("updated_at", "")),
                 "commit_message": commit_msg,
                 "started_at": started_at,
-                "expected_duration_sec": expected_duration_sec
+                "average_recent_duration": average_recent_duration
             }
     except Exception:
         return _error_result("forgejo", owner, repo)
