@@ -204,30 +204,71 @@
         return '? Error';
     }
 
+    let dashboardData = [];
+
+    function updateProgress() {
+        if (!dashboardData) return;
+        const now = Date.now();
+
+        dashboardData.forEach(item => {
+            if (item.status === 'running' && item.expected_duration_sec > 0 && item.started_at) {
+                const repoId = `${item.provider}-${item.owner}-${item.repo}`.replace(/[^a-zA-Z0-9-]/g, '-');
+                const progressEl = document.getElementById(`progress-${repoId}`);
+                const etaEl = document.getElementById(`eta-${repoId}`);
+
+                if (progressEl && etaEl) {
+                    const started = new Date(item.started_at).getTime();
+                    const elapsedSec = (now - started) / 1000;
+
+                    if (elapsedSec > item.expected_duration_sec) {
+                        progressEl.style.width = '100%';
+                        etaEl.innerText = '(Overtime)';
+                    } else {
+                        const percent = Math.min(100, Math.max(0, (elapsedSec / item.expected_duration_sec) * 100));
+                        progressEl.style.width = `${percent}%`;
+                        const remaining = Math.max(0, Math.ceil(item.expected_duration_sec - elapsedSec));
+                        etaEl.innerText = `(ETA: ${remaining}s)`;
+                    }
+                }
+            }
+        });
+    }
+
     async function fetchStatuses() {
         const res = await fetch('/api/status');
-        const data = await res.json();
+        dashboardData = await res.json();
 
         const list = document.getElementById('repoList');
-        if (data.length === 0) {
+        if (dashboardData.length === 0) {
             list.innerHTML = '<div style="padding: 20px; text-align: center; color: #586069;">No repositories added yet.</div>';
             return;
         }
 
-        list.innerHTML = data.map(item => {
+        list.innerHTML = dashboardData.map(item => {
             const linksHtml = (item.custom_links && item.custom_links.length > 0) ?
                 `<div class="custom-links-container">
                     ${item.custom_links.map(link => `<a href="${link.url}" target="_blank" class="custom-link">🔗 ${link.name}</a>`).join('')}
                 </div>` : '';
 
             const customLinksEncoded = encodeURIComponent(JSON.stringify(item.custom_links || []));
+            const repoId = `${item.provider}-${item.owner}-${item.repo}`.replace(/[^a-zA-Z0-9-]/g, '-');
+
+            let progressHtml = '';
+            if (item.status === 'running' && item.expected_duration_sec > 0 && item.started_at) {
+                progressHtml = `
+                    <div style="width: 80%; height: 4px; background: rgba(0,0,0,0.1); margin-top: 5px; position: relative; border-radius: 2px; overflow: hidden;">
+                        <div id="progress-${repoId}" style="height: 100%; background: #f57f17; width: 0%; transition: width 1s linear;"></div>
+                    </div>
+                    <div id="eta-${repoId}" style="font-size: 11px; margin-top: 3px; font-weight: normal; line-height: 1.2;">Calculating...</div>
+                `;
+            }
 
             return `
             <div class="repo-item">
-                <a href="${item.url}" target="_blank" class="status-block ${getStatusClass(item.status)}">
-                    ${getStatusIcon(item.status)}
-                </a>
-                <div class="info-block">
+                <a href="${item.url}" target="_blank" class="status-block ${getStatusClass(item.status)}" style="${progressHtml ? 'flex-direction: column; padding: 10px; gap: 4px;' : ''}">
+                    <div>${getStatusIcon(item.status)}</div>
+                    ${progressHtml}
+                </a>                <div class="info-block">
                     <div class="info-header">
                         <a href="${item.repo_url}" target="_blank" style="text-decoration: none; color: inherit; flex-grow: 1;">
                             <span class="repo-name">${item.owner}/${item.repo}</span>
@@ -253,6 +294,7 @@
     // Initial fetch and poll every 30s
     fetchStatuses();
     setInterval(fetchStatuses, 30000);
+    setInterval(updateProgress, 1000);
 
     async function fetchLogs(provider, owner, repo) {
         document.getElementById('modalTitle').innerText = `Logs: ${owner}/${repo}`;

@@ -1,4 +1,5 @@
 import httpx
+import datetime
 
 def _error_result(provider, owner, repo):
     return {
@@ -18,7 +19,7 @@ async def fetch_github_status(owner: str, repo: str, token: str):
 
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            runs_resp = await client.get(f"{base_url}/actions/runs?per_page=1", headers=headers)
+            runs_resp = await client.get(f"{base_url}/actions/runs?per_page=10", headers=headers)
             commits_resp = await client.get(f"{base_url}/commits?per_page=1", headers=headers)
 
             if runs_resp.status_code != 200 or commits_resp.status_code != 200:
@@ -27,13 +28,35 @@ async def fetch_github_status(owner: str, repo: str, token: str):
             runs_data = runs_resp.json()
             commits_data = commits_resp.json()
 
-            run = runs_data.get("workflow_runs", [{}])[0] if runs_data.get("workflow_runs") else {}
+            runs = runs_data.get("workflow_runs", [])
+            run = runs[0] if runs else {}
             commit_msg = commits_data[0].get("commit", {}).get("message", "No commit message").split("\n")[0] if commits_data else ""
 
             # Map GitHub status to common format
             status = run.get("status")
             conclusion = run.get("conclusion")
             common_status = "running" if status in ["in_progress", "queued", "requested"] else (conclusion or "unknown")
+
+            expected_duration_sec = None
+            started_at = run.get("run_started_at") or run.get("created_at", "")
+
+            successful_runs = [r for r in runs if r.get("status") == "completed" and r.get("conclusion") == "success"]
+            if successful_runs:
+                total_duration = 0
+                valid_runs = 0
+                for r in successful_runs[:5]:
+                    r_start = r.get("run_started_at") or r.get("created_at")
+                    r_end = r.get("updated_at")
+                    if r_start and r_end:
+                        try:
+                            start_dt = datetime.datetime.fromisoformat(r_start.replace("Z", "+00:00"))
+                            end_dt = datetime.datetime.fromisoformat(r_end.replace("Z", "+00:00"))
+                            total_duration += (end_dt - start_dt).total_seconds()
+                            valid_runs += 1
+                        except Exception:
+                            pass
+                if valid_runs > 0:
+                    expected_duration_sec = total_duration / valid_runs
 
             return {
                 "provider": "github",
@@ -43,7 +66,9 @@ async def fetch_github_status(owner: str, repo: str, token: str):
                 "url": run.get("html_url", f"https://github.com/{owner}/{repo}/actions"),
                 "repo_url": f"https://github.com/{owner}/{repo}",
                 "updated_at": run.get("updated_at", ""),
-                "commit_message": commit_msg
+                "commit_message": commit_msg,
+                "started_at": started_at,
+                "expected_duration_sec": expected_duration_sec
             }
     except Exception:
         return _error_result("github", owner, repo)
@@ -59,7 +84,7 @@ async def fetch_forgejo_status(owner: str, repo: str, token: str, forgejo_url: s
         async with httpx.AsyncClient(timeout=10.0) as client:
             # Forgejo / Gitea API for actions and commits
             # NOTE: action runs endpoint might vary slightly by gitea version, usually /actions/runs
-            runs_resp = await client.get(f"{base_url}/actions/runs?limit=1", headers=headers)
+            runs_resp = await client.get(f"{base_url}/actions/runs?limit=10", headers=headers)
             commits_resp = await client.get(f"{base_url}/commits?limit=1", headers=headers)
 
             if runs_resp.status_code != 200 or commits_resp.status_code != 200:
@@ -68,7 +93,8 @@ async def fetch_forgejo_status(owner: str, repo: str, token: str, forgejo_url: s
             runs_data = runs_resp.json()
             commits_data = commits_resp.json()
 
-            run = runs_data.get("workflow_runs", [{}])[-1] if runs_data.get("workflow_runs") else {}
+            runs = runs_data.get("workflow_runs", [])
+            run = runs[-1] if runs else {}
             commit_msg = commits_data[0].get("commit", {}).get("message", "No commit message").split("\n")[0] if commits_data else ""
 
             status = run.get("status", "unknown")
@@ -79,6 +105,32 @@ async def fetch_forgejo_status(owner: str, repo: str, token: str, forgejo_url: s
             elif common_status == "waiting":
                 common_status = "running"
 
+            expected_duration_sec = None
+            started_at = run.get("started") or run.get("created", "")
+
+            successful_runs = [r for r in reversed(runs) if r.get("status", "").lower() == "success"]
+            if successful_runs:
+                total_duration = 0
+                valid_runs = 0
+                for r in successful_runs[:5]:
+                    duration = r.get("duration")
+                    if duration:
+                        total_duration += (duration / 1000000000)
+                        valid_runs += 1
+                    else:
+                        r_start = r.get("started") or r.get("created")
+                        r_end = r.get("stopped") or r.get("updated")
+                        if r_start and r_end:
+                            try:
+                                start_dt = datetime.datetime.fromisoformat(r_start.replace("Z", "+00:00"))
+                                end_dt = datetime.datetime.fromisoformat(r_end.replace("Z", "+00:00"))
+                                total_duration += (end_dt - start_dt).total_seconds()
+                                valid_runs += 1
+                            except Exception:
+                                pass
+                if valid_runs > 0:
+                    expected_duration_sec = total_duration / valid_runs
+
             return {
                 "provider": "forgejo",
                 "owner": owner,
@@ -87,7 +139,9 @@ async def fetch_forgejo_status(owner: str, repo: str, token: str, forgejo_url: s
                 "url": f"{run.get('html_url', forgejo_url + '/' + owner + '/' + repo + '/actions/runs/' + str(run.get('index_in_repo', run.get('id', ''))))}/jobs/0/attempt/1",
                 "repo_url": f"{forgejo_url}/{owner}/{repo}",
                 "updated_at": run.get("updated", run.get("updated_at", "")),
-                "commit_message": commit_msg
+                "commit_message": commit_msg,
+                "started_at": started_at,
+                "expected_duration_sec": expected_duration_sec
             }
     except Exception:
         return _error_result("forgejo", owner, repo)
