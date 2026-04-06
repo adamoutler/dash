@@ -13,13 +13,15 @@ def _error_result(provider, owner, repo):
         "commit_message": "Failed to fetch"
     }
 
-async def fetch_github_status(owner: str, repo: str, token: str):
+async def fetch_github_status(owner: str, repo: str, token: str, workflow_id: str = None):
     headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github.v3+json"} if token else {}
     base_url = f"https://api.github.com/repos/{owner}/{repo}"
 
+    runs_url = f"{base_url}/actions/workflows/{workflow_id}/runs?per_page=10" if workflow_id else f"{base_url}/actions/runs?per_page=10"
+
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            runs_resp = await client.get(f"{base_url}/actions/runs?per_page=10", headers=headers)
+            runs_resp = await client.get(runs_url, headers=headers)
             commits_resp = await client.get(f"{base_url}/commits?per_page=1", headers=headers)
 
             if runs_resp.status_code != 200 or commits_resp.status_code != 200:
@@ -37,7 +39,7 @@ async def fetch_github_status(owner: str, repo: str, token: str):
             conclusion = run.get("conclusion")
             common_status = "running" if status in ["in_progress", "queued", "requested"] else (conclusion or "unknown")
 
-            average_recent_duration = None
+            expected_duration_sec = None
             started_at = run.get("run_started_at") or run.get("created_at", "")
 
             successful_runs = [r for r in runs if r.get("status") == "completed" and r.get("conclusion") == "success"]
@@ -56,7 +58,7 @@ async def fetch_github_status(owner: str, repo: str, token: str):
                         except Exception:
                             pass
                 if valid_runs > 0:
-                    average_recent_duration = total_duration / valid_runs
+                    expected_duration_sec = total_duration / valid_runs
 
             return {
                 "provider": "github",
@@ -68,12 +70,12 @@ async def fetch_github_status(owner: str, repo: str, token: str):
                 "updated_at": run.get("updated_at", ""),
                 "commit_message": commit_msg,
                 "started_at": started_at,
-                "average_recent_duration": average_recent_duration
+                "expected_duration_sec": expected_duration_sec
             }
     except Exception:
         return _error_result("github", owner, repo)
 
-async def fetch_forgejo_status(owner: str, repo: str, token: str, forgejo_url: str):
+async def fetch_forgejo_status(owner: str, repo: str, token: str, forgejo_url: str, workflow_id: str = None):
     if not forgejo_url:
         return _error_result("forgejo", owner, repo)
 
@@ -82,9 +84,7 @@ async def fetch_forgejo_status(owner: str, repo: str, token: str, forgejo_url: s
 
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            # Forgejo / Gitea API for actions and commits
-            # NOTE: action runs endpoint might vary slightly by gitea version, usually /actions/runs
-            runs_resp = await client.get(f"{base_url}/actions/runs?limit=10", headers=headers)
+            runs_resp = await client.get(f"{base_url}/actions/runs?limit=30", headers=headers)
             commits_resp = await client.get(f"{base_url}/commits?limit=1", headers=headers)
 
             if runs_resp.status_code != 200 or commits_resp.status_code != 200:
@@ -93,8 +93,15 @@ async def fetch_forgejo_status(owner: str, repo: str, token: str, forgejo_url: s
             runs_data = runs_resp.json()
             commits_data = commits_resp.json()
 
-            runs = runs_data.get("workflow_runs", [])
-            run = runs[-1] if runs else {}
+            all_runs = runs_data.get("workflow_runs", [])
+            runs = []
+            for r in all_runs:
+                if not workflow_id or r.get("name") == workflow_id or str(r.get("workflow_id")) == workflow_id:
+                    runs.append(r)
+
+            # Use runs[0] if exists. (Previously the codebase sometimes used runs[-1] incorrectly depending on ordering,
+            # but usually API returns newest first. Let's use the first match).
+            run = runs[0] if runs else {}
             commit_msg = commits_data[0].get("commit", {}).get("message", "No commit message").split("\n")[0] if commits_data else ""
 
             status = run.get("status", "unknown")
@@ -105,10 +112,10 @@ async def fetch_forgejo_status(owner: str, repo: str, token: str, forgejo_url: s
             elif common_status == "waiting":
                 common_status = "running"
 
-            average_recent_duration = None
+            expected_duration_sec = None
             started_at = run.get("started") or run.get("created", "")
 
-            successful_runs = [r for r in reversed(runs) if r.get("status", "").lower() == "success"]
+            successful_runs = [r for r in runs if r.get("status", "").lower() == "success"]
             if successful_runs:
                 total_duration = 0
                 valid_runs = 0
@@ -129,32 +136,34 @@ async def fetch_forgejo_status(owner: str, repo: str, token: str, forgejo_url: s
                             except Exception:
                                 pass
                 if valid_runs > 0:
-                    average_recent_duration = total_duration / valid_runs
+                    expected_duration_sec = total_duration / valid_runs
 
             return {
                 "provider": "forgejo",
                 "owner": owner,
                 "repo": repo,
                 "status": common_status,
-                "url": f"{run.get('html_url', forgejo_url + '/' + owner + '/' + repo + '/actions/runs/' + str(run.get('index_in_repo', run.get('id', ''))))}/jobs/0/attempt/1",
+                "url": f"{run.get('html_url', forgejo_url + '/' + owner + '/' + repo + '/actions/runs/' + str(run.get('index_in_repo', run.get('id', ''))))}/jobs/0/attempt/1" if run else "#",
                 "repo_url": f"{forgejo_url}/{owner}/{repo}",
                 "updated_at": run.get("updated", run.get("updated_at", "")),
                 "commit_message": commit_msg,
                 "started_at": started_at,
-                "average_recent_duration": average_recent_duration
+                "expected_duration_sec": expected_duration_sec
             }
     except Exception:
         return _error_result("forgejo", owner, repo)
 
-async def fetch_github_logs(owner: str, repo: str, token: str):
+async def fetch_github_logs(owner: str, repo: str, token: str, workflow_id: str = None):
     headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github.v3+json"} if token else {}
     base_url = f"https://api.github.com/repos/{owner}/{repo}"
+    runs_url = f"{base_url}/actions/workflows/{workflow_id}/runs?per_page=1" if workflow_id else f"{base_url}/actions/runs?per_page=1"
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
-            runs_resp = await client.get(f"{base_url}/actions/runs?per_page=1", headers=headers)
+            runs_resp = await client.get(runs_url, headers=headers)
             if runs_resp.status_code != 200:
                 return "Failed to fetch runs from GitHub."
-            run = runs_resp.json().get("workflow_runs", [{}])[0]
+            runs_list = runs_resp.json().get("workflow_runs", [])
+            run = runs_list[0] if runs_list else {}
             if not run.get('id'):
                 return "No runs found."
 
@@ -173,7 +182,7 @@ async def fetch_github_logs(owner: str, repo: str, token: str):
     except Exception as e:
         return f"Error fetching GitHub logs: {str(e)}"
 
-async def fetch_forgejo_logs(owner: str, repo: str, token: str, forgejo_url: str):
+async def fetch_forgejo_logs(owner: str, repo: str, token: str, forgejo_url: str, workflow_id: str = None):
     if not forgejo_url:
         return "Forgejo URL not configured."
     # Forgejo/Gitea's API does not currently expose downloading logs in this version.
@@ -182,12 +191,18 @@ async def fetch_forgejo_logs(owner: str, repo: str, token: str, forgejo_url: str
     headers = {"Authorization": f"token {token}", "Accept": "application/json"} if token else {}
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            runs_resp = await client.get(f"{base_url}/actions/runs?limit=1", headers=headers)
+            runs_resp = await client.get(f"{base_url}/actions/runs?limit=30", headers=headers)
             if runs_resp.status_code != 200:
                 return f"Failed to fetch runs from Forgejo. HTTP {runs_resp.status_code}\nPlease check your token or repository permissions."
 
             runs_data = runs_resp.json()
-            run = runs_data.get("workflow_runs", [{}])[-1] if runs_data.get("workflow_runs") else {}
+            all_runs = runs_data.get("workflow_runs", [])
+            runs = []
+            for r in all_runs:
+                if not workflow_id or r.get("name") == workflow_id or str(r.get("workflow_id")) == workflow_id:
+                    runs.append(r)
+
+            run = runs[0] if runs else {}
             if not run.get('id'):
                 return "No runs found."
 
@@ -200,15 +215,17 @@ async def fetch_forgejo_logs(owner: str, repo: str, token: str, forgejo_url: str
     except Exception as e:
         return f"Error fetching Forgejo logs: {str(e)}"
 
-async def fetch_github_artifacts(owner: str, repo: str, token: str):
+async def fetch_github_artifacts(owner: str, repo: str, token: str, workflow_id: str = None):
     headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github.v3+json"} if token else {}
     base_url = f"https://api.github.com/repos/{owner}/{repo}"
+    runs_url = f"{base_url}/actions/workflows/{workflow_id}/runs?per_page=1" if workflow_id else f"{base_url}/actions/runs?per_page=1"
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
-            runs_resp = await client.get(f"{base_url}/actions/runs?per_page=1", headers=headers)
+            runs_resp = await client.get(runs_url, headers=headers)
             if runs_resp.status_code != 200:
                 return {"error": f"Failed to fetch runs. HTTP {runs_resp.status_code}"}
-            run = runs_resp.json().get("workflow_runs", [{}])[0]
+            runs_list = runs_resp.json().get("workflow_runs", [])
+            run = runs_list[0] if runs_list else {}
             if not run.get('id'):
                 return {"error": "No runs found."}
 
@@ -219,19 +236,25 @@ async def fetch_github_artifacts(owner: str, repo: str, token: str):
     except Exception as e:
         return {"error": f"Error fetching GitHub artifacts: {str(e)}"}
 
-async def fetch_forgejo_artifacts(owner: str, repo: str, token: str, forgejo_url: str):
+async def fetch_forgejo_artifacts(owner: str, repo: str, token: str, forgejo_url: str, workflow_id: str = None):
     if not forgejo_url:
         return {"error": "Forgejo URL not configured."}
     base_url = f"{forgejo_url.rstrip('/')}/api/v1/repos/{owner}/{repo}"
     headers = {"Authorization": f"token {token}", "Accept": "application/json"} if token else {}
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            runs_resp = await client.get(f"{base_url}/actions/runs?limit=1", headers=headers)
+            runs_resp = await client.get(f"{base_url}/actions/runs?limit=30", headers=headers)
             if runs_resp.status_code != 200:
                 return {"error": f"Failed to fetch runs. HTTP {runs_resp.status_code}"}
 
             runs_data = runs_resp.json()
-            run = runs_data.get("workflow_runs", [{}])[-1] if runs_data.get("workflow_runs") else {}
+            all_runs = runs_data.get("workflow_runs", [])
+            runs = []
+            for r in all_runs:
+                if not workflow_id or r.get("name") == workflow_id or str(r.get("workflow_id")) == workflow_id:
+                    runs.append(r)
+
+            run = runs[0] if runs else {}
             if not run.get('id'):
                 return {"error": "No runs found."}
 
