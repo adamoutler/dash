@@ -5,21 +5,25 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, StreamingResponse, RedirectResponse
 import os
 import httpx
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 from api.storage import RepoStorage
 from api.git_providers import fetch_github_status, fetch_forgejo_status, fetch_github_logs, fetch_forgejo_logs, fetch_github_artifacts, fetch_forgejo_artifacts
 
-app = FastAPI()
+app = FastAPI(
+    title="CI Dashboard API",
+    description="API for tracking and monitoring continuous integration workflows across GitHub and Forgejo repositories.",
+    version="1.0.0"
+)
 storage = RepoStorage()
 
 class RepoItem(BaseModel):
-    provider: str
-    owner: str
-    repo: str
-    custom_links: Optional[list] = None
-    workflow_id: Optional[str] = None
-    workflow_name: Optional[str] = None
+    provider: str = Field(..., description="The git provider, e.g., 'github' or 'forgejo'")
+    owner: str = Field(..., description="The repository owner or organization name")
+    repo: str = Field(..., description="The repository name")
+    custom_links: Optional[list] = Field(None, description="An optional list of custom links (name and url) to display alongside the repository")
+    workflow_id: Optional[str] = Field(None, description="The specific workflow ID or filename to track. If omitted, the dashboard tracks the most recent run of any workflow.")
+    workflow_name: Optional[str] = Field(None, description="A friendly, human-readable name for the selected workflow")
 
 LOGS_DIR = os.environ.get("LOGS_DIR", "logs")
 os.makedirs(LOGS_DIR, exist_ok=True)
@@ -37,19 +41,19 @@ def get_log_filename(provider, owner, repo, workflow_id=None):
     safe_wf = ("_" + "".join(c for c in workflow_id if c.isalnum() or c in "-_")) if workflow_id else ""
     return f"{safe_provider}_{safe_owner}_{safe_repo}{safe_wf}_latest.log"
 
-@app.get("/")
+@app.get("/", summary="Dashboard UI", description="Serves the main HTML interface for the CI Dashboard.")
 async def read_index():
     return FileResponse("static/index.html")
 
-@app.get("/llms.txt")
+@app.get("/llms.txt", summary="LLM Agent Instructions", description="Serves a text file containing instructions on how LLMs and autonomous agents can interface with this system.")
 async def read_llms_txt():
     return FileResponse("static/llms.txt")
 
-@app.get("/api")
+@app.get("/api", summary="Redirect to Documentation", description="Redirects visitors accessing the base /api path directly to the interactive Swagger UI at /docs.")
 async def redirect_to_docs():
     return RedirectResponse(url="/docs")
 
-@app.get("/api/workflows")
+@app.get("/api/workflows", summary="List Available Workflows", description="Queries the specified provider to discover available CI workflows for a given repository. Often used to populate selection dropdowns.")
 async def get_workflows(provider: str, owner: str, repo: str):
     github_token = os.environ.get("GITHUB_TOKEN", "")
     forgejo_token = os.environ.get("FORGEJO_TOKEN", "")
@@ -88,7 +92,7 @@ async def get_workflows(provider: str, owner: str, repo: str):
             return []
     return []
 
-@app.get("/api/artifacts")
+@app.get("/api/artifacts", summary="Fetch Workflow Artifacts", description="Retrieves a list of generated artifacts for the latest run of a specific repository or workflow.")
 async def get_artifacts(provider: str, owner: str, repo: str, workflow_id: Optional[str] = None):
     github_token = os.environ.get("GITHUB_TOKEN", "")
     forgejo_token = os.environ.get("FORGEJO_TOKEN", "")
@@ -100,7 +104,7 @@ async def get_artifacts(provider: str, owner: str, repo: str, workflow_id: Optio
         return await fetch_forgejo_artifacts(owner, repo, forgejo_token, forgejo_url, workflow_id)
     return {"error": "Unknown provider"}
 
-@app.post("/api/logs")
+@app.post("/api/logs", summary="Upload External Logs", description="Allows external systems to push raw log data (up to 2MB) for a specific repository workflow run. Old logs are overwritten.")
 async def post_logs(provider: str, owner: str, repo: str, request: Request, workflow_id: Optional[str] = None):
     # To prevent DDOS from massive payloads, read the request stream in chunks
     # and buffer only the last MAX_LOG_SIZE bytes in a cyclic buffer
@@ -134,7 +138,7 @@ async def post_logs(provider: str, owner: str, repo: str, request: Request, work
 
     return {"message": "Log saved successfully", "file": filename}
 
-@app.get("/api/logs")
+@app.get("/api/logs", summary="Retrieve Workflow Logs", description="Fetches the execution logs for the most recent workflow run. Checks local storage first, then falls back to pulling from the git provider.")
 async def get_logs(provider: str, owner: str, repo: str, workflow_id: Optional[str] = None):
     filename = get_log_filename(provider, owner, repo, workflow_id)
     filepath = os.path.join(LOGS_DIR, filename)
@@ -153,7 +157,7 @@ async def get_logs(provider: str, owner: str, repo: str, workflow_id: Optional[s
         return {"log": await fetch_forgejo_logs(owner, repo, forgejo_token, forgejo_url, workflow_id)}
     return {"log": "Unknown provider"}
 
-@app.get("/api/status")
+@app.get("/api/status", summary="Retrieve System Status", description="Polls all configured repositories and their workflows to fetch their current execution status, timings, and commit metadata. Used by the frontend dashboard.")
 async def get_status():
     repos = storage.get_repos()
     tasks = []
@@ -194,17 +198,17 @@ async def get_status():
 
     return results
 
-@app.post("/api/repos")
+@app.post("/api/repos", summary="Track a Repository", description="Adds a new repository and/or specific workflow to the dashboard tracking list.")
 async def add_repo(item: RepoItem):
     storage.add_repo(item.provider, item.owner, item.repo, item.custom_links, item.workflow_id, item.workflow_name)
     return {"message": "added"}
 
-@app.delete("/api/repos")
+@app.delete("/api/repos", summary="Untrack a Repository", description="Removes a specific repository and workflow combination from the dashboard tracking list.")
 async def remove_repo(item: RepoItem):
     storage.remove_repo(item.provider, item.owner, item.repo, item.workflow_id)
     return {"message": "removed"}
 
-@app.get("/api/wait")
+@app.get("/api/wait", summary="Stream Execution Status", description="Provides a real-time event stream that periodically checks a workflow's status and pushes an update to the client once it has completed.")
 async def wait_status(provider: str, owner: str, repo: str, workflow_id: Optional[str] = None):
     github_token = os.environ.get("GITHUB_TOKEN", "")
     forgejo_token = os.environ.get("FORGEJO_TOKEN", "")
