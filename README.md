@@ -1,61 +1,66 @@
-# CI Status Dashboard
+# 🛑 Stop AI Hallucinations! Your Ultimate CI Dashboard & Agent Guardrail 🚀
 
-A Dockerized dashboard and robust REST API designed to monitor CI/CD action statuses across multiple Git providers, specifically GitHub and Forgejo/Gitea.
+> **The essential CI feedback loop and guardrail for autonomous AI development.**
 
-**Security Recommendation:** It is highly recommended to run this dashboard locally or within a secure internal network. Do not expose it directly to the public internet.
+Tired of your AI agent confidently hallucinating: *"I changed it, so now it works. I'll push the changes!"* only to break the main branch? 🤦‍♂️
 
-## Overview
+Welcome to the **CI Dashboard**—a beautifully simple, Dockerized hub that gives you an at-a-glance view of your projects, while serving as the ultimate **guardrail for your AI agents** (Claude, Gemini, GPT). Without a feedback loop from your Continuous Integration (CI) pipeline, agents fly blind. This dashboard serves as a foundational building block to provide immediate, factual build feedback to autonomous agents, stopping regressions in their tracks.
 
-### The User-Facing Side
-The dashboard provides a clean, visual interface for developers to track deployments and action statuses at a glance.
+![CI Dashboard Aesthetic](docs/img/dashboard.png)
 
-![CI Dashboard](docs/img/dashboard.png)
+---
 
-### The LLM-Facing Side
-For AI agents, scripts, and automated tools, the dashboard exposes a streamlined REST API. For extensive API examples and instructions tailored for LLMs and automated tools, please see `/llms.txt`, and you SHOULD just point your agent at it.
+## 🤖 For AI Agents: The Guardrail API
 
-## Features
+By pointing your agent to the repository URL and our `llms.txt`, you instantly give them superpower hooks to interact with your CI/CD pipeline. No more blind pushes! Your agent can now:
 
-### Visual Dashboard
-- **Clean UI:** A simple, large-font list view showing repository statuses.
-- **Color-Coded Status:** Quickly see if a build Passed, Failed, or is Running. Links directly to the specific CI action run.
-- **Repository Management:** Add, Edit, or Remove tracked repositories directly from the dashboard UI.
-- **Commit Context & Actions:** Displays the repository name, last updated time, and the first line of the latest commit message. Features a "View Logs" button for quick access.
-- **Custom Links:** Supports configuring and displaying custom quick-action links for each repository (e.g., Deploy Prod, Source, Kanban, Build Workflows).
+* ⏱️ **Estimate wait times** for CI runs.
+* ⏳ **Wait patiently** for the CI pipeline to finish.
+* 📥 **Receive immediate results** the second the build passes or fails.
+* 📜 **Request full CI logs** to autonomously debug failures.
+* 🔗 **Access important URLs** and check the current build status programmatically.
 
-### REST API for Automation & AI Agents (LLMs)
-The dashboard exposes a developer and AI-friendly API (detailed in `static/llms.txt`), making it easy to integrate into automated workflows or AI agent systems:
-- **Status Retrieval (`/api/status`):** Fetch the latest status of all tracked repositories.
-- **Log Management (`/api/logs`):**
-  - **Read:** Fetch raw log output or a link to the Web UI for a specific run.
-  - **Write:** Upload logs directly to the dashboard (useful for Forgejo/Gitea). Includes a protective 2MB cyclic buffer to retain the end of large logs without exhausting memory.
-  - **Smart Clearing:** Local logs are automatically cleared when a new run ID is detected, preventing accidental deletion of actively uploading logs.
-- **Artifacts (`/api/artifacts`):** Easily retrieve artifact metadata for recent runs.
-- **Long-Polling (`/api/wait`):** Stream updates and hold a connection open to wait until an in-progress build officially completes.
+### 🔌 Pro-Hacks: Setting Up Agent Hooks
 
-### Architecture & Quality
-- **Backend:** High-performance async API built with Python (FastAPI).
-- **Frontend:** Lightweight Vanilla HTML/CSS/JS.
-- **Storage:** Simple `data/repos.json` backend (designed to be persisted via Docker volume).
-- **Code Quality:** Enforced with robust pre-commit hooks and auto-formatting to maintain high standards and prevent syntax issues.
+Agents can discover how to use the dashboard simply by reading the `llms.txt` file at the root URL. You can use standard prompts to wire up these hooks:
 
-## Configuration
+#### Hack 1: The "Push & Wait" Hook
+Instruct your AI (Claude/Gemini/GPT) to run a script after pushing code that waits for the build and echoes the result:
+> *"After pushing code, run a script to wait for the build. Fetch the results using `curl -N -s 'https://your-dashboard-url/api/wait?provider=github&owner=your_user&repo=your_repo' | jq .status` and report back to me."*
 
-Authentication and settings are provided via Environment Variables. When deploying (e.g., via Docker), be sure to provide:
-- `GITHUB_TOKEN`: Your GitHub Personal Access Token.
-- `FORGEJO_URL`: The base URL of your Forgejo/Gitea instance (e.g., `https://git.yourdomain.com`).
-- `FORGEJO_TOKEN`: Your Forgejo/Gitea Personal Access Token.
+#### Hack 2: The "Tooling" Hook
+Give your agents a custom tool to gather build results across all your projects so they can check statuses before deciding what to work on next:
+> *"Before marking the task as complete, gather build results from the CI Dashboard using `curl -s https://your-dashboard-url/api/status` to verify that your changes did not break the build."*
 
-## API Usage Examples
+---
 
-**Get All Statuses:**
-```bash
-curl -s https://your-dashboard-url/api/status
-```
+## 🧑‍💻 For Humans: The Visual Hub
 
-**Wait for a Build to Complete:**
-```bash
-curl -N -s "https://your-dashboard-url/api/wait?provider=github&owner=owner_name&repo=repo_name"
-```
+Beyond acting as an API for AI, the CI Dashboard provides a clean, unified graphical experience for human developers. It's all about peace of mind:
 
-*For more extensive API examples and instructions tailored for LLMs and automated tools, please see `/llms.txt`, and you SHOULD just point your agent at it.*
+* 🎨 **Visual Sanity & At-a-Glance Status:** A clean, large-font UI to view the current build status of all your projects on a single screen.
+* 🚦 **Color-Coded Statuses:** Instantly see what's Running, Passed, or Failed. Stop digging through nested CI provider menus just to see if your `main` branch is green.
+* 🎯 **Deep Linking & Quick Actions:** Custom quick-action links (Deploy, Source, Kanban) get you exactly into the specific failing pipeline, commit, or log output you need to investigate with zero friction.
+
+---
+
+## 🚀 Get Started
+
+**For AI Agents:**
+Just point your agent to `https://your-dashboard-url/llms.txt` and tell it to read the docs. It will know exactly what to do! 🧠
+
+**For Humans (Deployment):**
+1. Clone the repo:
+   ```bash
+   git clone <repository-url>
+   cd ci-dashboard
+   ```
+2. Set your `GITHUB_TOKEN`, `FORGEJO_URL`, and/or `FORGEJO_TOKEN` in your environment (or `.env` file).
+3. Run via Docker Compose for a stress-free setup:
+   ```bash
+   docker-compose up -d
+   ```
+*(Note: Keep it safe! Run locally or on an internal network, not the public internet).*
+
+---
+**💡 Loving the seamless workflow? Drop a ⭐ on the repo and share your favorite AI automated workflows in the issues!**
