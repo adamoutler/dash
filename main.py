@@ -6,7 +6,9 @@ from fastapi.responses import FileResponse, StreamingResponse, RedirectResponse
 import os
 import httpx
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, Any
+from api.auth import require_basic_auth, get_current_user
+from fastapi import Depends
 from api.storage import RepoStorage
 from api.git_providers import fetch_github_status, fetch_forgejo_status, fetch_github_logs, fetch_forgejo_logs, fetch_github_artifacts, fetch_forgejo_artifacts
 
@@ -41,20 +43,20 @@ def get_log_filename(provider, owner, repo, workflow_id=None):
     safe_wf = ("_" + "".join(c for c in workflow_id if c.isalnum() or c in "-_")) if workflow_id else ""
     return f"{safe_provider}_{safe_owner}_{safe_repo}{safe_wf}_latest.log"
 
-@app.get("/", summary="Dashboard UI", description="Serves the main HTML interface for the CI Dashboard.")
-async def read_index():
+@app.get("/", summary="Dashboard UI", description="Serves the main HTML interface for the CI Dashboard.", include_in_schema=False)
+async def read_index(user: str = Depends(require_basic_auth)):
     return FileResponse("static/index.html")
 
 @app.get("/llms.txt", summary="LLM Agent Instructions", description="Serves a text file containing instructions on how LLMs and autonomous agents can interface with this system.")
 async def read_llms_txt():
     return FileResponse("static/llms.txt")
 
-@app.get("/api", summary="Redirect to Documentation", description="Redirects visitors accessing the base /api path directly to the interactive Swagger UI at /docs.")
-async def redirect_to_docs():
+@app.get("/api", summary="Redirect to Documentation", description="Redirects visitors accessing the base /api path directly to the interactive Swagger UI at /docs.", include_in_schema=False)
+async def redirect_to_docs(user: str = Depends(get_current_user)):
     return RedirectResponse(url="/docs")
 
 @app.get("/api/workflows", summary="List Available Workflows", description="Queries the specified provider to discover available CI workflows for a given repository. Often used to populate selection dropdowns.")
-async def get_workflows(provider: str, owner: str, repo: str):
+async def get_workflows(provider: str, owner: str, repo: str, user: str = Depends(get_current_user)):
     github_token = os.environ.get("GITHUB_TOKEN", "")
     forgejo_token = os.environ.get("FORGEJO_TOKEN", "")
     forgejo_url = os.environ.get("FORGEJO_URL", "")
@@ -93,7 +95,7 @@ async def get_workflows(provider: str, owner: str, repo: str):
     return []
 
 @app.get("/api/artifacts", summary="Fetch Workflow Artifacts", description="Retrieves a list of generated artifacts for the latest run of a specific repository or workflow.")
-async def get_artifacts(provider: str, owner: str, repo: str, workflow_id: Optional[str] = None):
+async def get_artifacts(provider: str, owner: str, repo: str, workflow_id: Optional[str] = None, user: str = Depends(get_current_user)):
     github_token = os.environ.get("GITHUB_TOKEN", "")
     forgejo_token = os.environ.get("FORGEJO_TOKEN", "")
     forgejo_url = os.environ.get("FORGEJO_URL", "")
@@ -105,7 +107,7 @@ async def get_artifacts(provider: str, owner: str, repo: str, workflow_id: Optio
     return {"error": "Unknown provider"}
 
 @app.post("/api/logs", summary="Upload External Logs", description="Allows external systems to push raw log data (up to 2MB) for a specific repository workflow run. Old logs are overwritten.")
-async def post_logs(provider: str, owner: str, repo: str, request: Request, workflow_id: Optional[str] = None):
+async def post_logs(provider: str, owner: str, repo: str, request: Request, workflow_id: Optional[str] = None, user: str = Depends(get_current_user)):
     # To prevent DDOS from massive payloads, read the request stream in chunks
     # and buffer only the last MAX_LOG_SIZE bytes in a cyclic buffer
     buffer = bytearray()
@@ -139,7 +141,7 @@ async def post_logs(provider: str, owner: str, repo: str, request: Request, work
     return {"message": "Log saved successfully", "file": filename}
 
 @app.get("/api/logs", summary="Retrieve Workflow Logs", description="Fetches the execution logs for the most recent workflow run. Checks local storage first, then falls back to pulling from the git provider.")
-async def get_logs(provider: str, owner: str, repo: str, workflow_id: Optional[str] = None):
+async def get_logs(provider: str, owner: str, repo: str, workflow_id: Optional[str] = None, user: str = Depends(get_current_user)):
     filename = get_log_filename(provider, owner, repo, workflow_id)
     filepath = os.path.join(LOGS_DIR, filename)
 
@@ -158,7 +160,7 @@ async def get_logs(provider: str, owner: str, repo: str, workflow_id: Optional[s
     return {"log": "Unknown provider"}
 
 @app.get("/api/status", summary="Retrieve System Status", description="Polls all configured repositories and their workflows to fetch their current execution status, timings, and commit metadata. Used by the frontend dashboard.")
-async def get_status():
+async def get_status(user: str = Depends(get_current_user)):
     repos = storage.get_repos()
     tasks = []
     github_token = os.environ.get("GITHUB_TOKEN", "")
@@ -199,17 +201,17 @@ async def get_status():
     return results
 
 @app.post("/api/repos", summary="Track a Repository", description="Adds a new repository and/or specific workflow to the dashboard tracking list.")
-async def add_repo(item: RepoItem):
+async def add_repo(item: RepoItem, user: str = Depends(get_current_user)):
     storage.add_repo(item.provider, item.owner, item.repo, item.custom_links, item.workflow_id, item.workflow_name)
     return {"message": "added"}
 
 @app.delete("/api/repos", summary="Untrack a Repository", description="Removes a specific repository and workflow combination from the dashboard tracking list.")
-async def remove_repo(item: RepoItem):
+async def remove_repo(item: RepoItem, user: str = Depends(get_current_user)):
     storage.remove_repo(item.provider, item.owner, item.repo, item.workflow_id)
     return {"message": "removed"}
 
 @app.get("/api/wait", summary="Stream Execution Status", description="Provides a real-time event stream that periodically checks a workflow's status and pushes an update to the client once it has completed.")
-async def wait_status(provider: str, owner: str, repo: str, workflow_id: Optional[str] = None):
+async def wait_status(provider: str, owner: str, repo: str, workflow_id: Optional[str] = None, user: str = Depends(get_current_user)):
     github_token = os.environ.get("GITHUB_TOKEN", "")
     forgejo_token = os.environ.get("FORGEJO_TOKEN", "")
     forgejo_url = os.environ.get("FORGEJO_URL", "")
@@ -234,3 +236,182 @@ async def wait_status(provider: str, owner: str, repo: str, workflow_id: Optiona
                 break
 
     return StreamingResponse(event_stream(), media_type="text/plain")
+
+class TokenCreateRequest(BaseModel):
+    name: str
+    expiry: Optional[float] = None
+
+@app.get("/configure", summary="Configuration UI", description="Serves the configuration UI", include_in_schema=False)
+async def read_configure(user: str = Depends(require_basic_auth)):
+    return FileResponse("static/configure.html")
+
+@app.post("/configure/tokens")
+async def create_new_token(req: TokenCreateRequest, user: str = Depends(require_basic_auth)):
+    from api.auth import token_manager
+    token = token_manager.create_token(req.name, req.expiry or 31536000)
+    return {"token": token}
+
+@app.get("/configure/data")
+async def get_configure_data(user: str = Depends(require_basic_auth)):
+    from api.auth import token_manager
+    repos = storage.get_repos()
+    tokens = token_manager.list_tokens()
+    return {"repos": repos, "tokens": tokens}
+
+@app.delete("/configure/tokens/{token}")
+async def delete_token(token: str, user: str = Depends(require_basic_auth)):
+    from api.auth import token_manager
+    success = token_manager.revoke_token(token)
+    if not success:
+        raise HTTPException(status_code=404, detail="Token not found")
+    return {"message": "Token revoked"}
+
+class JsonRpcRequest(BaseModel):
+    jsonrpc: str
+    method: str
+    params: Optional[dict] = None
+    id: Optional[Any] = None
+
+@app.post("/mcp", summary="MCP JSON-RPC Endpoint", description="Handles macro commands from AI agents using JSON-RPC 2.0")
+async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depends(get_current_user)):
+    if req.jsonrpc != "2.0":
+        return {
+            "jsonrpc": "2.0",
+            "id": req.id,
+            "error": {
+                "code": -32600,
+                "message": "Invalid Request"
+            }
+        }
+
+    try:
+        params = req.params or {}
+        project = params.get("project") or request.headers.get("x-project")
+        workflow = params.get("workflow") or request.headers.get("x-workflow")
+
+        if req.method in ["get_project_status", "get_logs", "wait"]:
+            repos = storage.get_repos()
+            matched_repo = None
+            if project:
+                for r in repos:
+                    # Match exact repo name or owner/repo
+                    if r["repo"] == project or f"{r['owner']}/{r['repo']}" == project:
+                        # If workflow is specified, match it. If not, match if the repo config doesn't require a specific workflow or we just take the first match
+                        if not workflow or r.get("workflow_name") == workflow or r.get("workflow_id") == workflow:
+                            matched_repo = r
+                            break
+                # If project was not found in loop, matched_repo remains None
+            elif len(repos) == 1:
+                # If no project specified but only 1 project is configured, default to it
+                matched_repo = repos[0]
+
+            if not matched_repo:
+                valid_projects = [f"{r['owner']}/{r['repo']} (workflow: {r.get('workflow_name') or r.get('workflow_id') or 'any'})" for r in repos]
+                return {
+                    "jsonrpc": "2.0",
+                    "id": req.id,
+                    "error": {
+                        "code": -32602,
+                        "message": f"Project not found. Valid projects: {', '.join(valid_projects)}. Please scope your request."
+                    }
+                }
+
+            provider = matched_repo["provider"]
+            owner = matched_repo["owner"]
+            repo_name = matched_repo["repo"]
+            wf_id = matched_repo.get("workflow_id")
+
+            if req.method == "get_project_status":
+                github_token = os.environ.get("GITHUB_TOKEN", "")
+                forgejo_token = os.environ.get("FORGEJO_TOKEN", "")
+                forgejo_url = os.environ.get("FORGEJO_URL", "")
+
+                if provider == "github":
+                    result = await fetch_github_status(owner, repo_name, github_token, wf_id)
+                elif provider == "forgejo":
+                    result = await fetch_forgejo_status(owner, repo_name, forgejo_token, forgejo_url, wf_id)
+                else:
+                    raise Exception("Unknown provider")
+
+                return {
+                    "jsonrpc": "2.0",
+                    "id": req.id,
+                    "result": {
+                        "url": result.get("url"),
+                        "repo_url": result.get("repo_url"),
+                        "commit_message": result.get("commit_message"),
+                        "started_at": result.get("started_at"),
+                        "average_recent_duration": result.get("average_recent_duration"),
+                        "status": result.get("status")
+                    }
+                }
+
+            elif req.method == "get_logs":
+                base_url = str(request.base_url).rstrip('/')
+                url = f"{base_url}/api/logs?provider={provider}&owner={owner}&repo={repo_name}"
+                if wf_id:
+                    url += f"&workflow_id={wf_id}"
+
+                return {
+                    "jsonrpc": "2.0",
+                    "id": req.id,
+                    "result": url
+                }
+
+            elif req.method == "wait":
+                async def wait_generator():
+                    github_token = os.environ.get("GITHUB_TOKEN", "")
+                    forgejo_token = os.environ.get("FORGEJO_TOKEN", "")
+                    forgejo_url = os.environ.get("FORGEJO_URL", "")
+
+                    while True:
+                        if provider == "github":
+                            result = await fetch_github_status(owner, repo_name, github_token, wf_id)
+                        elif provider == "forgejo":
+                            result = await fetch_forgejo_status(owner, repo_name, forgejo_token, forgejo_url, wf_id)
+                        else:
+                            yield json.dumps({
+                                "jsonrpc": "2.0",
+                                "id": req.id,
+                                "error": {"code": -32000, "message": "Unknown provider"}
+                            })
+                            break
+
+                        status = result.get("status")
+                        if status in ["running", "in_progress", "queued", "waiting", "requested", "pending"]:
+                            yield " "
+                            await asyncio.sleep(10)
+                        else:
+                            yield json.dumps({
+                                "jsonrpc": "2.0",
+                                "id": req.id,
+                                "result": {
+                                    "url": result.get("url"),
+                                    "repo_url": result.get("repo_url"),
+                                    "commit_message": result.get("commit_message"),
+                                    "started_at": result.get("started_at"),
+                                    "average_recent_duration": result.get("average_recent_duration"),
+                                    "status": status
+                                }
+                            })
+                            break
+                return StreamingResponse(wait_generator(), media_type="application/json")
+
+        else:
+            return {
+                "jsonrpc": "2.0",
+                "id": req.id,
+                "error": {
+                    "code": -32601,
+                    "message": "Method not found"
+                }
+            }
+    except Exception as e:
+        return {
+            "jsonrpc": "2.0",
+            "id": req.id,
+            "error": {
+                "code": -32000,
+                "message": str(e)
+            }
+        }
