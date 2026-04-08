@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CI Dashboard Configuration</title>
+    <style>
+        body { font-family: sans-serif; margin: 2rem; max-width: 800px; }
+        .section { margin-bottom: 2rem; padding: 1rem; border: 1px solid #ccc; border-radius: 4px; }
+        button { padding: 0.5rem 1rem; cursor: pointer; }
+        input { padding: 0.5rem; margin-right: 0.5rem; }
+    </style>
+</head>
+<body>
+    <h1>CI Dashboard Configuration</h1>
+
+    <div class="section" id="tokens-section">
+        <h2>Tokens</h2>
+        <div>
+            <input type="text" id="token-name" placeholder="Token Name">
+            <button onclick="createToken()">Create Token</button>
+        </div>
+        <div id="new-token-container" style="display:none; margin-top:1rem;">
+            <strong>New Token (Save this now!):</strong>
+            <code id="new-token-value" style="background:#eee; padding:2px 4px;"></code>
+        </div>
+        <ul id="tokens-list"></ul>
+    </div>
+
+    <div class="section" id="projects-section">
+        <h2>Configured Projects</h2>
+        <ul id="projects-list"></ul>
+    </div>
+
+    <div class="section" id="mcp-section">
+        <h2>MCP Server Connection</h2>
+        <p>Use these details to connect an MCP client:</p>
+        <div><strong>URL:</strong> <span id="mcp-url"></span></div>
+        <div><strong>Auth Header:</strong> Bearer &lt;YOUR_TOKEN&gt;</div>
+    </div>
+
+    <script>
+        document.getElementById('mcp-url').textContent = window.location.origin + '/mcp';
+
+        async function loadData() {
+            const res = await fetch('/configure/data');
+            if (res.ok) {
+                const data = await res.json();
+
+                const projectsList = document.getElementById('projects-list');
+                projectsList.innerHTML = '';
+                data.repos.forEach(r => {
+                    const li = document.createElement('li');
+                    li.textContent = `${r.provider} - ${r.owner}/${r.repo} ` + (r.workflow_name ? `(${r.workflow_name})` : '');
+                    projectsList.appendChild(li);
+                });
+
+                const tokensList = document.getElementById('tokens-list');
+                tokensList.innerHTML = '';
+                data.tokens.forEach((info) => {
+                    const li = document.createElement('li');
+                    li.textContent = `${info.name} `;
+                    const btn = document.createElement('button');
+                    btn.textContent = 'Revoke';
+                    btn.onclick = () => revokeToken(info.token);
+                    li.appendChild(btn);
+                    tokensList.appendChild(li);
+                });
+            } else if (res.status === 401) {
+                alert('Authentication required');
+            }
+        }
+
+        async function createToken() {
+            const name = document.getElementById('token-name').value;
+            if (!name) return;
+            const res = await fetch('/configure/tokens', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: name })
+            });
+            if (res.ok) {
+                const data = await res.json();
+                document.getElementById('new-token-container').style.display = 'block';
+                document.getElementById('new-token-value').textContent = data.token;
+                document.getElementById('token-name').value = '';
+                loadData();
+            }
+        }
+
+        async function revokeToken(token) {
+            const res = await fetch(`/configure/tokens/${token}`, { method: 'DELETE' });
+            if (res.ok) {
+                loadData();
+            }
+        }
+
+        loadData();
+    </script>
+</body>
+</html>

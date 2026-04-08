@@ -287,14 +287,26 @@
     }
 
     async function fetchStatuses() {
-        const res = await fetch('/api/status');
-        dashboardData = await res.json();
+        try {
+            const res = await fetch('/api/status');
+            if (res.status === 401) {
+                const list = document.getElementById('repoList');
+                list.innerHTML = '<div style="padding: 20px; text-align: center; color: #cb2431;">Authentication required. Please refresh the page to login.</div>';
+                return;
+            }
+            dashboardData = await res.json();
 
-        const list = document.getElementById('repoList');
-        if (dashboardData.length === 0) {
-            list.innerHTML = '<div style="padding: 20px; text-align: center; color: #586069;">No repositories added yet.</div>';
-            return;
-        }
+            if (!Array.isArray(dashboardData)) {
+                const list = document.getElementById('repoList');
+                list.innerHTML = '<div style="padding: 20px; text-align: center; color: #cb2431;">Error: Invalid data received from server.</div>';
+                return;
+            }
+
+            const list = document.getElementById('repoList');
+            if (dashboardData.length === 0) {
+                list.innerHTML = '<div style="padding: 20px; text-align: center; color: #586069;">No repositories added yet.</div>';
+                return;
+            }
 
         list.innerHTML = dashboardData.map(item => {
             const linksHtml = (item.custom_links && item.custom_links.length > 0) ?
@@ -344,6 +356,11 @@
                 </div>
             </div>
         `}).join('');
+        } catch (e) {
+            console.error("Error fetching statuses:", e);
+            const list = document.getElementById('repoList');
+            list.innerHTML = '<div style="padding: 20px; text-align: center; color: #cb2431;">Error fetching data. Check console for details.</div>';
+        }
     }
 
     // Initial fetch and poll every 30s
