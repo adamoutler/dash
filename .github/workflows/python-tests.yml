@@ -14,25 +14,31 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.12'
-        cache: 'pip'
+    - name: Initialize Log File
+      run: echo "Starting CI run..." > job-logs.txt
 
     - name: Install dependencies and Run Tests
       run: |
         {
+          echo "=== Environment Info ==="
+          python3 --version || echo "python3 not found"
+
+          echo "=== Setting up Virtual Environment ==="
+          python3 -m venv .venv
+          source .venv/bin/activate
+
           echo "=== Installing Dependencies ==="
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+
           echo "=== Running Tests ==="
           python -m pytest -v
-        } 2>&1 | tee job-logs.txt
+        } 2>&1 | tee -a job-logs.txt
 
     - name: Upload logs to Dashboard
       if: always()
       run: |
+        echo "Uploading logs..." >> job-logs.txt
         curl -X POST "https://dash.hackedyour.info/api/logs?provider=forgejo&owner=Updates&repo=gitdash" \
              -H "Content-Type: text/plain" \
              --data-binary @job-logs.txt || true
