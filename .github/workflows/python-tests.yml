@@ -20,11 +20,6 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.12'
-
     - name: Initialize Log File
       run: echo "Starting CI run..." > job-logs.txt
 
@@ -32,14 +27,22 @@ jobs:
       run: |
         {
           echo "=== Environment Info ==="
-          python --version || echo "python not found"
+          python3 --version || echo "python3 not found"
 
           echo "=== Installing Dependencies ==="
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          # Try to install venv if missing
+          sudo apt-get update && sudo apt-get install -y python3-venv python3-pip || echo "apt-get failed, continuing..."
+
+          python3 -m venv .venv || echo "venv creation failed"
+          if [ -f ".venv/bin/activate" ]; then
+            source .venv/bin/activate
+          fi
+
+          python3 -m pip install --upgrade pip
+          pip3 install -r requirements.txt
 
           echo "=== Running Tests ==="
-          python -m pytest -v
+          python3 -m pytest -v
         } 2>&1 | tee -a job-logs.txt
 
     - name: Upload logs to Dashboard
