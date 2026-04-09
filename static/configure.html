@@ -4,15 +4,38 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CI Dashboard Configuration</title>
+    <link rel="stylesheet" href="/static/design-system.css">
+    <script>
+        (function() {
+            const savedTheme = localStorage.getItem('theme');
+            const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            if (savedTheme === 'dark' || (!savedTheme && systemPrefersDark)) {
+                document.documentElement.setAttribute('data-theme', 'dark');
+            } else {
+                document.documentElement.setAttribute('data-theme', 'light');
+            }
+        })();
+    </script>
     <style>
-        body { font-family: sans-serif; margin: 2rem; max-width: 800px; }
-        .section { margin-bottom: 2rem; padding: 1rem; border: 1px solid #ccc; border-radius: 4px; }
-        button { padding: 0.5rem 1rem; cursor: pointer; }
-        input { padding: 0.5rem; margin-right: 0.5rem; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; margin: 2rem auto; max-width: 800px; background: var(--bg-primary); color: var(--text-primary); transition: background-color 0.3s ease, color 0.3s ease; }
+        .section { margin-bottom: 2rem; padding: 1rem; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-surface); transition: background-color 0.3s ease, border-color 0.3s ease; }
+        button { padding: 0.5rem 1rem; cursor: pointer; background: var(--btn-primary-bg); color: var(--btn-primary-text); border: none; border-radius: 4px; transition: background-color 0.3s ease; }
+        input { padding: 0.5rem; margin-right: 0.5rem; border: 1px solid var(--input-border); border-radius: 4px; background: var(--input-bg); color: var(--input-text); transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease; }
+        a { color: var(--link-color); transition: color 0.3s ease; }
+        code { background: var(--log-bg); color: var(--log-color); padding: 2px 4px; border-radius: 4px; }
+        .header-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
     </style>
 </head>
 <body>
-    <h1>CI Dashboard Configuration</h1>
+    <div class="header-top">
+        <h1 style="margin: 0;">CI Dashboard Configuration</h1>
+        <div>
+            <button class="theme-toggle-btn" style="background:none; border:none; font-size:20px; padding:0; color:var(--text-primary); transition: transform 0.2s ease; opacity: 0.8;" onclick="toggleTheme()" title="Toggle Dark Mode" onmouseover="this.style.opacity='1'; this.style.transform='scale(1.1)'" onmouseout="this.style.opacity='0.8'; this.style.transform='none'">
+                <span id="themeIcon">☀️</span>
+            </button>
+            <a href="/" style="margin-left: 15px; text-decoration: none;">🏠 Back</a>
+        </div>
+    </div>
 
     <div class="section" id="tokens-section">
         <h2>Tokens</h2>
@@ -40,6 +63,24 @@
     </div>
 
     <script>
+        function updateThemeIcon() {
+            const currentTheme = document.documentElement.getAttribute('data-theme');
+            const icon = document.getElementById('themeIcon');
+            if (icon) {
+                icon.innerText = currentTheme === 'dark' ? '🌙' : '☀️';
+            }
+        }
+
+        function toggleTheme() {
+            const currentTheme = document.documentElement.getAttribute('data-theme');
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-theme', newTheme);
+            localStorage.setItem('theme', newTheme);
+            updateThemeIcon();
+        }
+
+        updateThemeIcon();
+
         document.getElementById('mcp-url').textContent = window.location.origin + '/mcp';
 
         async function loadData() {
