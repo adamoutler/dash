@@ -303,6 +303,32 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
     try:
         params = req.params or {}
 
+        if req.method == "initialize":
+            return {
+                "jsonrpc": "2.0",
+                "id": req.id,
+                "result": {
+                    "protocolVersion": "2024-11-05",
+                    "capabilities": {
+                        "tools": {}
+                    },
+                    "serverInfo": {
+                        "name": "dashboard-mcp",
+                        "version": "1.0.0"
+                    }
+                }
+            }
+
+        if req.method == "notifications/initialized":
+            return None
+
+        if req.method == "ping":
+            return {
+                "jsonrpc": "2.0",
+                "id": req.id,
+                "result": {}
+            }
+
         if req.method == "tools/list":
             return {
                 "jsonrpc": "2.0",
