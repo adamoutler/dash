@@ -58,6 +58,17 @@ Beyond acting as an API for AI, the CI Dashboard provides a clean, unified graph
 * 🚦 **Color-Coded Statuses:** Instantly see what's Running, Passed, or Failed. Stop digging through nested CI provider menus just to see if your `main` branch is green.
 * 🎯 **Deep Linking & Quick Actions:** Custom quick-action links (Deploy, Source, Kanban) get you exactly into the specific failing pipeline, commit, or log output you need to investigate with zero friction.
 
+### ➕ Adding Repositories in the UI
+
+When clicking **+ Add Repository** in the dashboard, the input format depends on the CI provider you select:
+
+* **GitHub / Gitea / Forgejo:**
+  * **Owner:** The username or organization name (e.g., `adamoutler`).
+  * **Repo:** The repository name (e.g., `gitdash`).
+* **Jenkins:**
+  * **Owner:** A custom display name for the dashboard (e.g., `gitdash Deploy` or `BrowserTerm`).
+  * **Repo:** The full URL to the main project/job page (e.g., `https://jenkins.adamoutler.com/view/Upgrades/job/Updates/job/gitdash/job/master/`).
+
 ---
 
 ## 🚀 Get Started
