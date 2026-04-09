@@ -454,7 +454,7 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                 return {
                     "jsonrpc": "2.0",
                     "id": req.id,
-                    "result": {"content": [{"type": "text", "text": url}]} if is_tool_call else url
+                    "result": {"content": [{"type": "text", "text": json.dumps({"url": url})}]} if is_tool_call else url
                 }
 
             elif method_name == "wait":
