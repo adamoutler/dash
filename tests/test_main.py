@@ -33,3 +33,59 @@ def test_add_and_get_repos():
     # Test removing
     response = client.request("DELETE", "/api/repos", json={"provider": "github", "owner": "test", "repo": "testrepo"}, auth=auth)
     assert response.status_code == 200
+
+def test_post_and_get_logs(tmp_path, monkeypatch):
+    monkeypatch.setenv("LOGS_DIR", str(tmp_path))
+    auth = ("testuser", "testpass")
+
+    log_content = b"This is a test log.\nLine 2.\n"
+    response = client.post(
+        "/api/logs?provider=github&owner=testowner&repo=testrepo",
+        content=log_content,
+        auth=auth
+    )
+    assert response.status_code == 200
+    assert response.json()["message"] == "Log saved successfully"
+
+    response = client.get(
+        "/api/logs?provider=github&owner=testowner&repo=testrepo",
+        auth=auth
+    )
+    assert response.status_code == 200
+    assert response.json()["log"] == "This is a test log.\nLine 2.\n"
+
+def test_post_logs_invalid_params():
+    auth = ("testuser", "testpass")
+    # provider with only invalid characters will become empty string after sanitization
+    response = client.post(
+        "/api/logs?provider=///&owner=testowner&repo=testrepo",
+        content=b"test",
+        auth=auth
+    )
+    assert response.status_code == 400
+    assert "Invalid provider" in response.json()["detail"]
+
+def test_post_logs_truncation(tmp_path, monkeypatch):
+    monkeypatch.setenv("LOGS_DIR", str(tmp_path))
+    auth = ("testuser", "testpass")
+
+    import main
+    monkeypatch.setattr(main, "MAX_LOG_SIZE", 100)
+
+    large_log = b"A" * 150
+    response = client.post(
+        "/api/logs?provider=github&owner=testowner&repo=testrepo",
+        content=large_log,
+        auth=auth
+    )
+    assert response.status_code == 200
+
+    response = client.get(
+        "/api/logs?provider=github&owner=testowner&repo=testrepo",
+        auth=auth
+    )
+    assert response.status_code == 200
+    returned_log = response.json()["log"]
+    assert returned_log.startswith("[TRUNCATED...]\n")
+    assert returned_log.endswith("A" * 100)
+    assert len(returned_log) == 100 + len("[TRUNCATED...]\n")
