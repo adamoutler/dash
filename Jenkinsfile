@@ -8,10 +8,11 @@ pipeline {
             environment {
                 FORGEJO_TOKEN = credentials('forgejo-token-aoutler')
                 GITHUB_TOKEN = credentials('github-adamoutler-token')
-                JENKINS_CRED = credentials('Adam-Jenkins-Token')
             }
             steps {
-                sh 'docker compose up -d --build'
+                withCredentials([usernamePassword(credentialsId: 'Adam-Jenkins-Token', passwordVariable: 'JENKINS_TOKEN', usernameVariable: 'JENKINS_USER')]) {
+                    sh 'docker compose up -d --build'
+                }
             }
         }
     }
