@@ -2,18 +2,15 @@ name: Python Unit Tests
 
 on:
   push:
-    branches:
-      - master
-      - main
-      - '**'
+    branches: [ "**" ]
   pull_request:
-    branches:
-      - master
-      - main
-      - '**'
+    branches: [ "**" ]
 
 jobs:
   test:
+    runs-on: ubuntu-latest
+    container:
+      image: python:3.12
 
     steps:
     - name: Checkout repository
@@ -26,28 +23,22 @@ jobs:
       run: |
         {
           echo "=== Environment Info ==="
-          python3 --version || echo "python3 not found"
+          python --version || echo "python not found"
 
           echo "=== Installing Dependencies ==="
-          # Try to install venv if missing (no sudo needed in container)
-          apt-get update && apt-get install -y python3-venv python3-pip || echo "apt-get failed, continuing..."
-
-          python3 -m venv .venv || echo "venv creation failed"
-          if [ -f ".venv/bin/activate" ]; then
-            source .venv/bin/activate
-          fi
-
-          python3 -m pip install --upgrade pip
-          python3 -m pip install -r requirements.txt || pip3 install -r requirements.txt
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
           echo "=== Running Tests ==="
-          python3 -m pytest -v
+          python -m pytest -v
         } 2>&1 | tee -a job-logs.txt
 
     - name: Upload logs to Dashboard
       if: always()
       run: |
         echo "Uploading logs..." >> job-logs.txt
+        # If curl is not installed in the python:3.12 container, install it
+        apt-get update && apt-get install -y curl || echo "curl already installed"
         curl -X POST "https://dash.hackedyour.info/api/logs?provider=forgejo&owner=Updates&repo=gitdash" \
              -H "Content-Type: text/plain" \
              --data-binary @job-logs.txt || true
