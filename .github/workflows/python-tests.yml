@@ -9,8 +9,6 @@ on:
 jobs:
   test:
     runs-on: shark-wrangler
-    container:
-      image: python:3.12
 
     steps:
     - name: Checkout repository
@@ -19,9 +17,14 @@ jobs:
     - name: Install dependencies and Run Tests
       run: |
         {
+          echo "=== Setting up Virtual Environment ==="
+          python3.12 -m venv .venv
+          source .venv/bin/activate
+
           echo "=== Installing Dependencies ==="
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+
           echo "=== Running Tests ==="
           python -m pytest -v
         } 2>&1 | tee job-logs.txt
