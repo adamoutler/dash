@@ -7,8 +7,8 @@ services:
       FORGEJO_URL: "https://git.adamoutler.com"
       FORGEJO_TOKEN: "${FORGEJO_TOKEN}"
       GITHUB_TOKEN: "${GITHUB_TOKEN}"
-      JENKINS_USER: "${JENKINS_CRED_USR}"
-      JENKINS_TOKEN: "${JENKINS_CRED_PSW}"
+      JENKINS_USER: "${JENKINS_USER}"
+      JENKINS_TOKEN: "${JENKINS_TOKEN}"
       LOGS_DIR: "/app/logs"
     volumes:
       - dashboard_data:/app/data
