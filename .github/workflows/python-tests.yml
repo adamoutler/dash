@@ -9,8 +9,6 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    container:
-      image: python:3.12
 
     steps:
     - name: Checkout repository
@@ -23,22 +21,27 @@ jobs:
       run: |
         {
           echo "=== Environment Info ==="
-          python --version || echo "python not found"
+          python3 --version || echo "python3 not found"
 
           echo "=== Installing Dependencies ==="
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          apt-get update && apt-get install -y python3-venv python3-pip curl || echo "apt-get failed, continuing..."
+
+          python3 -m venv .venv || echo "venv creation failed"
+          if [ -f ".venv/bin/activate" ]; then
+            source .venv/bin/activate
+          fi
+
+          python3 -m pip install --upgrade pip
+          python3 -m pip install -r requirements.txt || pip3 install -r requirements.txt
 
           echo "=== Running Tests ==="
-          python -m pytest -v
+          python3 -m pytest -v
         } 2>&1 | tee -a job-logs.txt
 
     - name: Upload logs to Dashboard
       if: always()
       run: |
         echo "Uploading logs..." >> job-logs.txt
-        # If curl is not installed in the python:3.12 container, install it
-        apt-get update && apt-get install -y curl || echo "curl already installed"
         curl -X POST "https://dash.hackedyour.info/api/logs?provider=forgejo&owner=Updates&repo=gitdash" \
              -H "Content-Type: text/plain" \
              --data-binary @job-logs.txt || true
