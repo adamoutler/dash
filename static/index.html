@@ -348,6 +348,14 @@
             const wfDisplay = item.workflow_name ? ` <span style="font-size: 14px; color: #586069; font-weight: normal;">(${item.workflow_name})</span>` : '';
             const displayName = item.provider === 'jenkins' ? item.owner : `${item.owner}/${item.repo}`;
 
+            let baseUrl = '';
+            try {
+                baseUrl = new URL(item.repo_url !== '#' ? item.repo_url : item.url).origin;
+            } catch (e) {
+                baseUrl = 'https://github.com';
+            }
+            const faviconHtml = `<img src="${baseUrl}/favicon.ico" style="width: 18px; height: 18px; margin-right: 8px; vertical-align: middle;" onerror="this.style.display='none'">`;
+
             return `
             <div class="repo-item">
                 <a href="${item.url}" target="_blank" class="status-block ${getStatusClass(item.status)}" style="${progressHtml ? 'flex-direction: column; padding: 10px; gap: 4px;' : ''}">
@@ -355,8 +363,8 @@
                     ${progressHtml}
                 </a>                <div class="info-block">
                     <div class="info-header">
-                        <a href="${item.repo_url}" target="_blank" style="text-decoration: none; color: inherit; flex-grow: 1;">
-                            <span class="repo-name">${displayName}${wfDisplay}</span>
+                        <a href="${item.repo_url}" target="_blank" style="text-decoration: none; color: inherit; flex-grow: 1; display: flex; align-items: center;">
+                            ${faviconHtml}<span class="repo-name">${displayName}${wfDisplay}</span>
                         </a>
                         <div style="display: flex; align-items: center; gap: 15px;">
                             <span class="time-text">${formatTime(item.updated_at)}</span>
