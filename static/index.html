@@ -21,13 +21,13 @@
         .status-running { background: #fff8e1; color: #f57f17; }
         .status-error { background: #f6f8fa; color: #586069; }
 
-        .info-block { flex-grow: 1; padding: 12px 15px; text-decoration: none; color: inherit; display: flex; flex-direction: column; justify-content: center; position: relative;}
-        .info-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
-        .repo-name { font-weight: bold; font-size: 18px; color: #0366d6; }
-        .time-text { color: #586069; font-size: 14px; }
+        .info-block { flex-grow: 1; padding: 12px 15px; text-decoration: none; color: inherit; display: flex; flex-direction: column; justify-content: center; position: relative; min-width: 0;}
+        .info-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; min-width: 0; gap: 15px; }
+        .repo-name { font-weight: bold; font-size: 18px; color: #0366d6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+        .time-text { color: #586069; font-size: 14px; white-space: nowrap; }
         .commit-msg { color: #586069; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 600px; }
 
-        .actions-container { display: flex; gap: 15px; align-items: center; }
+        .actions-container { display: flex; gap: 15px; align-items: center; flex-shrink: 0; }
         .icon-btn { background: none; border: none; cursor: pointer; font-size: 18px; padding: 0; opacity: 0.6; transition: opacity 0.2s; font-weight: bold; }
         .icon-btn:hover { opacity: 1; }
         .delete-btn { color: #cb2431; }
@@ -354,7 +354,13 @@
             } catch (e) {
                 baseUrl = 'https://github.com';
             }
-            const faviconHtml = `<img src="${baseUrl}/favicon.ico" style="width: 18px; height: 18px; margin-right: 8px; vertical-align: middle;" onerror="this.style.display='none'">`;
+
+            let iconPath = '/favicon.ico';
+            if (item.provider === 'forgejo') {
+                iconPath = '/assets/img/favicon.svg';
+            }
+
+            const faviconHtml = `<img src="${baseUrl}${iconPath}" style="width: 18px; height: 18px; margin-right: 8px; vertical-align: middle;" onerror="this.style.display='none'">`;
 
             return `
             <div class="repo-item">
@@ -363,10 +369,10 @@
                     ${progressHtml}
                 </a>                <div class="info-block">
                     <div class="info-header">
-                        <a href="${item.repo_url}" target="_blank" style="text-decoration: none; color: inherit; flex-grow: 1; display: flex; align-items: center;">
+                        <a href="${item.repo_url}" target="_blank" style="text-decoration: none; color: inherit; flex-grow: 1; display: flex; align-items: center; min-width: 0;">
                             ${faviconHtml}<span class="repo-name">${displayName}${wfDisplay}</span>
                         </a>
-                        <div style="display: flex; align-items: center; gap: 15px;">
+                        <div style="display: flex; align-items: center; gap: 15px; flex-shrink: 0;">
                             <span class="time-text">${formatTime(item.updated_at)}</span>
                             <div class="actions-container">
                                 <button class="icon-btn" style="color: #6a737d;" onclick="fetchLogs('${item.provider}', '${item.owner}', '${item.repo}', '${item.workflow_id || ''}')" title="View Logs">📄</button>
