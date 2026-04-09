@@ -30,8 +30,8 @@ jobs:
           python3 --version || echo "python3 not found"
 
           echo "=== Installing Dependencies ==="
-          # Try to install venv if missing
-          sudo apt-get update && sudo apt-get install -y python3-venv python3-pip || echo "apt-get failed, continuing..."
+          # Try to install venv if missing (no sudo needed in container)
+          apt-get update && apt-get install -y python3-venv python3-pip || echo "apt-get failed, continuing..."
 
           python3 -m venv .venv || echo "venv creation failed"
           if [ -f ".venv/bin/activate" ]; then
@@ -39,7 +39,7 @@ jobs:
           fi
 
           python3 -m pip install --upgrade pip
-          pip3 install -r requirements.txt
+          python3 -m pip install -r requirements.txt || pip3 install -r requirements.txt
 
           echo "=== Running Tests ==="
           python3 -m pytest -v
