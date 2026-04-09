@@ -96,8 +96,10 @@ def test_mcp_tools_call(mock_fetch):
     assert response.status_code == 200
     data = response.json()
     assert "error" not in data
-    assert data["result"]["status"] == "success"
-    assert data["result"]["repo_url"] == "http://repo.com"
+    import json
+    res_obj = json.loads(data["result"]["content"][0]["text"])
+    assert res_obj["status"] == "success"
+    assert res_obj["repo_url"] == "http://repo.com"
 
 @patch("main.fetch_github_status")
 def test_mcp_get_project_status(mock_fetch):

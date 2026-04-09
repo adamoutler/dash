@@ -431,17 +431,18 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                 else:
                     raise Exception("Unknown provider")
 
+                res_obj = {
+                    "url": result.get("url"),
+                    "repo_url": result.get("repo_url"),
+                    "commit_message": result.get("commit_message"),
+                    "started_at": result.get("started_at"),
+                    "average_recent_duration": result.get("average_recent_duration"),
+                    "status": result.get("status")
+                }
                 return {
                     "jsonrpc": "2.0",
                     "id": req.id,
-                    "result": {
-                        "url": result.get("url"),
-                        "repo_url": result.get("repo_url"),
-                        "commit_message": result.get("commit_message"),
-                        "started_at": result.get("started_at"),
-                        "average_recent_duration": result.get("average_recent_duration"),
-                        "status": result.get("status")
-                    }
+                    "result": {"content": [{"type": "text", "text": json.dumps(res_obj)}]} if is_tool_call else res_obj
                 }
 
             elif method_name == "get_logs":
@@ -482,17 +483,18 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                             yield " "
                             await asyncio.sleep(10)
                         else:
+                            res_obj = {
+                                "url": result.get("url"),
+                                "repo_url": result.get("repo_url"),
+                                "commit_message": result.get("commit_message"),
+                                "started_at": result.get("started_at"),
+                                "average_recent_duration": result.get("average_recent_duration"),
+                                "status": status
+                            }
                             yield json.dumps({
                                 "jsonrpc": "2.0",
                                 "id": req.id,
-                                "result": {
-                                    "url": result.get("url"),
-                                    "repo_url": result.get("repo_url"),
-                                    "commit_message": result.get("commit_message"),
-                                    "started_at": result.get("started_at"),
-                                    "average_recent_duration": result.get("average_recent_duration"),
-                                    "status": status
-                                }
+                                "result": {"content": [{"type": "text", "text": json.dumps(res_obj)}]} if is_tool_call else res_obj
                             })
                             break
                 return StreamingResponse(wait_generator(), media_type="application/json")
