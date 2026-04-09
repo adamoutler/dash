@@ -266,3 +266,137 @@ async def fetch_forgejo_artifacts(owner: str, repo: str, token: str, forgejo_url
             return {"error": f"Failed to fetch artifacts. HTTP {artifacts_resp.status_code}"}
     except Exception as e:
         return {"error": f"Error fetching Forgejo artifacts: {str(e)}"}
+
+async def fetch_jenkins_status(owner: str, repo: str, user: str, token: str, workflow_id: str = None):
+    # repo is treated as the base URL of the Jenkins job/folder
+    base_url = repo.rstrip('/')
+    auth = (user, token) if user and token else None
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0, auth=auth) as client:
+            return await _resolve_jenkins_status(client, base_url, owner, repo)
+    except Exception:
+        return _error_result("jenkins", owner, repo)
+
+async def _resolve_jenkins_status(client, url, owner, repo_field, max_depth=3):
+    if max_depth <= 0:
+        return _error_result("jenkins", owner, repo_field)
+
+    api_url = f"{url.rstrip('/')}/api/json?tree=lastBuild[number,url,result,timestamp,duration,estimatedDuration,changeSets[items[msg]]],inQueue,color,jobs[name,url]"
+    resp = await client.get(api_url)
+    if resp.status_code != 200:
+        return _error_result("jenkins", owner, repo_field)
+
+    data = resp.json()
+    cls = data.get("_class", "")
+
+    if "WorkflowJob" in cls or "FreeStyleProject" in cls:
+        # It's a leaf job
+        last_build = data.get("lastBuild")
+        if not last_build:
+            return {
+                "provider": "jenkins",
+                "owner": owner,
+                "repo": repo_field,
+                "status": "unknown",
+                "url": url,
+                "repo_url": url,
+                "updated_at": "",
+                "commit_message": "No builds found",
+                "started_at": "",
+                "expected_duration_sec": None
+            }
+
+        result = last_build.get("result")
+        color = data.get("color", "")
+        # map status
+        status = "unknown"
+        if color and ("anime" in color or data.get("inQueue")):
+            status = "running"
+        elif result == "SUCCESS":
+            status = "success"
+        elif result in ["FAILURE", "UNSTABLE", "ABORTED"]:
+            status = "failure"
+
+        timestamp_ms = last_build.get("timestamp")
+        started_at = datetime.datetime.fromtimestamp(timestamp_ms / 1000.0, tz=datetime.timezone.utc).isoformat() if timestamp_ms else ""
+
+        expected_duration_sec = last_build.get("estimatedDuration", 0) / 1000.0 if last_build.get("estimatedDuration") else None
+
+        # Extract commit msg
+        commit_msg = ""
+        change_sets = last_build.get("changeSets", [])
+        if change_sets and isinstance(change_sets, list):
+            items = change_sets[0].get("items", [])
+            if items:
+                commit_msg = items[0].get("msg", "")
+
+        return {
+            "provider": "jenkins",
+            "owner": owner,
+            "repo": repo_field,
+            "status": status,
+            "url": last_build.get("url", url),
+            "repo_url": url,
+            "updated_at": started_at, # Jenkins doesn't give a clear updated_at, using started_at
+            "commit_message": commit_msg,
+            "started_at": started_at,
+            "expected_duration_sec": expected_duration_sec
+        }
+    elif "MultiBranchProject" in cls or "OrganizationFolder" in cls:
+        jobs = data.get("jobs", [])
+        if not jobs:
+            return _error_result("jenkins", owner, repo_field)
+
+        # Prioritize master or main
+        target_job = next((j for j in jobs if j.get("name") in ["master", "main"]), jobs[0])
+        return await _resolve_jenkins_status(client, target_job.get("url"), owner, repo_field, max_depth - 1)
+
+    return _error_result("jenkins", owner, repo_field)
+
+async def fetch_jenkins_logs(owner: str, repo: str, user: str, token: str, workflow_id: str = None):
+    # repo is treated as the base URL of the Jenkins job/folder
+    base_url = repo.rstrip('/')
+    auth = (user, token) if user and token else None
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0, auth=auth) as client:
+            return await _resolve_jenkins_logs(client, base_url, max_depth=3)
+    except Exception as e:
+        return f"Error fetching Jenkins logs: {str(e)}"
+
+async def _resolve_jenkins_logs(client, url, max_depth=3):
+    if max_depth <= 0:
+        return "Max depth reached while resolving Jenkins job."
+
+    api_url = f"{url.rstrip('/')}/api/json"
+    resp = await client.get(api_url)
+    if resp.status_code != 200:
+        return "Failed to fetch job data from Jenkins."
+
+    data = resp.json()
+    cls = data.get("_class", "")
+
+    if "WorkflowJob" in cls or "FreeStyleProject" in cls:
+        last_build = data.get("lastBuild")
+        if not last_build:
+            return "No builds found."
+
+        build_url = last_build.get("url")
+        log_url = f"{build_url.rstrip('/')}/consoleText"
+        log_resp = await client.get(log_url)
+        if log_resp.status_code == 200:
+            return log_resp.text
+        return f"Failed to fetch Jenkins console text. HTTP {log_resp.status_code}"
+    elif "MultiBranchProject" in cls or "OrganizationFolder" in cls:
+        jobs = data.get("jobs", [])
+        if not jobs:
+            return "No jobs found in folder."
+
+        target_job = next((j for j in jobs if j.get("name") in ["master", "main"]), jobs[0])
+        return await _resolve_jenkins_logs(client, target_job.get("url"), max_depth - 1)
+
+    return "Unsupported Jenkins object class."
+
+async def fetch_jenkins_artifacts(owner: str, repo: str, user: str, token: str, workflow_id: str = None):
+    return {"error": "Jenkins artifacts not implemented yet."}
