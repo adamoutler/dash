@@ -27,4 +27,18 @@ jobs:
 
     - name: Run tests with pytest
       run: |
-        python -m pytest -v
+        python -m pytest -v | tee pytest-logs.txt
+
+    - name: Upload test logs to dashboard
+      if: always()
+      run: |
+        curl -X POST "https://dash.hackedyour.info/api/logs?provider=forgejo&owner=${{ github.repository_owner }}&repo=${{ github.event.repository.name }}" \
+             -H "Content-Type: text/plain" \
+             --data-binary @pytest-logs.txt || true
+
+    - name: Upload test results artifact
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: pytest-logs
+        path: pytest-logs.txt
