@@ -31,7 +31,7 @@ async def fetch_github_status(owner: str, repo: str, token: str, workflow_id: st
             commits_data = commits_resp.json()
 
             runs = runs_data.get("workflow_runs", [])
-            run = runs[0] if runs else {}
+            run = sorted(runs, key=lambda x: x.get("updated_at", x.get("updated", "")), reverse=True)[0] if runs else {}
             commit_msg = commits_data[0].get("commit", {}).get("message", "No commit message").split("\n")[0] if commits_data else ""
 
             # Map GitHub status to common format
@@ -101,7 +101,7 @@ async def fetch_forgejo_status(owner: str, repo: str, token: str, forgejo_url: s
 
             # Use runs[0] if exists. (Previously the codebase sometimes used runs[-1] incorrectly depending on ordering,
             # but usually API returns newest first. Let's use the first match).
-            run = runs[0] if runs else {}
+            run = sorted(runs, key=lambda x: x.get("updated_at", x.get("updated", "")), reverse=True)[0] if runs else {}
             commit_msg = commits_data[0].get("commit", {}).get("message", "No commit message").split("\n")[0] if commits_data else ""
 
             status = run.get("status", "unknown")
@@ -202,7 +202,7 @@ async def fetch_forgejo_logs(owner: str, repo: str, token: str, forgejo_url: str
                 if not workflow_id or r.get("name") == workflow_id or str(r.get("workflow_id")) == workflow_id:
                     runs.append(r)
 
-            run = runs[0] if runs else {}
+            run = sorted(runs, key=lambda x: x.get("updated_at", x.get("updated", "")), reverse=True)[0] if runs else {}
             if not run.get('id'):
                 return "No runs found."
 
@@ -254,7 +254,7 @@ async def fetch_forgejo_artifacts(owner: str, repo: str, token: str, forgejo_url
                 if not workflow_id or r.get("name") == workflow_id or str(r.get("workflow_id")) == workflow_id:
                     runs.append(r)
 
-            run = runs[0] if runs else {}
+            run = sorted(runs, key=lambda x: x.get("updated_at", x.get("updated", "")), reverse=True)[0] if runs else {}
             if not run.get('id'):
                 return {"error": "No runs found."}
 
