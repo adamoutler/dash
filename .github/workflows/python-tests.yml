@@ -20,25 +20,19 @@ jobs:
         python-version: '3.12'
         cache: 'pip'
 
-    - name: Install dependencies
+    - name: Install dependencies and Run Tests
       run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
+        {
+          echo "=== Installing Dependencies ==="
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          echo "=== Running Tests ==="
+          python -m pytest -v
+        } 2>&1 | tee job-logs.txt
 
-    - name: Run tests with pytest
-      run: |
-        python -m pytest -v | tee pytest-logs.txt
-
-    - name: Upload test logs to dashboard
+    - name: Upload logs to Dashboard
       if: always()
       run: |
-        curl -X POST "https://dash.hackedyour.info/api/logs?provider=forgejo&owner=${{ github.repository_owner }}&repo=${{ github.event.repository.name }}" \
+        curl -X POST "https://dash.hackedyour.info/api/logs?provider=forgejo&owner=Updates&repo=gitdash" \
              -H "Content-Type: text/plain" \
-             --data-binary @pytest-logs.txt || true
-
-    - name: Upload test results artifact
-      uses: actions/upload-artifact@v4
-      if: always()
-      with:
-        name: pytest-logs
-        path: pytest-logs.txt
+             --data-binary @job-logs.txt || true
