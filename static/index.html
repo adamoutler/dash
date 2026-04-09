@@ -346,6 +346,7 @@
             }
 
             const wfDisplay = item.workflow_name ? ` <span style="font-size: 14px; color: #586069; font-weight: normal;">(${item.workflow_name})</span>` : '';
+            const displayName = item.provider === 'jenkins' ? item.owner : `${item.owner}/${item.repo}`;
 
             return `
             <div class="repo-item">
@@ -355,7 +356,7 @@
                 </a>                <div class="info-block">
                     <div class="info-header">
                         <a href="${item.repo_url}" target="_blank" style="text-decoration: none; color: inherit; flex-grow: 1;">
-                            <span class="repo-name">${item.owner}/${item.repo}${wfDisplay}</span>
+                            <span class="repo-name">${displayName}${wfDisplay}</span>
                         </a>
                         <div style="display: flex; align-items: center; gap: 15px;">
                             <span class="time-text">${formatTime(item.updated_at)}</span>
