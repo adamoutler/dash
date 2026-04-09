@@ -10,6 +10,18 @@ Welcome to the **CI Dashboard**—a beautifully simple, Dockerized hub that give
 
 ---
 
+## ✨ Key Features
+
+* 🔐 **Secure & Authenticated**: Role-based access with Basic Auth and Bearer Token management. *(Highly recommended: See our [Security & Authentication Guide](docs/security.md) to lock down your dashboard).*
+* 🤖 **AI-Ready MCP Server**: Built-in JSON-RPC 2.0 endpoint (`/mcp`) exposing essential macros (`get_project_status`, `get_logs`, `wait`) for agents.
+* 📜 **Agent Discovery**: Includes `llms.txt` at the root so autonomous agents can self-discover capabilities.
+* 🚦 **Unified Visual Dashboard**: A clean, centralized UI to view build statuses across all tracked repositories at a glance.
+* 🔌 **Multi-Provider Support**: Seamlessly integrates with both GitHub and Forgejo CI/CD pipelines.
+* 🛡️ **Autonomous Guardrail**: Allows agents to estimate wait times, wait for CI runs, and fetch logs autonomously to prevent broken pushes.
+* 🐳 **Dockerized Simplicity**: Easy to deploy with a single `docker-compose up` command.
+
+---
+
 ## 🤖 For AI Agents: The Guardrail API
 
 By pointing your agent to the repository URL and our `llms.txt`, you instantly give them superpower hooks to interact with your CI/CD pipeline. No more blind pushes! Your agent can now:
