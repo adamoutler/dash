@@ -10,7 +10,7 @@ from typing import Optional, Any
 from api.auth import require_basic_auth, get_current_user
 from fastapi import Depends
 from api.storage import RepoStorage
-from api.git_providers import fetch_github_status, fetch_forgejo_status, fetch_github_logs, fetch_forgejo_logs, fetch_github_artifacts, fetch_forgejo_artifacts
+from api.git_providers import fetch_github_status, fetch_forgejo_status, fetch_github_logs, fetch_forgejo_logs, fetch_github_artifacts, fetch_forgejo_artifacts, fetch_jenkins_status, fetch_jenkins_logs, fetch_jenkins_artifacts
 
 app = FastAPI(
     title="CI Dashboard API",
@@ -99,11 +99,15 @@ async def get_artifacts(provider: str, owner: str, repo: str, workflow_id: Optio
     github_token = os.environ.get("GITHUB_TOKEN", "")
     forgejo_token = os.environ.get("FORGEJO_TOKEN", "")
     forgejo_url = os.environ.get("FORGEJO_URL", "")
+    jenkins_user = os.environ.get("JENKINS_USER", "")
+    jenkins_token = os.environ.get("JENKINS_TOKEN", "")
 
     if provider == "github":
         return await fetch_github_artifacts(owner, repo, github_token, workflow_id)
     elif provider == "forgejo":
         return await fetch_forgejo_artifacts(owner, repo, forgejo_token, forgejo_url, workflow_id)
+    elif provider == "jenkins":
+        return await fetch_jenkins_artifacts(owner, repo, jenkins_user, jenkins_token, workflow_id)
     return {"error": "Unknown provider"}
 
 @app.post("/api/logs", summary="Upload External Logs", description="Allows external systems to push raw log data (up to 2MB) for a specific repository workflow run. Old logs are overwritten.")
@@ -152,11 +156,15 @@ async def get_logs(provider: str, owner: str, repo: str, workflow_id: Optional[s
     github_token = os.environ.get("GITHUB_TOKEN", "")
     forgejo_token = os.environ.get("FORGEJO_TOKEN", "")
     forgejo_url = os.environ.get("FORGEJO_URL", "")
+    jenkins_user = os.environ.get("JENKINS_USER", "")
+    jenkins_token = os.environ.get("JENKINS_TOKEN", "")
 
     if provider == "github":
         return {"log": await fetch_github_logs(owner, repo, github_token, workflow_id)}
     elif provider == "forgejo":
         return {"log": await fetch_forgejo_logs(owner, repo, forgejo_token, forgejo_url, workflow_id)}
+    elif provider == "jenkins":
+        return {"log": await fetch_jenkins_logs(owner, repo, jenkins_user, jenkins_token, workflow_id)}
     return {"log": "Unknown provider"}
 
 @app.get("/api/status", summary="Retrieve System Status", description="Polls all configured repositories and their workflows to fetch their current execution status, timings, and commit metadata. Used by the frontend dashboard.")
@@ -166,12 +174,16 @@ async def get_status(user: str = Depends(get_current_user)):
     github_token = os.environ.get("GITHUB_TOKEN", "")
     forgejo_token = os.environ.get("FORGEJO_TOKEN", "")
     forgejo_url = os.environ.get("FORGEJO_URL", "")
+    jenkins_user = os.environ.get("JENKINS_USER", "")
+    jenkins_token = os.environ.get("JENKINS_TOKEN", "")
 
     for r in repos:
         if r["provider"] == "github":
             tasks.append(fetch_github_status(r["owner"], r["repo"], github_token, r.get("workflow_id")))
         elif r["provider"] == "forgejo":
             tasks.append(fetch_forgejo_status(r["owner"], r["repo"], forgejo_token, forgejo_url, r.get("workflow_id")))
+        elif r["provider"] == "jenkins":
+            tasks.append(fetch_jenkins_status(r["owner"], r["repo"], jenkins_user, jenkins_token, r.get("workflow_id")))
 
     results = await asyncio.gather(*tasks)
 
@@ -215,6 +227,8 @@ async def wait_status(provider: str, owner: str, repo: str, workflow_id: Optiona
     github_token = os.environ.get("GITHUB_TOKEN", "")
     forgejo_token = os.environ.get("FORGEJO_TOKEN", "")
     forgejo_url = os.environ.get("FORGEJO_URL", "")
+    jenkins_user = os.environ.get("JENKINS_USER", "")
+    jenkins_token = os.environ.get("JENKINS_TOKEN", "")
 
     async def event_stream():
         yield "waiting for complete."
@@ -223,6 +237,8 @@ async def wait_status(provider: str, owner: str, repo: str, workflow_id: Optiona
                 result = await fetch_github_status(owner, repo, github_token, workflow_id)
             elif provider == "forgejo":
                 result = await fetch_forgejo_status(owner, repo, forgejo_token, forgejo_url, workflow_id)
+            elif provider == "jenkins":
+                result = await fetch_jenkins_status(owner, repo, jenkins_user, jenkins_token, workflow_id)
             else:
                 yield "\nError: Unknown provider\n"
                 break
@@ -377,11 +393,15 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                 github_token = os.environ.get("GITHUB_TOKEN", "")
                 forgejo_token = os.environ.get("FORGEJO_TOKEN", "")
                 forgejo_url = os.environ.get("FORGEJO_URL", "")
+                jenkins_user = os.environ.get("JENKINS_USER", "")
+                jenkins_token = os.environ.get("JENKINS_TOKEN", "")
 
                 if provider == "github":
                     result = await fetch_github_status(owner, repo_name, github_token, wf_id)
                 elif provider == "forgejo":
                     result = await fetch_forgejo_status(owner, repo_name, forgejo_token, forgejo_url, wf_id)
+                elif provider == "jenkins":
+                    result = await fetch_jenkins_status(owner, repo_name, jenkins_user, jenkins_token, wf_id)
                 else:
                     raise Exception("Unknown provider")
 
@@ -421,6 +441,8 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                             result = await fetch_github_status(owner, repo_name, github_token, wf_id)
                         elif provider == "forgejo":
                             result = await fetch_forgejo_status(owner, repo_name, forgejo_token, forgejo_url, wf_id)
+                        elif provider == "jenkins":
+                            result = await fetch_jenkins_status(owner, repo_name, jenkins_user, jenkins_token, wf_id)
                         else:
                             yield json.dumps({
                                 "jsonrpc": "2.0",

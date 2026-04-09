@@ -64,9 +64,10 @@
 
     <div class="add-form" id="addForm">
         <div style="display: flex; gap: 10px; margin-bottom: 10px;">
-            <select id="provider">
+            <select id="provider" onchange="updatePlaceholder()">
                 <option value="github">GitHub</option>
                 <option value="forgejo">Forgejo / Gitea</option>
+                <option value="jenkins">Jenkins</option>
             </select>
             <input type="text" id="owner" placeholder="Owner (e.g. adamoutler)" required>
             <input type="text" id="repo" placeholder="Repo (e.g. dashboard)" required>
@@ -92,11 +93,24 @@
     </div>
 
     <footer style="margin-top: 40px; margin-bottom: 20px; text-align: center; font-size: 12px;">
+        <a href="/configure" aria-label="Dashboard configuration" style="color: #bbb; text-decoration: none; transition: color 0.2s; margin-right: 15px;" onmouseover="this.style.color='#666'" onmouseout="this.style.color='#bbb'">⚙️ Configure Dashboard</a>
+        <a href="/api" aria-label="API Documentation" style="color: #bbb; text-decoration: none; transition: color 0.2s; margin-right: 15px;" onmouseover="this.style.color='#666'" onmouseout="this.style.color='#bbb'">📚 API Docs</a>
         <a href="/llms.txt" aria-label="API automation instructions for AI and LLM agents" style="color: #bbb; text-decoration: none; transition: color 0.2s;" onmouseover="this.style.color='#666'" onmouseout="this.style.color='#bbb'">🤖 LLM API Instructions</a>
     </footer>
 </div>
 
 <script>
+    function updatePlaceholder() {
+        const p = document.getElementById('provider').value;
+        if (p === 'jenkins') {
+            document.getElementById('owner').placeholder = "Display Name (e.g. Jenkins)";
+            document.getElementById('repo').placeholder = "Job URL (e.g. https://jenkins...)";
+        } else {
+            document.getElementById('owner').placeholder = "Owner (e.g. adamoutler)";
+            document.getElementById('repo').placeholder = "Repo (e.g. dashboard)";
+        }
+    }
+
     function addLinkRow(name = '', url = '') {
         const container = document.getElementById('linksContainer');
         const row = document.createElement('div');
@@ -122,7 +136,7 @@
 
         wfSelect.innerHTML = '<option value="">Loading...</option>';
         try {
-            const res = await fetch(`/api/workflows?provider=${encodeURIComponent(provider)}&owner=${encodeURIComponent(owner)}&repo=${encodeURIComponent(repo)}`);
+            const res = await fetch(`/api/workflows?provider=${encodeURIComponent(provider)}&owner=${encodeURIComponent(owner)}&repo=${encodeURIComponent(repo)}`, { cache: 'no-store' });
             const workflows = await res.json();
 
             wfSelect.innerHTML = '<option value="">All Workflows (Default)</option>';
@@ -148,6 +162,7 @@
 
         if (isEdit === true) {
             document.getElementById('provider').value = provider;
+            updatePlaceholder();
             document.getElementById('owner').value = owner;
             document.getElementById('repo').value = repo;
             document.getElementById('owner').readOnly = true;
@@ -171,6 +186,8 @@
             if (form.style.display === 'block' && document.getElementById('submitBtn').innerText !== 'Update') {
                 form.style.display = 'none';
             } else {
+                document.getElementById('provider').value = 'github';
+                updatePlaceholder();
                 document.getElementById('owner').readOnly = false;
                 document.getElementById('repo').readOnly = false;
                 document.getElementById('provider').disabled = false;
@@ -288,7 +305,7 @@
 
     async function fetchStatuses() {
         try {
-            const res = await fetch('/api/status');
+            const res = await fetch('/api/status', { cache: 'no-store' });
             if (res.status === 401) {
                 const list = document.getElementById('repoList');
                 list.innerHTML = '<div style="padding: 20px; text-align: center; color: #cb2431;">Authentication required. Please refresh the page to login.</div>';
@@ -380,7 +397,7 @@
         }
 
         try {
-            const res = await fetch(url);
+            const res = await fetch(url, { cache: 'no-store' });
             const data = await res.json();
 
             // Format log message links for Forgejo
