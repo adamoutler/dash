@@ -2,9 +2,15 @@ name: Python Unit Tests
 
 on:
   push:
-    branches: [ "**" ]
+    branches:
+      - master
+      - main
+      - '**'
   pull_request:
-    branches: [ "**" ]
+    branches:
+      - master
+      - main
+      - '**'
 
 jobs:
   test:
@@ -14,6 +20,11 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
     - name: Initialize Log File
       run: echo "Starting CI run..." > job-logs.txt
 
@@ -21,11 +32,7 @@ jobs:
       run: |
         {
           echo "=== Environment Info ==="
-          python3 --version || echo "python3 not found"
-
-          echo "=== Setting up Virtual Environment ==="
-          python3 -m venv .venv
-          source .venv/bin/activate
+          python --version || echo "python not found"
 
           echo "=== Installing Dependencies ==="
           python -m pip install --upgrade pip
