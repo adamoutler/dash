@@ -6,7 +6,9 @@ Tired of your AI agent confidently hallucinating: *"I changed it, so now it work
 
 Welcome to the **CI Dashboard**—a beautifully simple, Dockerized hub that gives you an at-a-glance view of your projects, while serving as the ultimate **guardrail for your AI agents** (Claude, Gemini, GPT). Without a feedback loop from your Continuous Integration (CI) pipeline, agents fly blind. This dashboard serves as a foundational building block to provide immediate, factual build feedback to autonomous agents, stopping regressions in their tracks.
 
-![CI Dashboard Aesthetic](docs/img/dashboard.png)
+> *"A unified dashboard for your autonomous agents, beautifully designed for your workflow—whether you prefer the light of day or the terminal dark."*
+
+![CI Dashboard Aesthetic](docs/img/dashboard_split.png?v=2)
 
 ---
 
