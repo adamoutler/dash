@@ -286,10 +286,62 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
 
     try:
         params = req.params or {}
-        project = params.get("project") or request.headers.get("x-project")
-        workflow = params.get("workflow") or request.headers.get("x-workflow")
 
-        if req.method in ["get_project_status", "get_logs", "wait"]:
+        if req.method == "tools/list":
+            return {
+                "jsonrpc": "2.0",
+                "id": req.id,
+                "result": {
+                    "tools": [
+                        {
+                            "name": "get_project_status",
+                            "description": "Fetch the latest status of a tracked repository.",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {
+                                    "project": {"type": "string", "description": "The name or owner/name of the project."},
+                                    "workflow": {"type": "string", "description": "Optional workflow name or ID."}
+                                }
+                            }
+                        },
+                        {
+                            "name": "get_logs",
+                            "description": "Fetch the log URL for the latest run.",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {
+                                    "project": {"type": "string", "description": "The name or owner/name of the project."},
+                                    "workflow": {"type": "string", "description": "Optional workflow name or ID."}
+                                }
+                            }
+                        },
+                        {
+                            "name": "wait",
+                            "description": "Wait until an in-progress build completes.",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {
+                                    "project": {"type": "string", "description": "The name or owner/name of the project."},
+                                    "workflow": {"type": "string", "description": "Optional workflow name or ID."}
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+
+        is_tool_call = req.method == "tools/call"
+        method_name = params.get("name") if is_tool_call else req.method
+
+        if is_tool_call:
+            call_args = params.get("arguments") or {}
+            project = call_args.get("project") or request.headers.get("x-project")
+            workflow = call_args.get("workflow") or request.headers.get("x-workflow")
+        else:
+            project = params.get("project") or request.headers.get("x-project")
+            workflow = params.get("workflow") or request.headers.get("x-workflow")
+
+        if method_name in ["get_project_status", "get_logs", "wait"]:
             repos = storage.get_repos()
             matched_repo = None
             if project:
@@ -321,7 +373,7 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
             repo_name = matched_repo["repo"]
             wf_id = matched_repo.get("workflow_id")
 
-            if req.method == "get_project_status":
+            if method_name == "get_project_status":
                 github_token = os.environ.get("GITHUB_TOKEN", "")
                 forgejo_token = os.environ.get("FORGEJO_TOKEN", "")
                 forgejo_url = os.environ.get("FORGEJO_URL", "")
@@ -346,7 +398,7 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                     }
                 }
 
-            elif req.method == "get_logs":
+            elif method_name == "get_logs":
                 base_url = str(request.base_url).rstrip('/')
                 url = f"{base_url}/api/logs?provider={provider}&owner={owner}&repo={repo_name}"
                 if wf_id:
@@ -358,7 +410,7 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                     "result": url
                 }
 
-            elif req.method == "wait":
+            elif method_name == "wait":
                 async def wait_generator():
                     github_token = os.environ.get("GITHUB_TOKEN", "")
                     forgejo_token = os.environ.get("FORGEJO_TOKEN", "")

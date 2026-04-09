@@ -24,7 +24,9 @@ Welcome to the **CI Dashboard**—a beautifully simple, Dockerized hub that give
 
 ## 🤖 For AI Agents: The Guardrail API
 
-By pointing your agent to the repository URL and our `llms.txt`, you instantly give them superpower hooks to interact with your CI/CD pipeline. No more blind pushes! Your agent can now:
+By pointing your agent to the repository URL and our `llms.txt` ([see a raw example of what the LLM sees here](https://raw.githubusercontent.com/adamoutler/agentic-gitdash/refs/heads/master/static/llms.txt)), you instantly give them superpower hooks to interact with your CI/CD pipeline. No more blind pushes! Your agent can now:
+
+* 📚 **Comprehensive AI Guide**: See the full [AI/Agent Journey](docs/ai-journey.md) for detailed automated workflows.
 
 * ⏱️ **Estimate wait times** for CI runs.
 * ⏳ **Wait patiently** for the CI pipeline to finish.
@@ -49,6 +51,8 @@ Give your agents a custom tool to gather build results across all your projects 
 ## 🧑‍💻 For Humans: The Visual Hub
 
 Beyond acting as an API for AI, the CI Dashboard provides a clean, unified graphical experience for human developers. It's all about peace of mind:
+
+* 🗺️ **Comprehensive User Guide**: See the full [User Journey](docs/user-journey.md) for detailed human workflows.
 
 * 🎨 **Visual Sanity & At-a-Glance Status:** A clean, large-font UI to view the current build status of all your projects on a single screen.
 * 🚦 **Color-Coded Statuses:** Instantly see what's Running, Passed, or Failed. Stop digging through nested CI provider menus just to see if your `main` branch is green.

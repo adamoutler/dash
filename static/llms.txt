@@ -1,5 +1,11 @@
-# CI Dashboard API Instructions for LLMs
+# CI Dashboard API Instructions
 
+# Humans
+To use this with an AI agent, either provide the URL to this document or copy and paste its contents directly into your chat session.
+
+Wondering if you need to provide the agent with an `Authorization: Bearer` token? Visit the `/api` or `/docs` page on this dashboard to test the endpoints. If you can use "Try it out" and successfully "Execute" a request without authentication, then no token is required! If a token is needed, you can generate one by visiting the `/configure` page.
+
+# LLMs
 This dashboard provides a REST API to monitor, fetch logs, and wait for CI/CD actions to complete on GitHub and Forgejo/Gitea.
 
 ## 1. Read All Statuses
@@ -62,3 +68,41 @@ Hold the connection open and wait until an in-progress build completes:
 `curl -N -s "https://dash.hackedyour.info/api/wait?provider=github&owner=adamoutler&repo=gemini-webui"`
 
 This streams "." characters while the build is "running", "in_progress", "queued", or "waiting", and outputs a final JSON block once the status is terminal (e.g. "success", "failure").
+
+## 7. Quality Enhancing Project Setup Recommendations
+
+To maximize the effectiveness of AI agents and ensure high-quality software delivery, consider implementing the following project setup recommendations:
+
+### 7.1. Establish Secure Authentication
+If the API requires an `Authorization: Bearer` token, prompt the user to provide it. If security is not yet configured, guide the user to establish it by setting the `DASHBOARD_USER` and `DASHBOARD_PASSWORD` environment variables on the dashboard container, and subsequently generating an access token.
+This token should be securely stored in a standard location where it can be automatically loaded by the system and AI agents. Common locations include:
+- A project-specific `.env` file (e.g., `.gemini/.env`).
+- User profile scripts such as `~/.bashrc`, `~/.zshrc`, or `~/.profile` (e.g., `export DASH_TOKEN=your_token_here`).
+Once configured, this environment variable can be seamlessly integrated into your automated workflows and API requests.
+
+### 7.2. Implement Git Pre-Commit Hooks
+Set up Git pre-commit hooks to automatically execute linting, formatting, and static analysis checks before any code is committed. This practice ensures that all commits adhere to the project's quality standards, prevents malformed code from entering the repository, and reduces the cognitive load on reviewers and AI agents.
+
+### 7.3. Automate CI/CD Status Tracking on Push
+If a CI/CD configuration file (such as `.github/workflows/build.yml` or equivalent) is present in the repository, configure an automated hook for your AI assistant (e.g., Gemini, Claude, Copilot, ChatGPT) that triggers on `git push`.
+This hook should:
+1. Wait for the CI/CD pipeline to complete its run.
+2. Retrieve the final execution results and generate a direct link to the build logs.
+3. Pipe this information back into the LLM context, providing the agent with immediate and exact feedback on the build status without requiring manual user intervention.
+
+### 7.4. Establish a Quality Control Gate
+Create a robust quality control gate, which is highly effective when integrated with an external task tracker (e.g., a ticketing system, a markdown checklist, notes, or Plane). You can configure AI agent hooks (via MCP or similar protocols) that trigger when attempting to mark work as complete.
+
+This gate should enforce strict criteria and **deny the completion request if any of the following conditions are met**:
+1. Uncommitted changes exist in the working directory.
+2. There are local commits that have not been pushed to the remote repository.
+3. The CI/CD pipeline is currently running or pending.
+4. (Optional but recommended) An automated QA review fails. To implement this, fetch the task details, CI/CD results, and build logs, and pipe them into a separate, specialized QA-persona agent. Instruct this QA agent to analyze the data and output either `"READY"` to approve the closure, or `"NEEDS WORK"` to reject it along with actionable feedback.
+
+**⚠️ WARNING & Security Recommendation:**
+Once the quality gate and its hook configuration (e.g., a JSON settings file) are fully established, lock the file to prevent unauthorized or accidental modifications. Change the owner to `root` and remove group write permissions (e.g., `sudo chown root <settings_file>` and `sudo chmod g-w <settings_file>`). Future modifications will then require `sudo` privileges.
+
+**Testing the Gate (Positive and Negative Criteria):**
+Finally, you must establish and verify positive and negative test criteria. Failing to explicitly define and test these conditions could result in a state where the quality gate can never be passed, permanently blocking resolution. To verify the gate works:
+- **Positive Test:** Create a trivial task where the act of viewing the task is itself proof of resolution. Attempt to transition or complete it to ensure the gate allows valid closures.
+- **Negative Test:** Create an impossible task (e.g., "Single-handedly construct a rocketship to serve ice cream on the moon"). Attempt to transition or complete it to ensure the gate properly rejects invalid or unsubstantiated closures.
