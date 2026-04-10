@@ -530,8 +530,7 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                     f"**{owner}/{repo_name}**\n"
                     f"{status_emoji} **Status:** {str(res_obj.get('status')).title()}{duration_info}\n"
                     f"**Started:** {res_obj.get('started_at') or 'N/A'}\n"
-                    f"**Commit:** {res_obj.get('commit_message') or 'N/A'}\n"
-                    f"**URL:** {res_obj.get('url') or 'N/A'}"
+                    f"**Commit:** {res_obj.get('commit_message') or 'N/A'}"
                 )
 
                 if is_tool_call:
