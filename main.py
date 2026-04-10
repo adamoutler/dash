@@ -430,10 +430,12 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                 }
 
             matched_repo = None
+            target_project_matched = False
             if project:
                 for r in repos:
                     # Match exact repo name or owner/repo
                     if r["repo"] == project or f"{r['owner']}/{r['repo']}" == project:
+                        target_project_matched = True
                         # If workflow is specified, match it. If not, match if the repo config doesn't require a specific workflow or we just take the first match
                         if not workflow or r.get("workflow_name") == workflow or r.get("workflow_id") == workflow:
                             matched_repo = r
@@ -442,16 +444,43 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
             elif len(repos) == 1:
                 # If no project specified but only 1 project is configured, default to it
                 matched_repo = repos[0]
+                target_project_matched = True
 
             if not matched_repo:
-                return {
-                    "jsonrpc": "2.0",
-                    "id": req.id,
-                    "error": {
-                        "code": -32602,
-                        "message": "Project not found or not specified. Use project='help' to see valid projects."
+                if target_project_matched and workflow:
+                    valid_workflows = [
+                        f"{r.get('workflow_name') or r.get('workflow_id') or 'any'}"
+                        for r in repos
+                        if r["repo"] == project or f"{r['owner']}/{r['repo']}" == project
+                    ]
+                    return {
+                        "jsonrpc": "2.0",
+                        "id": req.id,
+                        "result": {
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": f"Workflow '{workflow}' not found for project '{project}'. Valid workflows: {', '.join(valid_workflows)}",
+                                    "audience": ["assistant"]
+                                }
+                            ]
+                        }
                     }
-                }
+                else:
+                    valid_projects = [f"{r['owner']}/{r['repo']} (workflow: {r.get('workflow_name') or r.get('workflow_id') or 'any'})" for r in repos]
+                    return {
+                        "jsonrpc": "2.0",
+                        "id": req.id,
+                        "result": {
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": f"Project '{project}' not found. Valid projects: {', '.join(valid_projects)}",
+                                    "audience": ["assistant"]
+                                }
+                            ]
+                        }
+                    }
 
             provider = matched_repo["provider"]
             owner = matched_repo["owner"]
