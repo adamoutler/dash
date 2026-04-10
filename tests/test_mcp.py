@@ -98,7 +98,7 @@ def test_mcp_tools_call(mock_fetch):
     data = response.json()
     assert "error" not in data
     import json
-    res_obj = json.loads(data["result"]["content"][0]["text"])
+    res_obj = json.loads(data["result"]["llmContent"])
     assert res_obj["status"] == "success"
     assert res_obj["repo_url"] == "http://repo.com"
 
