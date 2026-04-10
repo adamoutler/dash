@@ -321,7 +321,11 @@ async def _resolve_jenkins_status(client, url, owner, repo_field, max_depth=3):
         timestamp_ms = last_build.get("timestamp")
         started_at = datetime.datetime.fromtimestamp(timestamp_ms / 1000.0, tz=datetime.timezone.utc).isoformat() if timestamp_ms else ""
 
-        expected_duration_sec = last_build.get("estimatedDuration", 0) / 1000.0 if last_build.get("estimatedDuration") else None
+        est_duration = last_build.get("estimatedDuration", -1)
+        if est_duration <= 0:
+            expected_duration_sec = 43.6  # Average of recent runs: 53, 32, 32, 50, 51
+        else:
+            expected_duration_sec = est_duration / 1000.0
 
         # Extract commit msg
         commit_msg = ""
