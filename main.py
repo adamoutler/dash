@@ -543,6 +543,8 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                     github_token = os.environ.get("GITHUB_TOKEN", "")
                     forgejo_token = os.environ.get("FORGEJO_TOKEN", "")
                     forgejo_url = os.environ.get("FORGEJO_URL", "")
+                    jenkins_user = os.environ.get("JENKINS_USER", "")
+                    jenkins_token = os.environ.get("JENKINS_TOKEN", "")
 
                     while True:
                         if provider == "github":
