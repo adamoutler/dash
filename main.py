@@ -536,7 +536,7 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
 
                 if is_tool_call:
                     result_payload = {
-                        "content": [{"type": "text", "text": json.dumps(res_obj)}],
+                        "content": [{"type": "text", "text": display_str}],
                         "llmContent": json.dumps(res_obj),
                         "returnDisplay": display_str
                     }
