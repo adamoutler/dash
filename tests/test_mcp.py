@@ -51,8 +51,9 @@ def test_mcp_project_not_found():
                            auth=("testuser", "testpass"))
     assert response.status_code == 200
     data = response.json()
-    assert data["error"]["code"] == -32602
-    assert "Project not found" in data["error"]["message"]
+    assert "result" in data
+    assert "content" in data["result"]
+    assert "Project 'nonexistent' not found" in data["result"]["content"][0]["text"]
 
 def test_mcp_tools_list():
     response = client.post("/mcp",
