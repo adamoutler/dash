@@ -47,13 +47,13 @@ def test_mcp_invalid_request():
 
 def test_mcp_project_not_found():
     response = client.post("/mcp",
-                           json={"jsonrpc": "2.0", "method": "get_project_status", "id": 2, "params": {"project": "nonexistent"}},
+                           json={"jsonrpc": "2.0", "method": "get_project_status", "id": 2, "params": {"repo": "nonexistent"}},
                            auth=("testuser", "testpass"))
     assert response.status_code == 200
     data = response.json()
     assert "result" in data
     assert "content" in data["result"]
-    assert "Project 'nonexistent' not found" in data["result"]["content"][0]["text"]
+    assert "Repo 'nonexistent' not found" in data["result"]["content"][0]["text"]
 
 def test_mcp_tools_list():
     response = client.post("/mcp",
@@ -90,7 +90,7 @@ def test_mcp_tools_call(mock_fetch):
                                "id": 100,
                                "params": {
                                    "name": "get_project_status",
-                                   "arguments": {"project": "testrepo"}
+                                   "arguments": {"repo": "testrepo"}
                                }
                            },
                            auth=("testuser", "testpass"))
@@ -115,7 +115,7 @@ def test_mcp_get_project_status(mock_fetch):
     storage.add_repo("github", "testowner", "testrepo", None, None, None)
 
     response = client.post("/mcp",
-                           json={"jsonrpc": "2.0", "method": "get_project_status", "id": 3, "params": {"project": "testrepo"}},
+                           json={"jsonrpc": "2.0", "method": "get_project_status", "id": 3, "params": {"repo": "testrepo"}},
                            auth=("testuser", "testpass"))
     assert response.status_code == 200
     data = response.json()
@@ -126,7 +126,7 @@ def test_mcp_get_project_status(mock_fetch):
 def test_mcp_get_logs():
     storage.add_repo("github", "testowner", "testrepo", None, "wf_1", None)
     response = client.post("/mcp",
-                           json={"jsonrpc": "2.0", "method": "get_logs", "id": 4, "params": {"project": "testrepo"}},
+                           json={"jsonrpc": "2.0", "method": "get_logs", "id": 4, "params": {"repo": "testrepo"}},
                            auth=("testuser", "testpass"))
     assert response.status_code == 200
     data = response.json()
@@ -153,7 +153,7 @@ async def test_mcp_wait(mock_sleep, mock_fetch):
     from httpx import AsyncClient, ASGITransport, BasicAuth
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         auth = BasicAuth("testuser", "testpass")
-        req_json = {"jsonrpc": "2.0", "method": "wait", "id": 5, "params": {"project": "testrepo"}}
+        req_json = {"jsonrpc": "2.0", "method": "wait", "id": 5, "params": {"repo": "testrepo"}}
         async with ac.stream("POST", "/mcp", json=req_json, auth=auth) as response:
             assert response.status_code == 200
 

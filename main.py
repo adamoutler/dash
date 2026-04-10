@@ -334,6 +334,26 @@ class JsonRpcRequest(BaseModel):
     params: Optional[dict] = None
     id: Optional[Any] = None
 
+def resolve_provider_conflict(repo: str, repos: list, req_id: Any):
+    matched_providers = set()
+    for r in repos:
+        if r["repo"] == repo or f"{r['owner']}/{r['repo']}" == repo:
+            matched_providers.add(r["provider"])
+
+    if len(matched_providers) > 1:
+        providers_list = ", ".join(sorted(matched_providers))
+        return None, {
+            "jsonrpc": "2.0",
+            "id": req_id,
+            "error": {
+                "code": -32602,
+                "message": f"There are multiple repos named {repo} please set provider to one of: {providers_list}"
+            }
+        }
+    elif len(matched_providers) == 1:
+        return matched_providers.pop(), None
+    return None, None
+
 @app.post("/mcp", summary="MCP JSON-RPC Endpoint", description="Handles macro commands from AI agents using JSON-RPC 2.0")
 async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depends(get_current_user)):
     if req.jsonrpc != "2.0":
@@ -387,8 +407,11 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                             "inputSchema": {
                                 "type": "object",
                                 "properties": {
-                                    "project": {"type": "string", "description": "The name or owner/name of the project. Use 'help' to list available projects."},
-                                    "workflow": {"type": "string", "description": "Optional workflow name or ID. Use 'help' to list available workflows for a project."}                                }
+                                    "provider": {"type": "string", "description": "Optional provider name."},
+                                    "repo": {"type": "string", "description": "The name or owner/name of the repository. Use 'help' to list available repos."},
+                                    "workflow": {"type": "string", "description": "Optional workflow name or ID."}
+                                },
+                                "required": ["repo"]
                             }
                         },
                         {
@@ -397,8 +420,11 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                             "inputSchema": {
                                 "type": "object",
                                 "properties": {
-                                    "project": {"type": "string", "description": "The name or owner/name of the project. Use 'help' to list available projects."},
-                                    "workflow": {"type": "string", "description": "Optional workflow name or ID. Use 'help' to list available workflows for a project."}                                }
+                                    "provider": {"type": "string", "description": "Optional provider name."},
+                                    "repo": {"type": "string", "description": "The name or owner/name of the repository. Use 'help' to list available repos."},
+                                    "workflow": {"type": "string", "description": "Optional workflow name or ID."}
+                                },
+                                "required": ["repo"]
                             }
                         },
                         {
@@ -407,8 +433,11 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                             "inputSchema": {
                                 "type": "object",
                                 "properties": {
-                                    "project": {"type": "string", "description": "The name or owner/name of the project. Use 'help' to list available projects."},
-                                    "workflow": {"type": "string", "description": "Optional workflow name or ID. Use 'help' to list available workflows for a project."}                                }
+                                    "provider": {"type": "string", "description": "Optional provider name."},
+                                    "repo": {"type": "string", "description": "The name or owner/name of the repository. Use 'help' to list available repos."},
+                                    "workflow": {"type": "string", "description": "Optional workflow name or ID."}
+                                },
+                                "required": ["repo"]
                             }
                         }
                     ]
@@ -420,119 +449,105 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
 
         if is_tool_call:
             call_args = params.get("arguments") or {}
-            project = call_args.get("project") or request.headers.get("x-project")
+            provider_arg = call_args.get("provider") or request.headers.get("x-provider")
+            repo = call_args.get("repo") or request.headers.get("x-repo")
             workflow = call_args.get("workflow") or request.headers.get("x-workflow")
         else:
-            project = params.get("project") or request.headers.get("x-project")
+            provider_arg = params.get("provider") or request.headers.get("x-provider")
+            repo = params.get("repo") or request.headers.get("x-repo")
             workflow = params.get("workflow") or request.headers.get("x-workflow")
 
         if method_name in ["get_project_status", "get_logs", "wait"]:
             repos = storage.get_repos()
 
-            if project == "help":
-                valid_projects = [f"{r['owner']}/{r['repo']}" for r in repos]
-                help_text = f"Valid projects: {', '.join(valid_projects)}"
+            if repo == "help":
+                valid_repos = [f"{r['owner']}/{r['repo']}" for r in repos]
+                help_text = f"Valid repos: {', '.join(valid_repos)}"
                 return {
                     "jsonrpc": "2.0",
                     "id": req.id,
                     "result": {
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": help_text
-                            }
-                        ],
+                        "content": [{"type": "text", "text": help_text}],
                         "llmContent": help_text,
-                        "returnDisplay": "Provided valid projects to agent context."
+                        "returnDisplay": "Provided valid repos to agent context."
                     }
                 }
 
             if workflow == "help":
-                target_project = project or (f"{repos[0]['owner']}/{repos[0]['repo']}" if len(repos) == 1 else None)
-                if not target_project:
+                target_repo = repo or (f"{repos[0]['owner']}/{repos[0]['repo']}" if len(repos) == 1 else None)
+                if not target_repo:
                     return {
                         "jsonrpc": "2.0",
                         "id": req.id,
                         "error": {
                             "code": -32602,
-                            "message": "Project not specified. Use project='help' to see valid projects."
+                            "message": "Repo not specified. Use repo='help' to see valid repos."
                         }
                     }
                 valid_workflows = [
                     f"{r.get('workflow_name') or r.get('workflow_id') or 'any'}"
                     for r in repos
-                    if r["repo"] == target_project or f"{r['owner']}/{r['repo']}" == target_project
+                    if r["repo"] == target_repo or f"{r['owner']}/{r['repo']}" == target_repo
                 ]
-                help_text = f"Valid workflows for {target_project}: {', '.join(valid_workflows)}"
+                help_text = f"Valid workflows for {target_repo}: {', '.join(valid_workflows)}"
                 return {
                     "jsonrpc": "2.0",
                     "id": req.id,
                     "result": {
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": help_text
-                            }
-                        ],
+                        "content": [{"type": "text", "text": help_text}],
                         "llmContent": help_text,
-                        "returnDisplay": f"Provided valid workflows for {target_project} to agent context."
+                        "returnDisplay": f"Provided valid workflows for {target_repo} to agent context."
                     }
                 }
 
+            if not provider_arg and repo:
+                resolved_provider, error_response = resolve_provider_conflict(repo, repos, req.id)
+                if error_response:
+                    return error_response
+                if resolved_provider:
+                    provider_arg = resolved_provider
+
             matched_repo = None
-            target_project_matched = False
-            if project:
+            target_repo_matched = False
+            if repo:
                 for r in repos:
-                    # Match exact repo name or owner/repo
-                    if r["repo"] == project or f"{r['owner']}/{r['repo']}" == project:
-                        target_project_matched = True
-                        # If workflow is specified, match it. If not, match if the repo config doesn't require a specific workflow or we just take the first match
+                    # Match exact repo name or owner/repo, and check provider if specified
+                    if (r["repo"] == repo or f"{r['owner']}/{r['repo']}" == repo) and (not provider_arg or r["provider"] == provider_arg):
+                        target_repo_matched = True
                         if not workflow or r.get("workflow_name") == workflow or r.get("workflow_id") == workflow:
                             matched_repo = r
                             break
-                # If project was not found in loop, matched_repo remains None
             elif len(repos) == 1:
-                # If no project specified but only 1 project is configured, default to it
                 matched_repo = repos[0]
-                target_project_matched = True
+                target_repo_matched = True
 
             if not matched_repo:
-                if target_project_matched and workflow:
+                if target_repo_matched and workflow:
                     valid_workflows = [
                         f"{r.get('workflow_name') or r.get('workflow_id') or 'any'}"
                         for r in repos
-                        if r["repo"] == project or f"{r['owner']}/{r['repo']}" == project
+                        if (r["repo"] == repo or f"{r['owner']}/{r['repo']}" == repo) and (not provider_arg or r["provider"] == provider_arg)
                     ]
-                    help_text = f"Workflow '{workflow}' not found for project '{project}'. Valid workflows: {', '.join(valid_workflows)}"
+                    help_text = f"Workflow '{workflow}' not found for repo '{repo}'. Valid workflows: {', '.join(valid_workflows)}"
                     return {
                         "jsonrpc": "2.0",
                         "id": req.id,
                         "result": {
-                            "content": [
-                                {
-                                    "type": "text",
-                                    "text": help_text
-                                }
-                            ],
+                            "content": [{"type": "text", "text": help_text}],
                             "llmContent": help_text,
-                            "returnDisplay": f"Workflow not found. Provided valid workflows for {project} to agent context."
+                            "returnDisplay": f"Workflow not found. Provided valid workflows for {repo} to agent context."
                         }
                     }
                 else:
-                    valid_projects = [f"{r['owner']}/{r['repo']}" for r in repos]
-                    help_text = f"Project '{project}' not found. Valid projects: {', '.join(valid_projects)}"
+                    valid_repos = [f"{r['owner']}/{r['repo']}" for r in repos]
+                    help_text = f"Repo '{repo}' not found. Valid repos: {', '.join(valid_repos)}"
                     return {
                         "jsonrpc": "2.0",
                         "id": req.id,
                         "result": {
-                            "content": [
-                                {
-                                    "type": "text",
-                                    "text": help_text
-                                }
-                            ],
+                            "content": [{"type": "text", "text": help_text}],
                             "llmContent": help_text,
-                            "returnDisplay": "Project not found. Provided valid projects to agent context."
+                            "returnDisplay": "Repo not found. Provided valid repos to agent context."
                         }
                     }
 
