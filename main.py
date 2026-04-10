@@ -455,11 +455,11 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
         if is_tool_call:
             call_args = params.get("arguments") or {}
             provider_arg = call_args.get("provider") or request.headers.get("x-provider")
-            repo = call_args.get("repo") or request.headers.get("x-repo")
+            repo = call_args.get("repo") or call_args.get("project") or request.headers.get("x-repo")
             workflow = call_args.get("workflow") or request.headers.get("x-workflow")
         else:
             provider_arg = params.get("provider") or request.headers.get("x-provider")
-            repo = params.get("repo") or request.headers.get("x-repo")
+            repo = params.get("repo") or params.get("project") or request.headers.get("x-repo")
             workflow = params.get("workflow") or request.headers.get("x-workflow")
 
         if method_name in ["get_project_status", "get_logs", "wait"]:
