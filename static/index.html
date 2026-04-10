@@ -363,7 +363,7 @@
         if(status === 'success') return 'status-success';
         if(status === 'failure') return 'status-failure';
         if(status === 'running') return 'status-running';
-        if(status === 'unknown') return 'status-error';
+        if(status === 'unknown' || status === 'skipped' || status === 'cancelled') return 'status-error';
         return 'status-error';
     }
 
@@ -372,6 +372,8 @@
         if(status === 'failure') return '✘ Fail';
         if(status === 'running') return '↻ Run';
         if(status === 'unknown') return '➖ Unknown';
+        if(status === 'skipped') return '⏭ Skipped';
+        if(status === 'cancelled') return '🛑 Cancelled';
         return '? Error';
     }
 
@@ -422,6 +424,12 @@
                 list.innerHTML = '<div style="padding: 20px; text-align: center; color: #cb2431;">Error: Invalid data received from server.</div>';
                 return;
             }
+
+            dashboardData.sort((a, b) => {
+                const timeA = new Date(a.updated_at || a.started_at || 0).getTime();
+                const timeB = new Date(b.updated_at || b.started_at || 0).getTime();
+                return timeB - timeA;
+            });
 
             const list = document.getElementById('repoList');
             if (dashboardData.length === 0) {

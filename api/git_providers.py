@@ -14,6 +14,8 @@ def _error_result(provider, owner, repo):
     }
 
 async def fetch_github_status(owner: str, repo: str, token: str, workflow_id: str = None):
+    if workflow_id == "any":
+        workflow_id = None
     headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github.v3+json"} if token else {}
     base_url = f"https://api.github.com/repos/{owner}/{repo}"
 
@@ -76,6 +78,8 @@ async def fetch_github_status(owner: str, repo: str, token: str, workflow_id: st
         return _error_result("github", owner, repo)
 
 async def fetch_forgejo_status(owner: str, repo: str, token: str, forgejo_url: str, workflow_id: str = None):
+    if workflow_id == "any":
+        workflow_id = None
     if not forgejo_url:
         return _error_result("forgejo", owner, repo)
 
@@ -148,12 +152,15 @@ async def fetch_forgejo_status(owner: str, repo: str, token: str, forgejo_url: s
                 "updated_at": run.get("updated", run.get("updated_at", "")),
                 "commit_message": commit_msg,
                 "started_at": started_at,
-                "expected_duration_sec": expected_duration_sec
+                "expected_duration_sec": expected_duration_sec,
+                "workflow_name": run.get("name", "")
             }
     except Exception:
         return _error_result("forgejo", owner, repo)
 
 async def fetch_github_logs(owner: str, repo: str, token: str, workflow_id: str = None):
+    if workflow_id == "any":
+        workflow_id = None
     headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github.v3+json"} if token else {}
     base_url = f"https://api.github.com/repos/{owner}/{repo}"
     runs_url = f"{base_url}/actions/workflows/{workflow_id}/runs?per_page=1" if workflow_id else f"{base_url}/actions/runs?per_page=1"
@@ -183,6 +190,8 @@ async def fetch_github_logs(owner: str, repo: str, token: str, workflow_id: str 
         return f"Error fetching GitHub logs: {str(e)}"
 
 async def fetch_forgejo_logs(owner: str, repo: str, token: str, forgejo_url: str, workflow_id: str = None):
+    if workflow_id == "any":
+        workflow_id = None
     if not forgejo_url:
         return "Forgejo URL not configured."
     # Forgejo/Gitea's API does not currently expose downloading logs in this version.
@@ -216,6 +225,8 @@ async def fetch_forgejo_logs(owner: str, repo: str, token: str, forgejo_url: str
         return f"Error fetching Forgejo logs: {str(e)}"
 
 async def fetch_github_artifacts(owner: str, repo: str, token: str, workflow_id: str = None):
+    if workflow_id == "any":
+        workflow_id = None
     headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github.v3+json"} if token else {}
     base_url = f"https://api.github.com/repos/{owner}/{repo}"
     runs_url = f"{base_url}/actions/workflows/{workflow_id}/runs?per_page=1" if workflow_id else f"{base_url}/actions/runs?per_page=1"
@@ -237,6 +248,8 @@ async def fetch_github_artifacts(owner: str, repo: str, token: str, workflow_id:
         return {"error": f"Error fetching GitHub artifacts: {str(e)}"}
 
 async def fetch_forgejo_artifacts(owner: str, repo: str, token: str, forgejo_url: str, workflow_id: str = None):
+    if workflow_id == "any":
+        workflow_id = None
     if not forgejo_url:
         return {"error": "Forgejo URL not configured."}
     base_url = f"{forgejo_url.rstrip('/')}/api/v1/repos/{owner}/{repo}"
@@ -268,6 +281,8 @@ async def fetch_forgejo_artifacts(owner: str, repo: str, token: str, forgejo_url
         return {"error": f"Error fetching Forgejo artifacts: {str(e)}"}
 
 async def fetch_jenkins_status(owner: str, repo: str, user: str, token: str, workflow_id: str = None):
+    if workflow_id == "any":
+        workflow_id = None
     # repo is treated as the base URL of the Jenkins job/folder
     base_url = repo.rstrip('/')
     auth = (user, token) if user and token else None
@@ -378,6 +393,8 @@ async def _resolve_jenkins_status(client, url, owner, repo_field, max_depth=3):
     return _error_result("jenkins", owner, repo_field)
 
 async def fetch_jenkins_logs(owner: str, repo: str, user: str, token: str, workflow_id: str = None):
+    if workflow_id == "any":
+        workflow_id = None
     # repo is treated as the base URL of the Jenkins job/folder
     base_url = repo.rstrip('/')
     auth = (user, token) if user and token else None
@@ -422,4 +439,6 @@ async def _resolve_jenkins_logs(client, url, max_depth=3):
     return "Unsupported Jenkins object class."
 
 async def fetch_jenkins_artifacts(owner: str, repo: str, user: str, token: str, workflow_id: str = None):
+    if workflow_id == "any":
+        workflow_id = None
     return {"error": "Jenkins artifacts not implemented yet."}

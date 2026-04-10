@@ -238,7 +238,12 @@ async def get_status(user: str = Depends(get_current_user)):
             res = results[i]
             res["custom_links"] = r.get("custom_links", [])
             res["workflow_id"] = r.get("workflow_id")
-            res["workflow_name"] = r.get("workflow_name")
+
+            configured_wf_name = r.get("workflow_name")
+            if not configured_wf_name or configured_wf_name == "Any Workflow":
+                res["workflow_name"] = res.get("workflow_name") or configured_wf_name
+            else:
+                res["workflow_name"] = configured_wf_name
 
             # Detect if a completely new run has started
             current_url = res.get("url")
