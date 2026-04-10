@@ -49,6 +49,14 @@ def get_log_filename(provider, owner, repo, workflow_id=None):
 async def read_index(user: str = Depends(require_basic_auth)):
     return FileResponse("static/index.html")
 
+@app.get("/sw.js", summary="Service Worker", description="Serves the Service Worker for PWA.", include_in_schema=False)
+async def read_sw():
+    return FileResponse("static/sw.js")
+
+@app.get("/manifest.json", summary="Web App Manifest", description="Serves the Web App Manifest for PWA.", include_in_schema=False)
+async def read_manifest():
+    return FileResponse("static/manifest.json")
+
 @app.get("/llms.txt", summary="LLM Agent Instructions", description="Serves a text file containing instructions on how LLMs and autonomous agents can interface with this system.")
 async def read_llms_txt():
     return FileResponse("static/llms.txt")
