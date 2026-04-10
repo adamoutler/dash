@@ -8,6 +8,7 @@ import httpx
 from pydantic import BaseModel, Field
 from typing import Optional, Any
 from api.auth import require_basic_auth, get_current_user
+from api.config import ConfigManager
 from fastapi import Depends
 from api.storage import RepoStorage
 from api.git_providers import fetch_github_status, fetch_forgejo_status, fetch_github_logs, fetch_forgejo_logs, fetch_github_artifacts, fetch_forgejo_artifacts, fetch_jenkins_status, fetch_jenkins_logs, fetch_jenkins_artifacts
@@ -20,6 +21,41 @@ app = FastAPI(
 )
 app.include_router(explore_router)
 storage = RepoStorage()
+config_manager = ConfigManager()
+
+
+class SettingsUpdate(BaseModel):
+    github_token: Optional[str] = None
+    forgejo_token: Optional[str] = None
+    forgejo_url: Optional[str] = None
+    jenkins_user: Optional[str] = None
+    jenkins_token: Optional[str] = None
+    jenkins_url: Optional[str] = None
+
+@app.get("/api/settings", summary="Get Configured Providers", description="Returns boolean flags indicating if each provider is configured.")
+async def get_settings_status(user: str = Depends(require_basic_auth)):
+    return {
+        "github_configured": bool(config_manager.get_value("github_token", "GITHUB_TOKEN")),
+        "forgejo_configured": bool(config_manager.get_value("forgejo_token", "FORGEJO_TOKEN") and config_manager.get_value("forgejo_url", "FORGEJO_URL")),
+        "jenkins_configured": bool(config_manager.get_value("jenkins_user", "JENKINS_USER") and config_manager.get_value("jenkins_token", "JENKINS_TOKEN"))
+    }
+
+@app.post("/api/settings", summary="Update Settings", description="Updates the tokens and URLs.")
+async def update_settings_status(settings: SettingsUpdate, user: str = Depends(require_basic_auth)):
+    updates = settings.model_dump(exclude_unset=True)
+    config_manager.update_settings(updates)
+    return {"message": "Settings updated"}
+
+@app.get("/api/providers", summary="Get Fully Enabled Providers", description="Returns a list of fully enabled providers.")
+async def get_enabled_providers(user: str = Depends(get_current_user)):
+    providers = []
+    if config_manager.get_value("github_token", "GITHUB_TOKEN"):
+        providers.append("github")
+    if config_manager.get_value("forgejo_token", "FORGEJO_TOKEN") and config_manager.get_value("forgejo_url", "FORGEJO_URL"):
+        providers.append("forgejo")
+    if config_manager.get_value("jenkins_user", "JENKINS_USER") and config_manager.get_value("jenkins_token", "JENKINS_TOKEN"):
+        providers.append("jenkins")
+    return {"providers": providers}
 
 class RepoItem(BaseModel):
     provider: str = Field(..., description="The git provider, e.g., 'github' or 'forgejo'")
@@ -67,9 +103,9 @@ async def redirect_to_docs(user: str = Depends(get_current_user)):
 
 @app.get("/api/workflows", summary="List Available Workflows", description="Queries the specified provider to discover available CI workflows for a given repository. Often used to populate selection dropdowns.")
 async def get_workflows(provider: str, owner: str, repo: str, user: str = Depends(get_current_user)):
-    github_token = os.environ.get("GITHUB_TOKEN", "")
-    forgejo_token = os.environ.get("FORGEJO_TOKEN", "")
-    forgejo_url = os.environ.get("FORGEJO_URL", "")
+    github_token = config_manager.get_value("github_token", "GITHUB_TOKEN")
+    forgejo_token = config_manager.get_value("forgejo_token", "FORGEJO_TOKEN")
+    forgejo_url = config_manager.get_value("forgejo_url", "FORGEJO_URL")
 
     if provider == "github":
         headers = {"Authorization": f"Bearer {github_token}", "Accept": "application/vnd.github.v3+json"} if github_token else {}
@@ -106,11 +142,11 @@ async def get_workflows(provider: str, owner: str, repo: str, user: str = Depend
 
 @app.get("/api/artifacts", summary="Fetch Workflow Artifacts", description="Retrieves a list of generated artifacts for the latest run of a specific repository or workflow.")
 async def get_artifacts(provider: str, owner: str, repo: str, workflow_id: Optional[str] = None, user: str = Depends(get_current_user)):
-    github_token = os.environ.get("GITHUB_TOKEN", "")
-    forgejo_token = os.environ.get("FORGEJO_TOKEN", "")
-    forgejo_url = os.environ.get("FORGEJO_URL", "")
-    jenkins_user = os.environ.get("JENKINS_USER", "")
-    jenkins_token = os.environ.get("JENKINS_TOKEN", "")
+    github_token = config_manager.get_value("github_token", "GITHUB_TOKEN")
+    forgejo_token = config_manager.get_value("forgejo_token", "FORGEJO_TOKEN")
+    forgejo_url = config_manager.get_value("forgejo_url", "FORGEJO_URL")
+    jenkins_user = config_manager.get_value("jenkins_user", "JENKINS_USER")
+    jenkins_token = config_manager.get_value("jenkins_token", "JENKINS_TOKEN")
 
     if provider == "github":
         return await fetch_github_artifacts(owner, repo, github_token, workflow_id)
@@ -163,11 +199,11 @@ async def get_logs(provider: str, owner: str, repo: str, workflow_id: Optional[s
         with open(filepath, "r", encoding="utf-8") as f:
             return {"log": f.read()}
 
-    github_token = os.environ.get("GITHUB_TOKEN", "")
-    forgejo_token = os.environ.get("FORGEJO_TOKEN", "")
-    forgejo_url = os.environ.get("FORGEJO_URL", "")
-    jenkins_user = os.environ.get("JENKINS_USER", "")
-    jenkins_token = os.environ.get("JENKINS_TOKEN", "")
+    github_token = config_manager.get_value("github_token", "GITHUB_TOKEN")
+    forgejo_token = config_manager.get_value("forgejo_token", "FORGEJO_TOKEN")
+    forgejo_url = config_manager.get_value("forgejo_url", "FORGEJO_URL")
+    jenkins_user = config_manager.get_value("jenkins_user", "JENKINS_USER")
+    jenkins_token = config_manager.get_value("jenkins_token", "JENKINS_TOKEN")
 
     if provider == "github":
         return {"log": await fetch_github_logs(owner, repo, github_token, workflow_id)}
@@ -181,11 +217,11 @@ async def get_logs(provider: str, owner: str, repo: str, workflow_id: Optional[s
 async def get_status(user: str = Depends(get_current_user)):
     repos = storage.get_repos()
     tasks = []
-    github_token = os.environ.get("GITHUB_TOKEN", "")
-    forgejo_token = os.environ.get("FORGEJO_TOKEN", "")
-    forgejo_url = os.environ.get("FORGEJO_URL", "")
-    jenkins_user = os.environ.get("JENKINS_USER", "")
-    jenkins_token = os.environ.get("JENKINS_TOKEN", "")
+    github_token = config_manager.get_value("github_token", "GITHUB_TOKEN")
+    forgejo_token = config_manager.get_value("forgejo_token", "FORGEJO_TOKEN")
+    forgejo_url = config_manager.get_value("forgejo_url", "FORGEJO_URL")
+    jenkins_user = config_manager.get_value("jenkins_user", "JENKINS_USER")
+    jenkins_token = config_manager.get_value("jenkins_token", "JENKINS_TOKEN")
 
     for r in repos:
         if r["provider"] == "github":
@@ -234,11 +270,11 @@ async def remove_repo(item: RepoItem, user: str = Depends(get_current_user)):
 
 @app.get("/api/wait", summary="Stream Execution Status", description="Provides a real-time event stream that periodically checks a workflow's status and pushes an update to the client once it has completed.")
 async def wait_status(provider: str, owner: str, repo: str, workflow_id: Optional[str] = None, user: str = Depends(get_current_user)):
-    github_token = os.environ.get("GITHUB_TOKEN", "")
-    forgejo_token = os.environ.get("FORGEJO_TOKEN", "")
-    forgejo_url = os.environ.get("FORGEJO_URL", "")
-    jenkins_user = os.environ.get("JENKINS_USER", "")
-    jenkins_token = os.environ.get("JENKINS_TOKEN", "")
+    github_token = config_manager.get_value("github_token", "GITHUB_TOKEN")
+    forgejo_token = config_manager.get_value("forgejo_token", "FORGEJO_TOKEN")
+    forgejo_url = config_manager.get_value("forgejo_url", "FORGEJO_URL")
+    jenkins_user = config_manager.get_value("jenkins_user", "JENKINS_USER")
+    jenkins_token = config_manager.get_value("jenkins_token", "JENKINS_TOKEN")
 
     async def event_stream():
         yield "waiting for complete."
@@ -506,11 +542,11 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
             wf_id = matched_repo.get("workflow_id")
 
             if method_name == "get_project_status":
-                github_token = os.environ.get("GITHUB_TOKEN", "")
-                forgejo_token = os.environ.get("FORGEJO_TOKEN", "")
-                forgejo_url = os.environ.get("FORGEJO_URL", "")
-                jenkins_user = os.environ.get("JENKINS_USER", "")
-                jenkins_token = os.environ.get("JENKINS_TOKEN", "")
+                github_token = config_manager.get_value("github_token", "GITHUB_TOKEN")
+                forgejo_token = config_manager.get_value("forgejo_token", "FORGEJO_TOKEN")
+                forgejo_url = config_manager.get_value("forgejo_url", "FORGEJO_URL")
+                jenkins_user = config_manager.get_value("jenkins_user", "JENKINS_USER")
+                jenkins_token = config_manager.get_value("jenkins_token", "JENKINS_TOKEN")
 
                 if provider == "github":
                     result = await fetch_github_status(owner, repo_name, github_token, wf_id)
@@ -570,11 +606,11 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
 
             elif method_name == "wait":
                 async def wait_generator():
-                    github_token = os.environ.get("GITHUB_TOKEN", "")
-                    forgejo_token = os.environ.get("FORGEJO_TOKEN", "")
-                    forgejo_url = os.environ.get("FORGEJO_URL", "")
-                    jenkins_user = os.environ.get("JENKINS_USER", "")
-                    jenkins_token = os.environ.get("JENKINS_TOKEN", "")
+                    github_token = config_manager.get_value("github_token", "GITHUB_TOKEN")
+                    forgejo_token = config_manager.get_value("forgejo_token", "FORGEJO_TOKEN")
+                    forgejo_url = config_manager.get_value("forgejo_url", "FORGEJO_URL")
+                    jenkins_user = config_manager.get_value("jenkins_user", "JENKINS_USER")
+                    jenkins_token = config_manager.get_value("jenkins_token", "JENKINS_TOKEN")
 
                     while True:
                         if provider == "github":
