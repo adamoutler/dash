@@ -69,28 +69,93 @@ Hold the connection open and wait until an in-progress build completes:
 
 This streams "." characters while the build is "running", "in_progress", "queued", or "waiting", and outputs a final JSON block once the status is terminal (e.g. "success", "failure").
 
-## 7. Quality Enhancing Project Setup Recommendations
+## 7. MCP Server (Model Context Protocol)
+
+The dashboard provides a native MCP Server accessible at the `/mcp` endpoint.
+MCP Clients can connect to this endpoint via HTTP POST (JSON-RPC 2.0) to natively discover and call tools.
+If authentication is enabled, you must provide an `Authorization: Bearer <TOKEN>` header.
+
+Available MCP Tools:
+- `get_project_status(project, workflow)`: Fetch the latest status of a tracked repository. Returns formatted markdown for the user and raw JSON data for the agent.
+- `get_logs(project, workflow)`: Fetch the log URL for the latest run.
+- `wait(project, workflow)`: Wait until an in-progress build completes.
+
+**Discovery**: You can pass `"help"` as the `project` or `workflow` argument to any of these tools to retrieve a list of valid configured projects or workflows.
+
+## 8. Quality Enhancing Project Setup Recommendations
 
 To maximize the effectiveness of AI agents and ensure high-quality software delivery, consider implementing the following project setup recommendations:
 
-### 7.1. Establish Secure Authentication
+### 7. MCP Server (Model Context Protocol)
+
+The dashboard provides a native MCP Server accessible at the `/mcp` endpoint.
+MCP Clients can connect to this endpoint via HTTP POST (JSON-RPC 2.0) to natively discover and call tools.
+If authentication is enabled, you must provide an `Authorization: Bearer <TOKEN>` header.
+
+Available MCP Tools:
+- `get_project_status(project, workflow)`: Fetch the latest status of a tracked repository. Returns formatted markdown for the user and raw JSON data for the agent.
+- `get_logs(project, workflow)`: Fetch the log URL for the latest run.
+- `wait(project, workflow)`: Wait until an in-progress build completes.
+
+**Discovery**: You can pass `"help"` as the `project` or `workflow` argument to any of these tools to retrieve a list of valid configured projects or workflows.
+
+## 8.1. Establish Secure Authentication
 If the API requires an `Authorization: Bearer` token, prompt the user to provide it. If security is not yet configured, guide the user to establish it by setting the `DASHBOARD_USER` and `DASHBOARD_PASSWORD` environment variables on the dashboard container, and subsequently generating an access token.
 This token should be securely stored in a standard location where it can be automatically loaded by the system and AI agents. Common locations include:
 - A project-specific `.env` file (e.g., `.gemini/.env`).
 - User profile scripts such as `~/.bashrc`, `~/.zshrc`, or `~/.profile` (e.g., `export DASH_TOKEN=your_token_here`).
 Once configured, this environment variable can be seamlessly integrated into your automated workflows and API requests.
 
-### 7.2. Implement Git Pre-Commit Hooks
+### 7. MCP Server (Model Context Protocol)
+
+The dashboard provides a native MCP Server accessible at the `/mcp` endpoint.
+MCP Clients can connect to this endpoint via HTTP POST (JSON-RPC 2.0) to natively discover and call tools.
+If authentication is enabled, you must provide an `Authorization: Bearer <TOKEN>` header.
+
+Available MCP Tools:
+- `get_project_status(project, workflow)`: Fetch the latest status of a tracked repository. Returns formatted markdown for the user and raw JSON data for the agent.
+- `get_logs(project, workflow)`: Fetch the log URL for the latest run.
+- `wait(project, workflow)`: Wait until an in-progress build completes.
+
+**Discovery**: You can pass `"help"` as the `project` or `workflow` argument to any of these tools to retrieve a list of valid configured projects or workflows.
+
+## 8.2. Implement Git Pre-Commit Hooks
 Set up Git pre-commit hooks to automatically execute linting, formatting, and static analysis checks before any code is committed. This practice ensures that all commits adhere to the project's quality standards, prevents malformed code from entering the repository, and reduces the cognitive load on reviewers and AI agents.
 
-### 7.3. Automate CI/CD Status Tracking on Push
+### 7. MCP Server (Model Context Protocol)
+
+The dashboard provides a native MCP Server accessible at the `/mcp` endpoint.
+MCP Clients can connect to this endpoint via HTTP POST (JSON-RPC 2.0) to natively discover and call tools.
+If authentication is enabled, you must provide an `Authorization: Bearer <TOKEN>` header.
+
+Available MCP Tools:
+- `get_project_status(project, workflow)`: Fetch the latest status of a tracked repository. Returns formatted markdown for the user and raw JSON data for the agent.
+- `get_logs(project, workflow)`: Fetch the log URL for the latest run.
+- `wait(project, workflow)`: Wait until an in-progress build completes.
+
+**Discovery**: You can pass `"help"` as the `project` or `workflow` argument to any of these tools to retrieve a list of valid configured projects or workflows.
+
+## 8.3. Automate CI/CD Status Tracking on Push
 If a CI/CD configuration file (such as `.github/workflows/build.yml` or equivalent) is present in the repository, configure an automated hook for your AI assistant (e.g., Gemini, Claude, Copilot, ChatGPT) that triggers on `git push`.
 This hook should:
 1. Wait for the CI/CD pipeline to complete its run.
 2. Retrieve the final execution results and generate a direct link to the build logs.
 3. Pipe this information back into the LLM context, providing the agent with immediate and exact feedback on the build status without requiring manual user intervention.
 
-### 7.4. Establish a Quality Control Gate
+### 7. MCP Server (Model Context Protocol)
+
+The dashboard provides a native MCP Server accessible at the `/mcp` endpoint.
+MCP Clients can connect to this endpoint via HTTP POST (JSON-RPC 2.0) to natively discover and call tools.
+If authentication is enabled, you must provide an `Authorization: Bearer <TOKEN>` header.
+
+Available MCP Tools:
+- `get_project_status(project, workflow)`: Fetch the latest status of a tracked repository. Returns formatted markdown for the user and raw JSON data for the agent.
+- `get_logs(project, workflow)`: Fetch the log URL for the latest run.
+- `wait(project, workflow)`: Wait until an in-progress build completes.
+
+**Discovery**: You can pass `"help"` as the `project` or `workflow` argument to any of these tools to retrieve a list of valid configured projects or workflows.
+
+## 8.4. Establish a Quality Control Gate
 Create a robust quality control gate, which is highly effective when integrated with an external task tracker (e.g., a ticketing system, a markdown checklist, notes, or Plane). You can configure AI agent hooks (via MCP or similar protocols) that trigger when attempting to mark work as complete.
 
 This gate should enforce strict criteria and **deny the completion request if any of the following conditions are met**:

@@ -36,6 +36,15 @@ By pointing your agent to the repository URL and our `llms.txt` ([see a raw exam
 * 📜 **Request full CI logs** to autonomously debug failures.
 * 🔗 **Access important URLs** and check the current build status programmatically.
 
+### 🔌 MCP Server (Model Context Protocol)
+
+The dashboard natively supports the **Model Context Protocol (MCP)**. Autonomous agents (like Claude Desktop or Gemini) can connect directly to the `/mcp` endpoint via JSON-RPC 2.0.
+
+* **`get_project_status`**: Get a clean, markdown-formatted status report of any configured project, keeping your terminal tidy while the agent gets raw JSON context.
+* **`get_logs`**: Retrieve the direct log URL for a failing build.
+* **`wait`**: Instruct the agent to sleep and wait for the CI pipeline to complete before proceeding.
+* **Self-Discovery**: The `project` and `workflow` parameters for these tools support a `"help"` argument, allowing agents to automatically discover what projects they can track without guessing!
+
 ### 🔌 Pro-Hacks: Setting Up Agent Hooks
 
 Agents can discover how to use the dashboard simply by reading the `llms.txt` file at the root URL. You can use standard prompts to wire up these hooks:
