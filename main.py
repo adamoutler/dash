@@ -583,7 +583,7 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                 }
 
                 status_emoji = {"success": "✅", "failure": "❌", "running": "🏃", "in_progress": "🏃", "unknown": "❓"}.get(res_obj.get("status", "unknown").lower(), "❓")
-                duration_info = f" (Expected duration: {res_obj['expected_duration_sec']}s)" if res_obj.get("expected_duration_sec") else ""
+                duration_info = f" (Expected duration: {int(res_obj['expected_duration_sec'] * 1.05)}s)" if res_obj.get("expected_duration_sec") else ""
 
                 display_str = (
                     f"**{owner}/{repo_name}**\n"
