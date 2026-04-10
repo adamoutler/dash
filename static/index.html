@@ -363,6 +363,7 @@
         if(status === 'success') return 'status-success';
         if(status === 'failure') return 'status-failure';
         if(status === 'running') return 'status-running';
+        if(status === 'unknown') return 'status-error';
         return 'status-error';
     }
 
@@ -370,6 +371,7 @@
         if(status === 'success') return '✔ Pass';
         if(status === 'failure') return '✘ Fail';
         if(status === 'running') return '↻ Run';
+        if(status === 'unknown') return '➖ Unknown';
         return '? Error';
     }
 
@@ -381,6 +383,7 @@
 
         dashboardData.forEach(item => {
             let duration = item.expected_duration_sec || item.average_recent_duration || 0;
+            if (duration > 0) duration = duration * 1.05; // Add 5% buffer to reduce overtime anxiety
             if (item.status === 'running' && duration > 0 && item.started_at) {
                 const repoId = `${item.provider}-${item.owner}-${item.repo}-${item.workflow_id || 'all'}`.replace(/[^a-zA-Z0-9-]/g, '-');
                 const progressEl = document.getElementById(`progress-${repoId}`);
@@ -437,6 +440,7 @@
 
             let progressHtml = '';
             let duration = item.expected_duration_sec || item.average_recent_duration || 0;
+            if (duration > 0) duration = duration * 1.05; // Add 5% buffer to reduce overtime anxiety
             if (item.status === 'running' && duration > 0 && item.started_at) {
                 progressHtml = `
                     <div style="width: 80%; height: 4px; background: rgba(0,0,0,0.1); margin-top: 5px; position: relative; border-radius: 2px; overflow: hidden;">
