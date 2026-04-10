@@ -293,30 +293,49 @@ async def _resolve_jenkins_status(client, url, owner, repo_field, max_depth=3):
     if "WorkflowJob" in cls or "FreeStyleProject" in cls:
         # It's a leaf job
         last_build = data.get("lastBuild")
+        in_queue = data.get("inQueue")
+        color = data.get("color", "")
+
+        status = "unknown"
+        if in_queue or "anime" in color:
+            status = "running"
+
         if not last_build:
-            return {
-                "provider": "jenkins",
-                "owner": owner,
-                "repo": repo_field,
-                "status": "unknown",
-                "url": url,
-                "repo_url": url,
-                "updated_at": "",
-                "commit_message": "No builds found",
-                "started_at": "",
-                "expected_duration_sec": None
-            }
+            if status != "running":
+                return {
+                    "provider": "jenkins",
+                    "owner": owner,
+                    "repo": repo_field,
+                    "status": "unknown",
+                    "url": url,
+                    "repo_url": url,
+                    "updated_at": "",
+                    "commit_message": "No builds found",
+                    "started_at": "",
+                    "expected_duration_sec": None
+                }
+            else:
+                return {
+                    "provider": "jenkins",
+                    "owner": owner,
+                    "repo": repo_field,
+                    "status": status,
+                    "url": url,
+                    "repo_url": url,
+                    "updated_at": "",
+                    "commit_message": "Job is in queue or starting",
+                    "started_at": "",
+                    "expected_duration_sec": None
+                }
 
         result = last_build.get("result")
-        color = data.get("color", "")
-        # map status
-        status = "unknown"
-        if color and ("anime" in color or data.get("inQueue")):
-            status = "running"
-        elif result == "SUCCESS":
-            status = "success"
-        elif result in ["FAILURE", "UNSTABLE", "ABORTED"]:
-            status = "failure"
+        if status == "unknown":
+            if result is None:
+                status = "running"
+            elif result == "SUCCESS":
+                status = "success"
+            elif result in ["FAILURE", "UNSTABLE", "ABORTED"]:
+                status = "failure"
 
         timestamp_ms = last_build.get("timestamp")
         started_at = datetime.datetime.fromtimestamp(timestamp_ms / 1000.0, tz=datetime.timezone.utc).isoformat() if timestamp_ms else ""
