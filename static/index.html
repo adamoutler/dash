@@ -15,6 +15,29 @@
             }
         })();
     </script>
+    <style>
+        .cascading-browser-container {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .browser-level {
+            padding: 8px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            background-color: var(--bg-surface);
+            color: var(--text-primary);
+            font-size: 14px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        .browser-level:focus {
+            outline: none;
+            border-color: #0366d6;
+            box-shadow: 0 0 0 3px rgba(3, 102, 214, 0.3);
+        }
+    </style>
 </head>
 <body>
 <div id="logModal" class="modal">
@@ -37,20 +60,17 @@
 
     <div class="add-form" id="addForm">
         <div style="display: flex; gap: 10px; margin-bottom: 10px;">
-            <select id="provider" onchange="updatePlaceholder()">
+            <select id="provider" style="flex: 1; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; background-color: var(--bg-surface); color: var(--text-primary);">
                 <option value="github">GitHub</option>
                 <option value="forgejo">Forgejo / Gitea</option>
                 <option value="jenkins">Jenkins</option>
             </select>
-            <input type="text" id="owner" placeholder="Owner (e.g. adamoutler)" required>
-            <input type="text" id="repo" placeholder="Repo (e.g. dashboard)" required>
         </div>
-        <div style="display: flex; gap: 10px; margin-bottom: 10px;">
-            <select id="workflow" style="flex: 1;">
-                <option value="">All Workflows (Default)</option>
-            </select>
-            <button type="button" class="add-link-btn" style="margin-top: 0; padding: 6px 12px; font-size: 13px;" onclick="loadWorkflows()">Load Workflows</button>
-        </div>
+        <div id="cascadingBrowser" class="cascading-browser-container"></div>
+        <input type="hidden" id="owner" value="">
+        <input type="hidden" id="repo" value="">
+        <input type="hidden" id="workflow" value="">
+        <input type="hidden" id="workflowName" value="">
         <div id="linksContainer">
             <!-- Dynamic links go here -->
         </div>
@@ -73,16 +93,164 @@
 </div>
 
 <script>
-    function updatePlaceholder() {
-        const p = document.getElementById('provider').value;
-        if (p === 'jenkins') {
-            document.getElementById('owner').placeholder = "Display Name (e.g. Jenkins)";
-            document.getElementById('repo').placeholder = "Job URL (e.g. https://jenkins...)";
-        } else {
-            document.getElementById('owner').placeholder = "Owner (e.g. adamoutler)";
-            document.getElementById('repo').placeholder = "Repo (e.g. dashboard)";
+    class CascadingPathBrowser {
+        constructor(containerId, providerSelectId) {
+            this.container = document.getElementById(containerId);
+            this.providerSelect = document.getElementById(providerSelectId);
+            this.levels = [];
+            this.providerSelect.addEventListener('change', () => this.reset());
+        }
+
+        reset() {
+            this.container.innerHTML = '';
+            this.levels = [];
+            this.loadLevel('');
+            this.updateHiddenFields();
+        }
+
+        async loadLevel(path, levelIndex = 0) {
+            while (this.levels.length > levelIndex) {
+                this.levels.pop().remove();
+            }
+
+            const provider = this.providerSelect.value;
+            const select = document.createElement('select');
+            select.className = 'browser-level';
+            select.innerHTML = '<option value="">Loading...</option>';
+            this.container.appendChild(select);
+            this.levels.push(select);
+
+            try {
+                const res = await fetch(`/api/explore/${provider}/nodes?path=${encodeURIComponent(path)}`);
+                if (!res.ok) throw new Error('Failed to fetch');
+                const data = await res.json();
+
+                select.innerHTML = '<option value="">-- Select --</option>';
+                data.nodes.forEach(node => {
+                    const opt = document.createElement('option');
+                    opt.value = node.path;
+                    opt.textContent = node.name;
+                    opt.dataset.type = node.type;
+                    opt.dataset.hasChildren = node.has_children;
+                    opt.dataset.url = node.url || '';
+                    opt.dataset.id = node.id || '';
+                    select.appendChild(opt);
+                });
+
+                select.addEventListener('change', () => {
+                    const selectedOpt = select.options[select.selectedIndex];
+                    if (!selectedOpt || !selectedOpt.value) {
+                        while (this.levels.length > levelIndex + 1) {
+                            this.levels.pop().remove();
+                        }
+                        this.updateHiddenFields();
+                        return;
+                    }
+
+                    if (selectedOpt.dataset.hasChildren === 'true') {
+                        this.loadLevel(selectedOpt.value, levelIndex + 1);
+                    } else {
+                        while (this.levels.length > levelIndex + 1) {
+                            this.levels.pop().remove();
+                        }
+                    }
+                    this.updateHiddenFields();
+                });
+
+            } catch (e) {
+                select.innerHTML = `<option value="">None found or Error</option>`;
+                console.error(e);
+            }
+
+            this.updateHiddenFields();
+        }
+
+        updateHiddenFields() {
+            const provider = this.providerSelect.value;
+            let owner = '';
+            let repo = '';
+            let workflowId = '';
+            let workflowName = '';
+
+            if (provider === 'jenkins') {
+                const lastSelect = this.levels[this.levels.length - 1];
+                if (lastSelect && lastSelect.selectedIndex > 0) {
+                    const opt = lastSelect.options[lastSelect.selectedIndex];
+                    owner = opt.textContent;
+                    repo = opt.dataset.url || opt.value;
+                } else if (this.levels.length > 1) {
+                    const prevSelect = this.levels[this.levels.length - 2];
+                    if (prevSelect && prevSelect.selectedIndex > 0) {
+                        const opt = prevSelect.options[prevSelect.selectedIndex];
+                        owner = opt.textContent;
+                        repo = opt.dataset.url || opt.value;
+                    }
+                }
+            } else {
+                if (this.levels[0] && this.levels[0].selectedIndex > 0) {
+                    owner = this.levels[0].options[this.levels[0].selectedIndex].dataset.id;
+                }
+                if (this.levels[1] && this.levels[1].selectedIndex > 0) {
+                    repo = this.levels[1].options[this.levels[1].selectedIndex].dataset.id;
+                }
+                if (this.levels[2] && this.levels[2].selectedIndex > 0) {
+                    const opt = this.levels[2].options[this.levels[2].selectedIndex];
+                    workflowId = opt.dataset.id;
+                    workflowName = opt.textContent;
+                }
+            }
+
+            document.getElementById('owner').value = owner || '';
+            document.getElementById('repo').value = repo || '';
+            document.getElementById('workflow').value = workflowId || '';
+            document.getElementById('workflowName').value = workflowName || '';
+        }
+
+        setEditMode(owner, repo, workflowId, workflowName) {
+            this.container.innerHTML = '';
+            this.levels = [];
+
+            const createInput = (val, placeholder) => {
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.value = val;
+                input.placeholder = placeholder;
+                input.readOnly = true;
+                input.style.flex = '1';
+                input.style.padding = '8px';
+                input.style.border = '1px solid var(--border-color)';
+                input.style.borderRadius = '4px';
+                input.style.backgroundColor = 'var(--bg-primary)';
+                input.style.color = 'var(--text-primary)';
+                input.style.boxSizing = 'border-box';
+                return input;
+            };
+
+            const row = document.createElement('div');
+            row.style.display = 'flex';
+            row.style.gap = '10px';
+
+            row.appendChild(createInput(owner, 'Owner'));
+            row.appendChild(createInput(repo, 'Repo'));
+
+            this.container.appendChild(row);
+
+            if (workflowId || workflowName) {
+                const wfRow = document.createElement('div');
+                wfRow.style.display = 'flex';
+                wfRow.style.gap = '10px';
+                wfRow.style.marginTop = '10px';
+                wfRow.appendChild(createInput(workflowName || workflowId, 'Workflow'));
+                this.container.appendChild(wfRow);
+            }
+
+            document.getElementById('owner').value = owner || '';
+            document.getElementById('repo').value = repo || '';
+            document.getElementById('workflow').value = workflowId || '';
+            document.getElementById('workflowName').value = workflowName || '';
         }
     }
+    let pathBrowser;
 
     function addLinkRow(name = '', url = '') {
         const container = document.getElementById('linksContainer');
@@ -96,37 +264,13 @@
         container.appendChild(row);
     }
 
-    async function loadWorkflows() {
-        const provider = document.getElementById('provider').value;
-        const owner = document.getElementById('owner').value.trim();
-        const repo = document.getElementById('repo').value.trim();
-        const wfSelect = document.getElementById('workflow');
-
-        if (!owner || !repo) {
-            alert('Please enter Owner and Repo first to load workflows');
-            return;
-        }
-
-        wfSelect.innerHTML = '<option value="">Loading...</option>';
-        try {
-            const res = await fetch(`/api/workflows?provider=${encodeURIComponent(provider)}&owner=${encodeURIComponent(owner)}&repo=${encodeURIComponent(repo)}`, { cache: 'no-store' });
-            const workflows = await res.json();
-
-            wfSelect.innerHTML = '<option value="">All Workflows (Default)</option>';
-            workflows.forEach(w => {
-                const opt = document.createElement('option');
-                opt.value = w.id;
-                opt.textContent = w.name;
-                wfSelect.appendChild(opt);
-            });
-        } catch (e) {
-            wfSelect.innerHTML = '<option value="">Failed to load. All Workflows (Default)</option>';
-        }
-    }
-
     function toggleForm(isEdit = false, provider = 'github', owner = '', repo = '', customLinksRaw = '', workflowId = '', workflowName = '') {
         const form = document.getElementById('addForm');
         document.getElementById('linksContainer').innerHTML = ''; // clear links
+
+        if (!pathBrowser) {
+            pathBrowser = new CascadingPathBrowser('cascadingBrowser', 'provider');
+        }
 
         let customLinks = [];
         try {
@@ -135,21 +279,10 @@
 
         if (isEdit === true) {
             document.getElementById('provider').value = provider;
-            updatePlaceholder();
-            document.getElementById('owner').value = owner;
-            document.getElementById('repo').value = repo;
-            document.getElementById('owner').readOnly = true;
-            document.getElementById('repo').readOnly = true;
             document.getElementById('provider').disabled = true;
             document.getElementById('submitBtn').innerText = 'Update';
 
-            const wfSelect = document.getElementById('workflow');
-            if (workflowId) {
-                wfSelect.innerHTML = `<option value="${workflowId}" selected>${workflowName || workflowId}</option>`;
-            } else {
-                wfSelect.innerHTML = '<option value="">All Workflows (Default)</option>';
-            }
-            wfSelect.disabled = true;
+            pathBrowser.setEditMode(owner, repo, workflowId, workflowName);
 
             customLinks.forEach(link => addLinkRow(link.name, link.url));
 
@@ -160,18 +293,11 @@
                 form.style.display = 'none';
             } else {
                 document.getElementById('provider').value = 'github';
-                updatePlaceholder();
-                document.getElementById('owner').readOnly = false;
-                document.getElementById('repo').readOnly = false;
                 document.getElementById('provider').disabled = false;
-                document.getElementById('owner').value = '';
-                document.getElementById('repo').value = '';
-
-                const wfSelect = document.getElementById('workflow');
-                wfSelect.innerHTML = '<option value="">All Workflows (Default)</option>';
-                wfSelect.disabled = false;
-
                 document.getElementById('submitBtn').innerText = 'Add';
+
+                pathBrowser.reset();
+
                 form.style.display = 'block';
             }
         }
@@ -181,9 +307,8 @@
         const provider = document.getElementById('provider').value;
         const owner = document.getElementById('owner').value.trim();
         const repo = document.getElementById('repo').value.trim();
-        const workflowSelect = document.getElementById('workflow');
-        const workflow_id = workflowSelect.value;
-        const workflow_name = workflow_id ? workflowSelect.options[workflowSelect.selectedIndex].text : '';
+        const workflow_id = document.getElementById('workflow').value.trim();
+        const workflow_name = document.getElementById('workflowName').value.trim();
 
         const linkRows = document.querySelectorAll('.link-row');
         const custom_links = [];
@@ -203,16 +328,12 @@
             body: JSON.stringify({provider, owner, repo, custom_links, workflow_id, workflow_name})
         });
 
-        document.getElementById('owner').value = '';
-        document.getElementById('repo').value = '';
         document.getElementById('submitBtn').innerText = 'Add';
-        document.getElementById('owner').readOnly = false;
-        document.getElementById('repo').readOnly = false;
         document.getElementById('provider').disabled = false;
-        document.getElementById('workflow').disabled = false;
         document.getElementById('linksContainer').innerHTML = '';
 
         document.getElementById('addForm').style.display = 'none';
+        if (pathBrowser) pathBrowser.reset();
         fetchStatuses();
     }
 

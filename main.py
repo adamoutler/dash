@@ -11,12 +11,14 @@ from api.auth import require_basic_auth, get_current_user
 from fastapi import Depends
 from api.storage import RepoStorage
 from api.git_providers import fetch_github_status, fetch_forgejo_status, fetch_github_logs, fetch_forgejo_logs, fetch_github_artifacts, fetch_forgejo_artifacts, fetch_jenkins_status, fetch_jenkins_logs, fetch_jenkins_artifacts
+from api.explore import router as explore_router
 
 app = FastAPI(
     title="CI Dashboard API",
     description="API for tracking and monitoring continuous integration workflows across GitHub and Forgejo repositories.",
     version="1.0.0"
 )
+app.include_router(explore_router)
 storage = RepoStorage()
 
 class RepoItem(BaseModel):
