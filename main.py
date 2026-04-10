@@ -509,6 +509,7 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                     "commit_message": result.get("commit_message"),
                     "started_at": result.get("started_at"),
                     "average_recent_duration": result.get("average_recent_duration"),
+                    "expected_duration_sec": result.get("expected_duration_sec"),
                     "status": result.get("status")
                 }
                 return {
