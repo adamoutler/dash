@@ -384,7 +384,8 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
             repos = storage.get_repos()
 
             if project == "help":
-                valid_projects = [f"{r['owner']}/{r['repo']} (workflow: {r.get('workflow_name') or r.get('workflow_id') or 'any'})" for r in repos]
+                valid_projects = [f"{r['owner']}/{r['repo']}" for r in repos]
+                help_text = f"Valid projects: {', '.join(valid_projects)}"
                 return {
                     "jsonrpc": "2.0",
                     "id": req.id,
@@ -392,10 +393,11 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                         "content": [
                             {
                                 "type": "text",
-                                "text": f"Valid projects: {', '.join(valid_projects)}",
-                                "audience": ["assistant"]
+                                "text": help_text
                             }
-                        ]
+                        ],
+                        "llmContent": help_text,
+                        "returnDisplay": "Provided valid projects to agent context."
                     }
                 }
 
@@ -415,6 +417,7 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                     for r in repos
                     if r["repo"] == target_project or f"{r['owner']}/{r['repo']}" == target_project
                 ]
+                help_text = f"Valid workflows for {target_project}: {', '.join(valid_workflows)}"
                 return {
                     "jsonrpc": "2.0",
                     "id": req.id,
@@ -422,10 +425,11 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                         "content": [
                             {
                                 "type": "text",
-                                "text": f"Valid workflows for {target_project}: {', '.join(valid_workflows)}",
-                                "audience": ["assistant"]
+                                "text": help_text
                             }
-                        ]
+                        ],
+                        "llmContent": help_text,
+                        "returnDisplay": f"Provided valid workflows for {target_project} to agent context."
                     }
                 }
 
@@ -453,6 +457,7 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                         for r in repos
                         if r["repo"] == project or f"{r['owner']}/{r['repo']}" == project
                     ]
+                    help_text = f"Workflow '{workflow}' not found for project '{project}'. Valid workflows: {', '.join(valid_workflows)}"
                     return {
                         "jsonrpc": "2.0",
                         "id": req.id,
@@ -460,14 +465,16 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                             "content": [
                                 {
                                     "type": "text",
-                                    "text": f"Workflow '{workflow}' not found for project '{project}'. Valid workflows: {', '.join(valid_workflows)}",
-                                    "audience": ["assistant"]
+                                    "text": help_text
                                 }
-                            ]
+                            ],
+                            "llmContent": help_text,
+                            "returnDisplay": f"Workflow not found. Provided valid workflows for {project} to agent context."
                         }
                     }
                 else:
-                    valid_projects = [f"{r['owner']}/{r['repo']} (workflow: {r.get('workflow_name') or r.get('workflow_id') or 'any'})" for r in repos]
+                    valid_projects = [f"{r['owner']}/{r['repo']}" for r in repos]
+                    help_text = f"Project '{project}' not found. Valid projects: {', '.join(valid_projects)}"
                     return {
                         "jsonrpc": "2.0",
                         "id": req.id,
@@ -475,10 +482,11 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                             "content": [
                                 {
                                     "type": "text",
-                                    "text": f"Project '{project}' not found. Valid projects: {', '.join(valid_projects)}",
-                                    "audience": ["assistant"]
+                                    "text": help_text
                                 }
-                            ]
+                            ],
+                            "llmContent": help_text,
+                            "returnDisplay": "Project not found. Provided valid projects to agent context."
                         }
                     }
 
