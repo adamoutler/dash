@@ -522,10 +522,31 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                     "expected_duration_sec": result.get("expected_duration_sec"),
                     "status": result.get("status")
                 }
+
+                status_emoji = {"success": "✅", "failure": "❌", "running": "🏃", "in_progress": "🏃", "unknown": "❓"}.get(res_obj.get("status", "unknown").lower(), "❓")
+                duration_info = f" (Expected duration: {res_obj['expected_duration_sec']}s)" if res_obj.get("expected_duration_sec") else ""
+
+                display_str = (
+                    f"**{owner}/{repo_name}**\n"
+                    f"{status_emoji} **Status:** {str(res_obj.get('status')).title()}{duration_info}\n"
+                    f"**Started:** {res_obj.get('started_at') or 'N/A'}\n"
+                    f"**Commit:** {res_obj.get('commit_message') or 'N/A'}\n"
+                    f"**URL:** {res_obj.get('url') or 'N/A'}"
+                )
+
+                if is_tool_call:
+                    result_payload = {
+                        "content": [{"type": "text", "text": json.dumps(res_obj)}],
+                        "llmContent": json.dumps(res_obj),
+                        "returnDisplay": display_str
+                    }
+                else:
+                    result_payload = res_obj
+
                 return {
                     "jsonrpc": "2.0",
                     "id": req.id,
-                    "result": {"content": [{"type": "text", "text": json.dumps(res_obj)}]} if is_tool_call else res_obj
+                    "result": result_payload
                 }
 
             elif method_name == "get_logs":
