@@ -273,6 +273,7 @@
 
     function toggleForm(isEdit = false, provider = 'github', owner = '', repo = '', customLinksRaw = '', workflowId = '', workflowName = '') {
         const form = document.getElementById('addForm');
+        const addBtn = document.getElementById('addRepoBtn');
         document.getElementById('linksContainer').innerHTML = ''; // clear links
 
         if (!pathBrowser) {
@@ -294,10 +295,16 @@
             customLinks.forEach(link => addLinkRow(link.name, link.url));
 
             form.style.display = 'block';
+            addBtn.innerHTML = '✕';
+            addBtn.style.backgroundColor = '#b74b4b'; // non-alerting red
+            addBtn.style.padding = '8px 12px';
             window.scrollTo({ top: 0, behavior: 'smooth' });
         } else {
             if (form.style.display === 'block' && document.getElementById('submitBtn').innerText !== 'Update') {
                 form.style.display = 'none';
+                addBtn.innerHTML = '+ Add Repository';
+                addBtn.style.backgroundColor = '';
+                addBtn.style.padding = '';
             } else {
                 document.getElementById('provider').value = 'github';
                 document.getElementById('provider').disabled = false;
@@ -306,6 +313,9 @@
                 pathBrowser.reset();
 
                 form.style.display = 'block';
+                addBtn.innerHTML = '✕';
+                addBtn.style.backgroundColor = '#b74b4b'; // non-alerting red
+                addBtn.style.padding = '8px 12px';
             }
         }
     }
@@ -340,6 +350,11 @@
         document.getElementById('linksContainer').innerHTML = '';
 
         document.getElementById('addForm').style.display = 'none';
+        const addBtn = document.getElementById('addRepoBtn');
+        addBtn.innerHTML = '+ Add Repository';
+        addBtn.style.backgroundColor = '';
+        addBtn.style.padding = '';
+
         if (pathBrowser) pathBrowser.reset();
         fetchStatuses();
     }
