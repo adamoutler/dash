@@ -1,4 +1,3 @@
-import os
 import httpx
 import logging
 from enum import Enum
@@ -6,8 +5,11 @@ from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, HTTPException, Query, Path, Depends
 from api.auth import get_current_user
+from api.config import ConfigManager
 
 logger = logging.getLogger(__name__)
+
+config_manager = ConfigManager()
 
 router = APIRouter(prefix="/api/explore", tags=["explore"])
 
@@ -69,7 +71,7 @@ class ProviderNotImplementedError(Exception):
     pass
 
 async def github_explore(path: str) -> List[Node]:
-    token = os.environ.get("GITHUB_TOKEN")
+    token = config_manager.get_value("github_token", "GITHUB_TOKEN")
     if not token:
         raise ProviderPathNotFoundError("GitHub token not configured")
     headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github.v3+json"}
@@ -110,8 +112,8 @@ async def github_explore(path: str) -> List[Node]:
     return []
 
 async def forgejo_explore(path: str) -> List[Node]:
-    token = os.environ.get("FORGEJO_TOKEN")
-    url = os.environ.get("FORGEJO_URL")
+    token = config_manager.get_value("forgejo_token", "FORGEJO_TOKEN")
+    url = config_manager.get_value("forgejo_url", "FORGEJO_URL")
     if not token or not url:
         raise ProviderPathNotFoundError("Forgejo token or URL not configured")
     url = url.rstrip('/')
@@ -150,9 +152,9 @@ async def forgejo_explore(path: str) -> List[Node]:
     return []
 
 async def jenkins_explore(path: str) -> List[Node]:
-    user = os.environ.get("JENKINS_USER")
-    token = os.environ.get("JENKINS_TOKEN")
-    base_url = os.environ.get("JENKINS_URL") # Wait, dashboard might not use JENKINS_URL globally, let's allow it or require it. Wait, Jenkins has no global root in this dashboard, or does it? Wait, DASH-21 says: "path="" (Root): Queries base URL..."
+    user = config_manager.get_value("jenkins_user", "JENKINS_USER")
+    token = config_manager.get_value("jenkins_token", "JENKINS_TOKEN")
+    base_url = config_manager.get_value("jenkins_url", "JENKINS_URL") # Wait, dashboard might not use JENKINS_URL globally, let's allow it or require it. Wait, Jenkins has no global root in this dashboard, or does it? Wait, DASH-21 says: "path="" (Root): Queries base URL..."
     if not base_url:
         # Fallback to a hardcoded or configured env var if missing
         pass

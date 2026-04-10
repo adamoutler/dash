@@ -49,6 +49,11 @@
   </div>
 </div>
 <div class="container">
+    <div id="no-providers-banner" style="display:none; background-color: var(--bg-surface); border: 2px dashed #cb2431; padding: 20px; text-align: center; margin-bottom: 20px; border-radius: 8px;">
+        <h2 style="margin-top: 0; color: #cb2431;">No CI Providers Configured</h2>
+        <p style="color: var(--text-primary);">You haven't configured any CI providers yet. Please configure at least one provider to start adding repositories.</p>
+        <a href="/configure" style="display: inline-block; padding: 10px 20px; background-color: #0366d6; color: white; text-decoration: none; border-radius: 4px; font-weight: bold; margin-top: 10px;">Go to Configuration</a>
+    </div>
     <div class="header">
         <h1>CI Dashboard</h1>
         <div class="header-right">
@@ -56,7 +61,7 @@
             <button class="theme-toggle-btn" onclick="toggleTheme()" title="Toggle Dark Mode">
                 <span id="themeIcon">☀️</span>
             </button>
-            <button class="add-btn" onclick="toggleForm()">+ Add Repository</button>
+            <button class="add-btn" onclick="toggleForm()" id="addRepoBtn">+ Add Repository</button>
         </div>
     </div>
 
@@ -510,6 +515,45 @@
 
     // Set initial icon on load
     updateThemeIcon();
+
+    let availableProviders = [];
+
+    async function fetchProviders() {
+        try {
+            const res = await fetch('/api/providers');
+            if (res.ok) {
+                const data = await res.json();
+                availableProviders = data.providers || [];
+
+                const providerSelect = document.getElementById('provider');
+                Array.from(providerSelect.options).forEach(opt => {
+                    if (availableProviders.includes(opt.value)) {
+                        opt.style.display = 'block';
+                    } else {
+                        opt.style.display = 'none';
+                    }
+                });
+
+                // Select the first available provider if current is hidden
+                if (!availableProviders.includes(providerSelect.value) && availableProviders.length > 0) {
+                    providerSelect.value = availableProviders[0];
+                }
+
+                if (availableProviders.length === 0) {
+                    document.getElementById('no-providers-banner').style.display = 'block';
+                    document.getElementById('addRepoBtn').style.display = 'none';
+                    document.getElementById('addForm').style.display = 'none';
+                } else {
+                    document.getElementById('no-providers-banner').style.display = 'none';
+                    document.getElementById('addRepoBtn').style.display = 'inline-block';
+                }
+            }
+        } catch (e) {
+            console.error("Error fetching providers:", e);
+        }
+    }
+
+    fetchProviders();
 
     // Initial fetch and poll every 30s
     fetchStatuses();

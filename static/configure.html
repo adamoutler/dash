@@ -50,6 +50,33 @@
         <ul id="tokens-list"></ul>
     </div>
 
+    <div class="section" id="provider-keys-section">
+        <h2>Provider API Keys</h2>
+        <div style="margin-bottom: 1rem;">
+            <h3 style="margin-bottom: 0.5rem; display: flex; align-items: center; gap: 10px;">
+                GitHub <span id="github-status" style="font-size: 0.9em; font-weight: normal;"></span>
+            </h3>
+            <input type="password" id="github-token" placeholder="GitHub Token">
+        </div>
+        <div style="margin-bottom: 1rem;">
+            <h3 style="margin-bottom: 0.5rem; display: flex; align-items: center; gap: 10px;">
+                Forgejo <span id="forgejo-status" style="font-size: 0.9em; font-weight: normal;"></span>
+            </h3>
+            <input type="text" id="forgejo-url" placeholder="Forgejo URL">
+            <input type="password" id="forgejo-token" placeholder="Forgejo Token">
+        </div>
+        <div style="margin-bottom: 1rem;">
+            <h3 style="margin-bottom: 0.5rem; display: flex; align-items: center; gap: 10px;">
+                Jenkins <span id="jenkins-status" style="font-size: 0.9em; font-weight: normal;"></span>
+            </h3>
+            <input type="text" id="jenkins-url" placeholder="Jenkins URL">
+            <input type="text" id="jenkins-user" placeholder="Jenkins User">
+            <input type="password" id="jenkins-token" placeholder="Jenkins Token">
+        </div>
+        <button onclick="saveProviderKeys()">Save Keys</button>
+        <span id="save-keys-msg" style="margin-left: 10px; color: green; display: none;">Saved successfully!</span>
+    </div>
+
     <div class="section" id="projects-section">
         <h2>Configured Projects</h2>
         <ul id="projects-list"></ul>
@@ -136,7 +163,61 @@
             }
         }
 
+        async function loadProviderStatus() {
+            const res = await fetch('/api/settings');
+            if (res.ok) {
+                const data = await res.json();
+                document.getElementById('github-status').innerHTML = data.github_configured ? '✅ Configured' : '❌ Not Set';
+                document.getElementById('forgejo-status').innerHTML = data.forgejo_configured ? '✅ Configured' : '❌ Not Set';
+                document.getElementById('jenkins-status').innerHTML = data.jenkins_configured ? '✅ Configured' : '❌ Not Set';
+            }
+        }
+
+        async function saveProviderKeys() {
+            const payload = {};
+            const ghToken = document.getElementById('github-token').value;
+            if (ghToken) payload.github_token = ghToken;
+
+            const fgUrl = document.getElementById('forgejo-url').value;
+            if (fgUrl) payload.forgejo_url = fgUrl;
+            const fgToken = document.getElementById('forgejo-token').value;
+            if (fgToken) payload.forgejo_token = fgToken;
+
+            const jkUrl = document.getElementById('jenkins-url').value;
+            if (jkUrl) payload.jenkins_url = jkUrl;
+            const jkUser = document.getElementById('jenkins-user').value;
+            if (jkUser) payload.jenkins_user = jkUser;
+            const jkToken = document.getElementById('jenkins-token').value;
+            if (jkToken) payload.jenkins_token = jkToken;
+
+            if (Object.keys(payload).length === 0) return;
+
+            const res = await fetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (res.ok) {
+                document.getElementById('github-token').value = '';
+                document.getElementById('forgejo-url').value = '';
+                document.getElementById('forgejo-token').value = '';
+                document.getElementById('jenkins-url').value = '';
+                document.getElementById('jenkins-user').value = '';
+                document.getElementById('jenkins-token').value = '';
+
+                const msg = document.getElementById('save-keys-msg');
+                msg.style.display = 'inline';
+                setTimeout(() => msg.style.display = 'none', 3000);
+
+                loadProviderStatus();
+            } else {
+                alert('Failed to save provider keys');
+            }
+        }
+
         loadData();
+        loadProviderStatus();
     </script>
 </body>
 </html>
