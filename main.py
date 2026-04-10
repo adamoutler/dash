@@ -341,9 +341,8 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                             "inputSchema": {
                                 "type": "object",
                                 "properties": {
-                                    "project": {"type": "string", "description": "The name or owner/name of the project."},
-                                    "workflow": {"type": "string", "description": "Optional workflow name or ID."}
-                                }
+                                    "project": {"type": "string", "description": "The name or owner/name of the project. Use 'help' to list available projects."},
+                                    "workflow": {"type": "string", "description": "Optional workflow name or ID. Use 'help' to list available workflows for a project."}                                }
                             }
                         },
                         {
@@ -352,9 +351,8 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                             "inputSchema": {
                                 "type": "object",
                                 "properties": {
-                                    "project": {"type": "string", "description": "The name or owner/name of the project."},
-                                    "workflow": {"type": "string", "description": "Optional workflow name or ID."}
-                                }
+                                    "project": {"type": "string", "description": "The name or owner/name of the project. Use 'help' to list available projects."},
+                                    "workflow": {"type": "string", "description": "Optional workflow name or ID. Use 'help' to list available workflows for a project."}                                }
                             }
                         },
                         {
@@ -363,9 +361,8 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                             "inputSchema": {
                                 "type": "object",
                                 "properties": {
-                                    "project": {"type": "string", "description": "The name or owner/name of the project."},
-                                    "workflow": {"type": "string", "description": "Optional workflow name or ID."}
-                                }
+                                    "project": {"type": "string", "description": "The name or owner/name of the project. Use 'help' to list available projects."},
+                                    "workflow": {"type": "string", "description": "Optional workflow name or ID. Use 'help' to list available workflows for a project."}                                }
                             }
                         }
                     ]
@@ -385,6 +382,53 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
 
         if method_name in ["get_project_status", "get_logs", "wait"]:
             repos = storage.get_repos()
+
+            if project == "help":
+                valid_projects = [f"{r['owner']}/{r['repo']} (workflow: {r.get('workflow_name') or r.get('workflow_id') or 'any'})" for r in repos]
+                return {
+                    "jsonrpc": "2.0",
+                    "id": req.id,
+                    "result": {
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": f"Valid projects: {', '.join(valid_projects)}",
+                                "audience": ["assistant"]
+                            }
+                        ]
+                    }
+                }
+
+            if workflow == "help":
+                target_project = project or (f"{repos[0]['owner']}/{repos[0]['repo']}" if len(repos) == 1 else None)
+                if not target_project:
+                    return {
+                        "jsonrpc": "2.0",
+                        "id": req.id,
+                        "error": {
+                            "code": -32602,
+                            "message": "Project not specified. Use project='help' to see valid projects."
+                        }
+                    }
+                valid_workflows = [
+                    f"{r.get('workflow_name') or r.get('workflow_id') or 'any'}"
+                    for r in repos
+                    if r["repo"] == target_project or f"{r['owner']}/{r['repo']}" == target_project
+                ]
+                return {
+                    "jsonrpc": "2.0",
+                    "id": req.id,
+                    "result": {
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": f"Valid workflows for {target_project}: {', '.join(valid_workflows)}",
+                                "audience": ["assistant"]
+                            }
+                        ]
+                    }
+                }
+
             matched_repo = None
             if project:
                 for r in repos:
@@ -400,13 +444,12 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                 matched_repo = repos[0]
 
             if not matched_repo:
-                valid_projects = [f"{r['owner']}/{r['repo']} (workflow: {r.get('workflow_name') or r.get('workflow_id') or 'any'})" for r in repos]
                 return {
                     "jsonrpc": "2.0",
                     "id": req.id,
                     "error": {
                         "code": -32602,
-                        "message": f"Project not found. Valid projects: {', '.join(valid_projects)}. Please scope your request."
+                        "message": "Project not found or not specified. Use project='help' to see valid projects."
                     }
                 }
 
