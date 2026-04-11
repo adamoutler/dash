@@ -224,56 +224,24 @@ async def fetch_github_logs(owner: str, repo: str, token: str, workflow_id: str 
         return f"Error fetching GitHub logs: {str(e)}"
 
 async def fetch_forgejo_logs(owner: str, repo: str, token: str, forgejo_url: str, workflow_id: str = None):
-    if workflow_id == "any":
-        workflow_id = None
-    if not forgejo_url:
-        return "Forgejo URL not configured."
-    # Forgejo/Gitea's API does not currently expose downloading logs in this version.
-    # The best we can do is provide the URL for the user to visit.
-    base_url = f"{forgejo_url.rstrip('/')}/api/v1/repos/{owner}/{repo}"
-    headers = {"Authorization": f"token {token}", "Accept": "application/json"} if token else {}
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            runs_resp = await client.get(f"{base_url}/actions/runs?limit=30", headers=headers)
-            if runs_resp.status_code != 200:
-                return f"Failed to fetch runs from Forgejo. HTTP {runs_resp.status_code}\nPlease check your token or repository permissions."
+    wf_param = f"&workflow_id={workflow_id}" if workflow_id and workflow_id != "any" else ""
 
-            runs_data = runs_resp.json()
-            all_runs = runs_data.get("workflow_runs", [])
-            runs = []
-            for r in all_runs:
-                if not workflow_id or r.get("name") == workflow_id or str(r.get("workflow_id")) == workflow_id:
-                    runs.append(r)
+    return f"""Forgejo/Gitea logs are not natively available via API in this version.
 
-            def get_status_weight(r):
-                st = r.get("status", "").lower()
-                conclusion = r.get("conclusion", "").lower()
-                # Treat in_progress, queued, etc. as running
-                if st in ["in_progress", "queued", "requested", "waiting", "running"]:
-                    return 3
-                if conclusion in ["success", "failure", "action_required"] or st in ["success", "failure"]:
-                    return 2
-                return 1
+To view logs here, please configure your CI pipeline to upload logs to the dashboard's /api/logs endpoint.
+You can do this by adding a step that runs on failure using the always() method.
 
-            # Sort by created_at first. Since runs from the same push might be 1-2 seconds apart,
-            # we just take the newest run's time, then find all runs within a small window and pick the highest weight.
-            # A simpler robust sort: just sort by (created_at[:16], weight, updated_at) to group by minute.
-            run = sorted(runs, key=lambda x: (
-                (x.get("created_at") or x.get("created", ""))[:16], # Group by minute "YYYY-MM-DDTHH:MM"
-                get_status_weight(x),
-                x.get("updated_at") or x.get("updated", "")
-            ), reverse=True)[0] if runs else {}
-            if not run.get('id'):
-                return "No runs found."
+Example curl command to upload logs:
+curl -X POST "${{DASH_API_URL}}/api/logs?provider=forgejo&owner={owner}&repo={repo}{wf_param}" \\
+     -H "Authorization: Bearer ${{DASH_API_TOKEN}}" \\
+     -H "Content-Type: text/plain" \\
+     --data-binary @path/to/your/logfile.log
 
-            run_url = run.get('html_url', forgejo_url + '/' + owner + '/' + repo + '/actions/runs/' + str(run.get('index_in_repo', run.get('id', ''))))
-            return (
-                "Forgejo/Gitea's API on this server does not expose an endpoint to fetch raw logs directly. "
-                "However, you can view the logs in the web interface here:\n\n"
-                f"{run_url}/jobs/0/attempt/1"
-            )
-    except Exception as e:
-        return f"Error fetching Forgejo logs: {str(e)}"
+Recommendations:
+- Use the always() condition in your CI step so logs are uploaded even if previous steps fail.
+- Check earlier stages in your pipeline to ensure the log file is being generated correctly.
+- Be sure to test your configuration to verify that logs are successfully uploaded and appear here.
+"""
 
 async def fetch_github_artifacts(owner: str, repo: str, token: str, workflow_id: str = None):
     if workflow_id == "any":
