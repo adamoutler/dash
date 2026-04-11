@@ -490,10 +490,10 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                     "result": {
                         "content": [{"type": "text", "text": help_text}],
                         "llmContent": help_text,
-                        "returnDisplay": "Provided valid repos to agent context."
+                        "returnDisplay": "Provided valid repos to agent context.",
+                        "isError": True
                     }
                 }
-
             if workflow == "help":
                 target_repo = repo or (f"{repos[0]['owner']}/{repos[0]['repo']}" if len(repos) == 1 else None)
                 if not target_repo:
@@ -556,7 +556,8 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                         "result": {
                             "content": [{"type": "text", "text": help_text}],
                             "llmContent": help_text,
-                            "returnDisplay": f"Workflow not found. Provided valid workflows for {repo} to agent context."
+                            "returnDisplay": f"Workflow not found. Provided valid workflows for {repo} to agent context.",
+                            "isError": True
                         }
                     }
                 else:
