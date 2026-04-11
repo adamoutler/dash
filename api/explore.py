@@ -188,6 +188,8 @@ async def jenkins_explore(path: str) -> List[Node]:
 
                 nodes.append(Node(id=j_name, name=j_name, type=node_type, path=next_path, has_children=is_folder, url=j_url))
             return nodes
+        elif resp.status_code in (401, 403):
+            raise HTTPException(status_code=401, detail="Jenkins authentication failed. Please verify your User and Token in the configuration.")
         raise ProviderPathNotFoundError(f"Jenkins path {path} not found")
 
 async def fetch_provider_nodes(provider: str, path: str) -> List[Node]:

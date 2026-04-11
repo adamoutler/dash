@@ -37,7 +37,7 @@ async def get_settings_status(user: str = Depends(require_basic_auth)):
     return {
         "github_configured": bool(config_manager.get_value("github_token", "GITHUB_TOKEN")),
         "forgejo_configured": bool(config_manager.get_value("forgejo_token", "FORGEJO_TOKEN") and config_manager.get_value("forgejo_url", "FORGEJO_URL")),
-        "jenkins_configured": bool(config_manager.get_value("jenkins_user", "JENKINS_USER") and config_manager.get_value("jenkins_token", "JENKINS_TOKEN"))
+        "jenkins_configured": bool(config_manager.get_value("jenkins_user", "JENKINS_USER") and config_manager.get_value("jenkins_token", "JENKINS_TOKEN") and config_manager.get_value("jenkins_url", "JENKINS_URL"))
     }
 
 @app.post("/api/settings", summary="Update Settings", description="Updates the tokens and URLs.")
@@ -283,6 +283,9 @@ async def wait_status(provider: str, owner: str, repo: str, workflow_id: Optiona
 
     async def event_stream():
         yield "waiting for complete."
+        attempts_when_not_running = 0
+        was_running = False
+
         while True:
             if provider == "github":
                 result = await fetch_github_status(owner, repo, github_token, workflow_id)
@@ -295,10 +298,23 @@ async def wait_status(provider: str, owner: str, repo: str, workflow_id: Optiona
                 break
 
             status = result.get("status")
-            if status in ["running", "in_progress", "queued", "waiting", "requested", "pending"]:
+            is_running = status in ["running", "in_progress", "queued", "waiting", "requested", "pending"]
+
+            if is_running:
+                was_running = True
                 yield "."
                 await asyncio.sleep(10)
             else:
+                if not was_running and attempts_when_not_running < 2:
+                    attempts_when_not_running += 1
+                    yield "."
+                    await asyncio.sleep(10)
+                    continue
+
+                if not was_running:
+                    status = "no job in progress"
+                    result["status"] = status
+
                 yield f"\nStatus changed to {status}\n{json.dumps(result)}\n"
                 break
 
@@ -632,6 +648,9 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                     jenkins_user = config_manager.get_value("jenkins_user", "JENKINS_USER")
                     jenkins_token = config_manager.get_value("jenkins_token", "JENKINS_TOKEN")
 
+                    attempts_when_not_running = 0
+                    was_running = False
+
                     while True:
                         if provider == "github":
                             result = await fetch_github_status(owner, repo_name, github_token, wf_id)
@@ -648,10 +667,23 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                             break
 
                         status = result.get("status")
-                        if status in ["running", "in_progress", "queued", "waiting", "requested", "pending"]:
+                        is_running = status in ["running", "in_progress", "queued", "waiting", "requested", "pending"]
+
+                        if is_running:
+                            was_running = True
                             yield " "
                             await asyncio.sleep(10)
                         else:
+                            if not was_running and attempts_when_not_running < 2:
+                                attempts_when_not_running += 1
+                                yield " "
+                                await asyncio.sleep(10)
+                                continue
+
+                            if not was_running:
+                                status = "no job in progress"
+                                result["status"] = status
+
                             res_obj = {
                                 "url": result.get("url"),
                                 "repo_url": result.get("repo_url"),
