@@ -423,8 +423,8 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                 "result": {
                     "tools": [
                         {
-                            "name": "get_project_status",
-                            "description": "Fetch the latest status of a tracked repository.",
+                            "name": "get_status",
+                            "description": "Use this to get current build status- always check the dash",
                             "inputSchema": {
                                 "type": "object",
                                 "properties": {
@@ -478,7 +478,7 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
             repo = params.get("repo") or params.get("project") or request.headers.get("x-repo")
             workflow = params.get("workflow") or request.headers.get("x-workflow")
 
-        if method_name in ["get_project_status", "get_logs", "wait"]:
+        if method_name in ["get_status", "get_logs", "wait"]:
             repos = storage.get_repos()
 
             if repo == "help":
@@ -574,7 +574,7 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
             repo_name = matched_repo["repo"]
             wf_id = matched_repo.get("workflow_id")
 
-            if method_name == "get_project_status":
+            if method_name == "get_status":
                 github_token = config_manager.get_value("github_token", "GITHUB_TOKEN")
                 forgejo_token = config_manager.get_value("forgejo_token", "FORGEJO_TOKEN")
                 forgejo_url = config_manager.get_value("forgejo_url", "FORGEJO_URL")
