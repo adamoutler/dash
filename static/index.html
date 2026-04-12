@@ -129,7 +129,14 @@
 
             try {
                 const res = await fetch(`/api/explore/${provider}/nodes?path=${encodeURIComponent(path)}`);
-                if (!res.ok) throw new Error('Failed to fetch');
+                if (!res.ok) {
+                    let errMsg = 'Failed to fetch';
+                    try {
+                        const errData = await res.json();
+                        errMsg = errData.detail || errData.message || errMsg;
+                    } catch(jsonErr) {}
+                    throw new Error(errMsg);
+                }
                 const data = await res.json();
 
                 select.innerHTML = '<option value="">-- Select --</option>';
@@ -165,7 +172,7 @@
                 });
 
             } catch (e) {
-                select.innerHTML = `<option value="">None found or Error</option>`;
+                select.innerHTML = `<option value="">⚠️ ${e.message}</option>`;
                 console.error(e);
             }
 
