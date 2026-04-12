@@ -1,14 +1,14 @@
-# 🛑 Stop AI Hallucinations! Your Ultimate CI Dashboard & Agent Guardrail 🚀
+# 🛑 Stop AI Hallucinations! Your Ultimate Dash & Agent Guardrail 🚀
 
 > **The essential CI feedback loop and guardrail for autonomous AI development.**
 
 Tired of your AI agent confidently hallucinating: *"I changed it, so now it works. I'll push the changes!"* only to break the main branch? 🤦‍♂️
 
-Welcome to the **CI Dashboard**—a beautifully simple, Dockerized hub that gives you an at-a-glance view of your projects, while serving as the ultimate **guardrail for your AI agents** (Claude, Gemini, GPT). Without a feedback loop from your Continuous Integration (CI) pipeline, agents fly blind. This dashboard serves as a foundational building block to provide immediate, factual build feedback to autonomous agents, stopping regressions in their tracks.
+Welcome to the **Dash**—a beautifully simple, Dockerized hub that gives you an at-a-glance view of your projects, while serving as the ultimate **guardrail for your AI agents** (Claude, Gemini, GPT). Without a feedback loop from your Continuous Integration (CI) pipeline, agents fly blind. This dashboard serves as a foundational building block to provide immediate, factual build feedback to autonomous agents, stopping regressions in their tracks.
 
 > *"A unified dashboard for your autonomous agents, beautifully designed for your workflow—whether you prefer the light of day or the terminal dark."*
 
-![CI Dashboard Aesthetic](docs/img/dashboard_split.png?v=2)
+![Dash Aesthetic](docs/img/dashboard_split.png?v=2)
 
 ---
 
@@ -26,7 +26,7 @@ Welcome to the **CI Dashboard**—a beautifully simple, Dockerized hub that give
 
 ## 🤖 For AI Agents: The Guardrail API
 
-By pointing your agent to the repository URL and our `llms.txt` ([see a raw example of what the LLM sees here](https://raw.githubusercontent.com/adamoutler/agentic-gitdash/refs/heads/master/static/llms.txt)), you instantly give them superpower hooks to interact with your CI/CD pipeline. No more blind pushes! Your agent can now:
+By pointing your agent to the repository URL and our `llms.txt` ([see a raw example of what the LLM sees here](https://raw.githubusercontent.com/adamoutler/agentic-dash/refs/heads/master/static/llms.txt)), you instantly give them superpower hooks to interact with your CI/CD pipeline. No more blind pushes! Your agent can now:
 
 * 📚 **Comprehensive AI Guide**: See the full [AI/Agent Journey](docs/ai-journey.md) for detailed automated workflows.
 
@@ -55,13 +55,13 @@ Instruct your AI (Claude/Gemini/GPT) to run a script after pushing code that wai
 
 #### Hack 2: The "Tooling" Hook
 Give your agents a custom tool to gather build results across all your projects so they can check statuses before deciding what to work on next:
-> *"Before marking the task as complete, gather build results from the CI Dashboard using `curl -s https://your-dashboard-url/api/status` to verify that your changes did not break the build."*
+> *"Before marking the task as complete, gather build results from the Dash using `curl -s https://your-dashboard-url/api/status` to verify that your changes did not break the build."*
 
 ---
 
 ## 🧑‍💻 For Humans: The Visual Hub
 
-Beyond acting as an API for AI, the CI Dashboard provides a clean, unified graphical experience for human developers. It's all about peace of mind:
+Beyond acting as an API for AI, the Dash provides a clean, unified graphical experience for human developers. It's all about peace of mind:
 
 * 🗺️ **Comprehensive User Guide**: See the full [User Journey](docs/user-journey.md) for detailed human workflows.
 
@@ -75,10 +75,10 @@ When clicking **+ Add Repository** in the dashboard, the input format depends on
 
 * **GitHub / Gitea / Forgejo:**
   * **Owner:** The username or organization name (e.g., `adamoutler`).
-  * **Repo:** The repository name (e.g., `gitdash`).
+  * **Repo:** The repository name (e.g., `dash`).
 * **Jenkins:**
-  * **Owner:** A custom display name for the dashboard (e.g., `gitdash Deploy` or `BrowserTerm`).
-  * **Repo:** The full URL to the main project/job page (e.g., `https://jenkins.adamoutler.com/view/Upgrades/job/Updates/job/gitdash/job/master/`).
+  * **Owner:** A custom display name for the dashboard (e.g., `dash Deploy` or `BrowserTerm`).
+  * **Repo:** The full URL to the main project/job page (e.g., `https://jenkins.adamoutler.com/view/Upgrades/job/Updates/job/dash/job/master/`).
 
 ---
 

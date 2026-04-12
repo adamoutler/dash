@@ -1,4 +1,4 @@
-# CI Dashboard API Instructions
+# Dash API Instructions
 
 # Humans
 To use this with an AI agent, either provide the URL to this document or copy and paste its contents directly into your chat session.

@@ -13,7 +13,7 @@ def setup_env(monkeypatch):
 def test_read_index():
     response = client.get("/", auth=("testuser", "testpass"))
     assert response.status_code == 200
-    assert "CI Dashboard" in response.text
+    assert "Dash" in response.text
 
 def test_add_and_get_repos():
     auth = ("testuser", "testpass")

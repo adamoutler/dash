@@ -34,10 +34,10 @@ Create `static/index.html`
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>CI Dashboard</title>
+    <title>Dash</title>
 </head>
 <body>
-    <h1>CI Dashboard</h1>
+    <h1>Dash</h1>
 </body>
 </html>
 ```
@@ -54,7 +54,7 @@ client = TestClient(app)
 def test_read_index():
     response = client.get("/")
     assert response.status_code == 200
-    assert "CI Dashboard" in response.text
+    assert "Dash" in response.text
 ```
 
 - [ ] **Step 4: Implement minimal server**
@@ -419,7 +419,7 @@ Replace contents of `static/index.html` with:
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>CI Dashboard</title>
+    <title>Dash</title>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 20px; background: #f6f8fa; color: #24292e; }
         .container { max-width: 900px; margin: 0 auto; }
@@ -451,7 +451,7 @@ Replace contents of `static/index.html` with:
 <body>
 <div class="container">
     <div class="header">
-        <h1>CI Dashboard</h1>
+        <h1>Dash</h1>
         <button class="add-btn" onclick="toggleForm()">+ Add Repository</button>
     </div>
 

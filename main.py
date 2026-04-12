@@ -15,7 +15,7 @@ from api.git_providers import fetch_github_status, fetch_forgejo_status, fetch_g
 from api.explore import router as explore_router
 
 app = FastAPI(
-    title="CI Dashboard API",
+    title="Dash API",
     description="API for tracking and monitoring continuous integration workflows across GitHub and Forgejo repositories.",
     version="1.0.0"
 )
@@ -81,7 +81,7 @@ def get_log_filename(provider, owner, repo, workflow_id=None):
     safe_wf = ("_" + "".join(c for c in workflow_id if c.isalnum() or c in "-_")) if workflow_id else ""
     return f"{safe_provider}_{safe_owner}_{safe_repo}{safe_wf}_latest.log"
 
-@app.get("/", summary="Dashboard UI", description="Serves the main HTML interface for the CI Dashboard.", include_in_schema=False)
+@app.get("/", summary="Dashboard UI", description="Serves the main HTML interface for the Dash.", include_in_schema=False)
 async def read_index(user: str = Depends(require_basic_auth)):
     return FileResponse("static/index.html")
 

@@ -1,6 +1,6 @@
-# CI Dashboard AI/Agent Journey
+# Dash AI/Agent Journey
 
-This document outlines the capabilities and typical workflows for an AI, LLM, or automated agent interacting with the CI Dashboard via its REST API and MCP interface.
+This document outlines the capabilities and typical workflows for an AI, LLM, or automated agent interacting with the Dash via its REST API and MCP interface.
 
 *   **Discover Capabilities:**
     *   Fetch `GET /llms.txt` to read human-readable instructions on how to interact with the API.
