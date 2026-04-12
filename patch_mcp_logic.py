@@ -52,11 +52,9 @@ old_logic = """\
                             }
                         ],
                         "llmContent": help_text,
-                        "returnDisplay": f"Provided valid workflows for {target_project} to agent context.",
-                        "isError": True
-                    }
-                }
-            matched_repo = None
+                        "returnDisplay": f"Provided valid workflows for {target_project} to agent context."
+                        }
+                        }            matched_repo = None
             target_project_matched = False
             if project:
                 for r in repos:
