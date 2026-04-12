@@ -483,14 +483,13 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
 
             if repo == "help":
                 valid_repos = [f"{r['owner']}/{r['repo']}" for r in repos]
-                help_text = f"Valid repos: {', '.join(valid_repos)}"
+                legend = "\n\nField Definitions:\n✅ Success | ❌ Failure | 🏃 Running | ❓ Unknown"
+                help_text = f"Valid repos: {', '.join(valid_repos)}{legend}"
                 return {
                     "jsonrpc": "2.0",
                     "id": req.id,
                     "result": {
                         "content": [{"type": "text", "text": help_text}],
-                        "llmContent": help_text,
-                        "returnDisplay": "Provided valid repos to agent context.",
                         "isError": True
                     }
                 }
@@ -510,14 +509,14 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                     for r in repos
                     if r["repo"] == target_repo or f"{r['owner']}/{r['repo']}" == target_repo
                 ]
-                help_text = f"Valid workflows for {target_repo}: {', '.join(valid_workflows)}"
+                legend = "\n\nField Definitions:\n✅ Success | ❌ Failure | 🏃 Running | ❓ Unknown"
+                help_text = f"Valid workflows for {target_repo}: {', '.join(valid_workflows)}{legend}"
                 return {
                     "jsonrpc": "2.0",
                     "id": req.id,
                     "result": {
                         "content": [{"type": "text", "text": help_text}],
-                        "llmContent": help_text,
-                        "returnDisplay": f"Provided valid workflows for {target_repo} to agent context."
+                        "isError": True
                     }
                 }
 
@@ -555,8 +554,6 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                         "id": req.id,
                         "result": {
                             "content": [{"type": "text", "text": help_text}],
-                            "llmContent": help_text,
-                            "returnDisplay": f"Workflow not found. Provided valid workflows for {repo} to agent context.",
                             "isError": True
                         }
                     }
@@ -567,9 +564,7 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                         "jsonrpc": "2.0",
                         "id": req.id,
                         "result": {
-                            "content": [{"type": "text", "text": help_text}],
-                            "llmContent": help_text,
-                            "returnDisplay": "Repo not found. Provided valid repos to agent context."
+                            "content": [{"type": "text", "text": help_text}]
                         }
                     }
 
@@ -621,9 +616,7 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
 
                 if is_tool_call:
                     result_payload = {
-                        "content": [{"type": "text", "text": display_str}],
-                        "llmContent": json.dumps(res_obj),
-                        "returnDisplay": display_str
+                        "content": [{"type": "text", "text": display_str}]
                     }
                 else:
                     result_payload = res_obj
