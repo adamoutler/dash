@@ -26,7 +26,7 @@ async def get_settings_status(user: str = Depends(require_basic_auth)):
     return {
         "github_configured": bool(config_manager.get_value("github_token", "GITHUB_TOKEN")),
         "forgejo_configured": bool(config_manager.get_value("forgejo_token", "FORGEJO_TOKEN") and config_manager.get_value("forgejo_url", "FORGEJO_URL")),
-        "jenkins_configured": bool(config_manager.get_value("jenkins_user", "JENKINS_USER") and config_manager.get_value("jenkins_token", "JENKINS_TOKEN"))
+        "jenkins_configured": bool(config_manager.get_value("jenkins_user", "JENKINS_USER") and config_manager.get_value("jenkins_token", "JENKINS_TOKEN") and config_manager.get_value("jenkins_url", "JENKINS_URL"))
     }
 
 @app.post("/api/settings", summary="Update Settings", description="Updates the tokens and URLs.")

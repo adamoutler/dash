@@ -154,14 +154,9 @@ async def forgejo_explore(path: str) -> List[Node]:
 async def jenkins_explore(path: str) -> List[Node]:
     user = config_manager.get_value("jenkins_user", "JENKINS_USER")
     token = config_manager.get_value("jenkins_token", "JENKINS_TOKEN")
-    base_url = config_manager.get_value("jenkins_url", "JENKINS_URL") # Wait, dashboard might not use JENKINS_URL globally, let's allow it or require it. Wait, Jenkins has no global root in this dashboard, or does it? Wait, DASH-21 says: "path="" (Root): Queries base URL..."
+    base_url = config_manager.get_value("jenkins_url", "JENKINS_URL")
     if not base_url:
-        # Fallback to a hardcoded or configured env var if missing
-        pass
-
-    # If base_url is not set, we can't discover root.
-    if not base_url:
-        return []
+        raise HTTPException(status_code=400, detail="Jenkins URL is not configured. Please update your settings.")
 
     base_url = base_url.rstrip('/')
     auth = (user, token) if user and token else None
@@ -225,6 +220,8 @@ async def get_nodes(
         raise HTTPException(status_code=404, detail=str(e))
     except ProviderNotImplementedError as e:
         raise HTTPException(status_code=501, detail=str(e))
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error exploring {provider_lower} path '{path}': {e}")
         raise HTTPException(status_code=500, detail="Internal server error while fetching nodes.")
