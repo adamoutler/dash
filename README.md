@@ -15,7 +15,7 @@ Welcome to the **CI Dashboard**—a beautifully simple, Dockerized hub that give
 ## ✨ Key Features
 
 * 🔐 **Secure & Authenticated**: Role-based access with Basic Auth and Bearer Token management. *(Highly recommended: See our [Security & Authentication Guide](docs/security.md) to lock down your dashboard).*
-* 🤖 **AI-Ready MCP Server**: Built-in JSON-RPC 2.0 endpoint (`/mcp`) exposing essential macros (`get_project_status`, `get_logs`, `wait`) for agents.
+* 🤖 **AI-Ready MCP Server**: Built-in JSON-RPC 2.0 endpoint (`/mcp`) exposing essential macros (`get_status`, `get_logs`, `wait`) for agents.
 * 📜 **Agent Discovery**: Includes `llms.txt` at the root so autonomous agents can self-discover capabilities.
 * 🚦 **Unified Visual Dashboard**: A clean, centralized UI to view build statuses across all tracked repositories at a glance.
 * 🔌 **Multi-Provider Support**: Seamlessly integrates with both GitHub and Forgejo CI/CD pipelines.
@@ -40,7 +40,7 @@ By pointing your agent to the repository URL and our `llms.txt` ([see a raw exam
 
 The dashboard natively supports the **Model Context Protocol (MCP)**. Autonomous agents (like Claude Desktop or Gemini) can connect directly to the `/mcp` endpoint via JSON-RPC 2.0.
 
-* **`get_project_status`**: Get a clean, markdown-formatted status report of any configured project, keeping your terminal tidy while the agent gets raw JSON context.
+* **`get_status`**: Get a clean, markdown-formatted status report of any configured project, keeping your terminal tidy while the agent gets raw JSON context.
 * **`get_logs`**: Retrieve the direct log URL for a failing build.
 * **`wait`**: Instruct the agent to sleep and wait for the CI pipeline to complete before proceeding.
 * **Self-Discovery**: The `repo` and `workflow` parameters for these tools support a `"help"` argument, allowing agents to automatically discover what repos they can track without guessing!

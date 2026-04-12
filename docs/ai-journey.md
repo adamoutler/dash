@@ -21,6 +21,6 @@ This document outlines the capabilities and typical workflows for an AI, LLM, or
 
 *   **Interact via Model Context Protocol (MCP):**
     *   Connect to the MCP JSON-RPC endpoint at `POST /mcp` using a Bearer token (generated in the user UI).
-    *   Execute the `get_project_status` method to retrieve the current CI status, commit message, and timing for a specific repository.
+    *   Execute the `get_status` method to retrieve the current CI status, commit message, and timing for a specific repository.
     *   Execute the `get_logs` method to obtain the direct URL to the repository's logs.
     *   Execute the `wait` method to establish a streaming connection that waits for the currently running workflow to finish before returning the final status.

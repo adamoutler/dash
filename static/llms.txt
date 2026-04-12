@@ -76,7 +76,7 @@ MCP Clients can connect to this endpoint via HTTP POST (JSON-RPC 2.0) to nativel
 If authentication is enabled, you must provide an `Authorization: Bearer <TOKEN>` header.
 
 Available MCP Tools:
-- `get_project_status(repo, workflow, provider)`: Fetch the latest status of a tracked repository. Returns formatted markdown for the user and raw JSON data for the agent.
+- `get_status(repo, workflow, provider)`: Fetch the latest status of a tracked repository. Returns formatted markdown for the user and raw JSON data for the agent.
 - `get_logs(repo, workflow, provider)`: Fetch the log URL for the latest run.
 - `wait(repo, workflow, provider)`: Wait until an in-progress build completes.
 

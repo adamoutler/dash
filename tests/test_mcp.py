@@ -47,7 +47,7 @@ def test_mcp_invalid_request():
 
 def test_mcp_project_not_found():
     response = client.post("/mcp",
-                           json={"jsonrpc": "2.0", "method": "get_project_status", "id": 2, "params": {"repo": "nonexistent"}},
+                           json={"jsonrpc": "2.0", "method": "get_status", "id": 2, "params": {"repo": "nonexistent"}},
                            auth=("testuser", "testpass"))
     assert response.status_code == 200
     data = response.json()
@@ -67,7 +67,7 @@ def test_mcp_tools_list():
     tools = data["result"]["tools"]
     assert len(tools) == 3
     tool_names = [t["name"] for t in tools]
-    assert "get_project_status" in tool_names
+    assert "get_status" in tool_names
     assert "get_logs" in tool_names
     assert "wait" in tool_names
 
@@ -89,7 +89,7 @@ def test_mcp_tools_call(mock_fetch):
                                "method": "tools/call",
                                "id": 100,
                                "params": {
-                                   "name": "get_project_status",
+                                   "name": "get_status",
                                    "arguments": {"repo": "testrepo"}
                                }
                            },
@@ -102,7 +102,7 @@ def test_mcp_tools_call(mock_fetch):
     assert "✅ **testowner/testrepo**" in content
 
 @patch("main.fetch_github_status")
-def test_mcp_get_project_status(mock_fetch):
+def test_mcp_get_status(mock_fetch):
     mock_fetch.return_value = {
         "url": "http://example.com",
         "repo_url": "http://repo.com",
@@ -114,7 +114,7 @@ def test_mcp_get_project_status(mock_fetch):
     storage.add_repo("github", "testowner", "testrepo", None, None, None)
 
     response = client.post("/mcp",
-                           json={"jsonrpc": "2.0", "method": "get_project_status", "id": 3, "params": {"repo": "testrepo"}},
+                           json={"jsonrpc": "2.0", "method": "get_status", "id": 3, "params": {"repo": "testrepo"}},
                            auth=("testuser", "testpass"))
     assert response.status_code == 200
     data = response.json()

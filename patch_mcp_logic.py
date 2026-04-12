@@ -3,7 +3,7 @@ with open("main.py", "r") as f:
     content = f.read()
 
 old_logic = """\
-        if method_name in ["get_project_status", "get_logs", "wait"]:
+        if method_name in ["get_status", "get_logs", "wait"]:
             repos = storage.get_repos()
 
             if project == "help":
@@ -118,7 +118,7 @@ old_logic = """\
             repo_name = matched_repo["repo"]"""
 
 new_logic = """\
-        if method_name in ["get_project_status", "get_logs", "wait"]:
+        if method_name in ["get_status", "get_logs", "wait"]:
             repos = storage.get_repos()
 
             if repo == "help":
