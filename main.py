@@ -489,8 +489,7 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                     "jsonrpc": "2.0",
                     "id": req.id,
                     "result": {
-                        "content": [{"type": "text", "text": help_text}],
-                        "isError": True
+                        "content": [{"type": "text", "text": help_text}]
                     }
                 }
             if workflow == "help":
@@ -515,8 +514,7 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                     "jsonrpc": "2.0",
                     "id": req.id,
                     "result": {
-                        "content": [{"type": "text", "text": help_text}],
-                        "isError": True
+                        "content": [{"type": "text", "text": help_text}]
                     }
                 }
 
@@ -553,8 +551,7 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                         "jsonrpc": "2.0",
                         "id": req.id,
                         "result": {
-                            "content": [{"type": "text", "text": help_text}],
-                            "isError": True
+                            "content": [{"type": "text", "text": help_text}]
                         }
                     }
                 else:
