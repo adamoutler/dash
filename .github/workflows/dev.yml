@@ -39,7 +39,7 @@ jobs:
 
     - name: Run Tests
       run: |
-        pytest -v 2>&1 | tee job-logs.txt
+        python -m pytest -v 2>&1 | tee job-logs.txt
 
     - name: Upload logs to Dashboard
       if: always()
