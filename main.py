@@ -607,8 +607,9 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                 status_emoji = {"success": "✅", "failure": "❌", "running": "🏃", "in_progress": "🏃", "unknown": "❓"}.get(res_obj.get("status", "unknown").lower(), "❓")
                 duration_info = f" (Expected duration: {int(res_obj['expected_duration_sec'] * 1.05)}s)" if res_obj.get("expected_duration_sec") else ""
 
+                display_name = owner if provider == "jenkins" else f"{owner}/{repo_name}"
                 display_str = (
-                    f"**{owner}/{repo_name}**\n"
+                    f"**{display_name}**\n"
                     f"**Status:** {status_emoji} {str(res_obj.get('status')).title()}\n"
                     f"**Started:** {res_obj.get('started_at') or 'N/A'}{duration_info}\n"
                     f"**Commit:** {res_obj.get('commit_message') or 'N/A'}"
