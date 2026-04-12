@@ -1,7 +1,7 @@
-# CI Dashboard Security Model
+# Dash Security Model
 
 ## Overview
-The CI Dashboard implements a **Two-Tiered Authentication System** designed to accommodate both human administrators and autonomous AI agents safely. By default, the application runs in an **unauthenticated (open) mode** to facilitate easy local testing. It must be explicitly locked down for production use.
+The Dash implements a **Two-Tiered Authentication System** designed to accommodate both human administrators and autonomous AI agents safely. By default, the application runs in an **unauthenticated (open) mode** to facilitate easy local testing. It must be explicitly locked down for production use.
 
 ## 1. Authentication Tiers
 
