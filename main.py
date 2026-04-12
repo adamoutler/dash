@@ -597,7 +597,7 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                 }
 
                 status_emoji = {"success": "✅", "failure": "❌", "running": "🏃", "in_progress": "🏃", "unknown": "❓"}.get(res_obj.get("status", "unknown").lower(), "❓")
-                duration_info = f" (Expected duration: {int(res_obj['expected_duration_sec'] * 1.05)}s)" if res_obj.get("expected_duration_sec") else ""
+                duration_info = f" ⏳ {int(res_obj['expected_duration_sec'] * 1.05)}s" if res_obj.get("expected_duration_sec") else ""
 
                 if res_obj.get("display_name"):
                     display_name = res_obj["display_name"]
@@ -605,10 +605,9 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                     display_name = owner if provider == "jenkins" else f"{owner}/{repo_name}"
 
                 display_str = (
-                    f"**{display_name}**\n"
-                    f"**Status:** {status_emoji} {str(res_obj.get('status')).title()}\n"
-                    f"**Started:** {res_obj.get('started_at') or 'N/A'}{duration_info}\n"
-                    f"**Commit:** {res_obj.get('commit_message') or 'N/A'}"
+                    f"⚒️ **{display_name}** {status_emoji}\n"
+                    f"🕜 {res_obj.get('started_at') or 'N/A'}{duration_info}\n"
+                    f"📜 {res_obj.get('commit_message') or 'N/A'}"
                 )
 
                 if is_tool_call:
