@@ -482,9 +482,9 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
             repos = storage.get_repos()
 
             if repo == "help":
-                valid_repos = [f"{r['owner']}/{r['repo']}" for r in repos]
-                legend = "\n\nField Definitions:\n✅ Success | ❌ Failure | 🏃 Running | ❓ Unknown"
-                help_text = f"Valid repos: {', '.join(valid_repos)}{legend}"
+                valid_repos = [f"⚒️ {r['owner']}/{r['repo']}" for r in repos]
+                legend = "\n\nField Definitions:\n✅ Success | ❌ Failure | 🏃 Running | ❓ Unknown\n🕜 Started | ⏳ Expected Duration | 📜 Commit Message | ⚒️ Repository/Workflow"
+                help_text = "\n".join(valid_repos) + legend
                 return {
                     "jsonrpc": "2.0",
                     "id": req.id,
