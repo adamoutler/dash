@@ -59,7 +59,7 @@ old_logic = """\
             if project:
                 for r in repos:
                     # Match exact repo name or owner/repo
-                    if r["repo"] == project or f"{r['owner']}/{r['repo']}" == project:
+                    if r["repo"] == project or f"{r['owner']}/{r['repo']}" == project or (r.get("provider") == "jenkins" and r["owner"] == project):
                         target_project_matched = True
                         # If workflow is specified, match it. If not, match if the repo config doesn't require a specific workflow or we just take the first match
                         if not workflow or r.get("workflow_name") == workflow or r.get("workflow_id") == workflow:
