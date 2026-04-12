@@ -99,7 +99,7 @@ def test_mcp_tools_call(mock_fetch):
     assert "error" not in data
     content = data["result"]["content"][0]["text"]
     assert "✅" in content
-    assert "⚒️ **testowner/testrepo**" in content
+    assert "✅ **testowner/testrepo**" in content
 
 @patch("main.fetch_github_status")
 def test_mcp_get_project_status(mock_fetch):
