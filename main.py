@@ -555,7 +555,7 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                         }
                     }
                 else:
-                    valid_repos = [f"⚒️ {r['owner']}/{r['repo']}" for r in repos]
+                    valid_repos = [f"⚒️ {r['owner']}" if r.get("provider") == "jenkins" else f"⚒️ {r['owner']}/{r['repo']}" for r in repos]
                     legend = "\n\nField Definitions:\n✅ Success | ❌ Failure | 🏃 Running | ❓ Unknown\n🕜 Started | ⏳ Expected Duration | 📜 Commit Message | ⚒️ Repository/Workflow"
                     help_text = f"Repo '{repo}' not found. Valid repos:\n" + "\n".join(valid_repos) + legend
                     return {
