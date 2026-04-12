@@ -605,8 +605,7 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                     display_name = owner if provider == "jenkins" else f"{owner}/{repo_name}"
 
                 display_str = (
-                    f"⚒️ **{display_name}** {status_emoji}\n"
-                    f"🕜 {res_obj.get('started_at') or 'N/A'}{duration_info}\n"
+                    f"{status_emoji} **{display_name}** 🕜 {res_obj.get('started_at') or 'N/A'}{duration_info}\n"
                     f"📜 {res_obj.get('commit_message') or 'N/A'}"
                 )
 
