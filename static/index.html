@@ -187,18 +187,19 @@
             let workflowName = '';
 
             if (provider === 'jenkins') {
-                const lastSelect = this.levels[this.levels.length - 1];
-                if (lastSelect && lastSelect.selectedIndex > 0) {
-                    const opt = lastSelect.options[lastSelect.selectedIndex];
-                    owner = opt.textContent;
-                    repo = opt.dataset.url || opt.value;
-                } else if (this.levels.length > 1) {
-                    const prevSelect = this.levels[this.levels.length - 2];
-                    if (prevSelect && prevSelect.selectedIndex > 0) {
-                        const opt = prevSelect.options[prevSelect.selectedIndex];
-                        owner = opt.textContent;
-                        repo = opt.dataset.url || opt.value;
+                const parts = [];
+                let finalUrl = '';
+                for (let i = 0; i < this.levels.length; i++) {
+                    const sel = this.levels[i];
+                    if (sel && sel.selectedIndex > 0) {
+                        const opt = sel.options[sel.selectedIndex];
+                        parts.push(opt.textContent);
+                        finalUrl = opt.dataset.url || opt.value;
                     }
+                }
+                if (parts.length > 0) {
+                    owner = parts.join('/');
+                    repo = finalUrl;
                 }
             } else {
                 if (this.levels[0] && this.levels[0].selectedIndex > 0) {
@@ -481,7 +482,7 @@
             }
 
             const wfDisplay = item.workflow_name ? ` <span style="font-size: 14px; color: #586069; font-weight: normal;">(${item.workflow_name})</span>` : '';
-            const displayName = item.provider === 'jenkins' ? item.owner : `${item.owner}/${item.repo}`;
+            const displayName = item.display_name ? item.display_name : (item.provider === 'jenkins' ? item.owner : `${item.owner}/${item.repo}`);
 
             let baseUrl = '';
             try {

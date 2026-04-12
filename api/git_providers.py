@@ -412,6 +412,7 @@ async def _resolve_jenkins_status(client, url, owner, repo_field, max_depth=3):
             "status": status,
             "url": last_build.get("url", url),
             "repo_url": url,
+            "display_name": data.get("fullDisplayName") or data.get("displayName") or owner,
             "updated_at": started_at, # Jenkins doesn't give a clear updated_at, using started_at
             "commit_message": commit_msg,
             "started_at": started_at,
