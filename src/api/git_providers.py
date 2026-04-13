@@ -33,26 +33,28 @@ async def fetch_github_status(owner: str, repo: str, token: str, workflow_id: st
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             runs_resp = await client.get(runs_url, headers=headers)
-            commits_resp = await client.get(f"{base_url}/commits?per_page=1", headers=headers)
 
-            if runs_resp.status_code != 200 or commits_resp.status_code != 200:
-                return _error_result("github", owner, repo)
+            if runs_resp.status_code == 403:
+                err = _error_result("github", owner, repo)
+                err["commit_message"] = "GitHub API Rate Limit Exceeded (403)"
+                return err
+            elif runs_resp.status_code != 200:
+                err = _error_result("github", owner, repo)
+                err["commit_message"] = f"Failed to fetch (HTTP {runs_resp.status_code})"
+                return err
 
             runs_data = runs_resp.json()
-            commits_data = commits_resp.json()
-
             runs = runs_data.get("workflow_runs", [])
-            # Sort by created_at first. Since runs from the same push might be 1-2 seconds apart,
-            # we just take the newest run's time, then find all runs within a small window and pick the highest weight.
-            # A simpler robust sort: just sort by (created_at[:16], weight, updated_at) to group by minute.
             run = sorted(runs, key=lambda x: (
-                (x.get("created_at") or x.get("created", ""))[:16], # Group by minute "YYYY-MM-DDTHH:MM"
+                (x.get("created_at") or x.get("created", ""))[:16],
                 _get_status_weight(x),
                 x.get("updated_at") or x.get("updated", "")
             ), reverse=True)[0] if runs else {}
-            commit_msg = commits_data[0].get("commit", {}).get("message", "No commit message").split("\n")[0] if commits_data else ""
 
-            # Map GitHub status to common format
+            commit_msg = "No commit message"
+            if run and "head_commit" in run and run["head_commit"]:
+                commit_msg = run["head_commit"].get("message", "No commit message").split("\n")[0]
+            
             status = run.get("status")
             conclusion = run.get("conclusion")
             common_status = "running" if status in ["in_progress", "queued", "requested"] else (conclusion or "unknown")
@@ -90,8 +92,10 @@ async def fetch_github_status(owner: str, repo: str, token: str, workflow_id: st
                 "started_at": started_at,
                 "expected_duration_sec": expected_duration_sec
             }
-    except Exception:
-        return _error_result("github", owner, repo)
+    except Exception as e:
+        err = _error_result("github", owner, repo)
+        err["commit_message"] = f"Exception: {str(e)}"
+        return err
 
 async def fetch_forgejo_status(owner: str, repo: str, token: str, forgejo_url: str, workflow_id: str = None):
     """

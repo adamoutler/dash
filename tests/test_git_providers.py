@@ -7,13 +7,9 @@ from api.git_providers import fetch_github_status
 async def test_fetch_github_status(mock_get):
     mock_response_runs = MagicMock()
     mock_response_runs.status_code = 200
-    mock_response_runs.json.return_value = {"workflow_runs": [{"status": "completed", "conclusion": "success", "html_url": "http://git/run/1", "updated_at": "2023-01-01T00:00:00Z"}]}
+    mock_response_runs.json.return_value = {"workflow_runs": [{"status": "completed", "conclusion": "success", "html_url": "http://git/run/1", "updated_at": "2023-01-01T00:00:00Z", "head_commit": {"message": "Fix bug"}}]}
 
-    mock_response_commits = MagicMock()
-    mock_response_commits.status_code = 200
-    mock_response_commits.json.return_value = [{"commit": {"message": "Fix bug"}}]
-
-    mock_get.side_effect = [mock_response_runs, mock_response_commits]
+    mock_get.return_value = mock_response_runs
 
     result = await fetch_github_status("owner", "repo", "token")
     assert result["status"] == "success"

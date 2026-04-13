@@ -83,6 +83,31 @@ class ProviderPathNotFoundError(Exception):
 class ProviderNotImplementedError(Exception):
     pass
 
+async def _fetch_all_github_pages(client, url, headers, is_workflow=False):
+    results = []
+    while url:
+        resp = await client.get(url, headers=headers)
+        if resp.status_code == 403:
+            raise ProviderPathNotFoundError("GitHub API Rate Limit Exceeded (403). Please wait before trying again.")
+        if resp.status_code != 200:
+            break
+        data = resp.json()
+        if is_workflow and isinstance(data, dict) and "workflows" in data:
+            results.extend(data["workflows"])
+        elif isinstance(data, list):
+            results.extend(data)
+            
+        link_header = resp.headers.get("Link", "")
+        next_url = None
+        if link_header:
+            links = link_header.split(",")
+            for link in links:
+                parts = link.split(";")
+                if len(parts) == 2 and 'rel="next"' in parts[1]:
+                    next_url = parts[0].strip()[1:-1]
+        url = next_url
+    return results
+
 async def github_explore(path: str) -> List[Node]:
     """
     Explores the GitHub hierarchy (User -> Orgs -> Repos -> Workflows) given a generic path.
@@ -94,7 +119,7 @@ async def github_explore(path: str) -> List[Node]:
     - Performs HTTP requests dynamically based on the path depth. Responses are cached by the caller.
 
     Failure Modes:
-    - Raises `ProviderPathNotFoundError` if authentication tokens are missing or the API returns 404.
+    - Raises `ProviderPathNotFoundError` if authentication tokens are missing, rate limits are hit (403), or the API returns 404.
     """
     token = config_manager.get_value("github_token", "GITHUB_TOKEN")
     if not token:
@@ -107,32 +132,32 @@ async def github_explore(path: str) -> List[Node]:
             # Root: Return authenticated user and orgs
             nodes = []
             user_resp = await client.get("https://api.github.com/user", headers=headers)
+            if user_resp.status_code == 403:
+                raise ProviderPathNotFoundError("GitHub API Rate Limit Exceeded (403)")
             if user_resp.status_code == 200:
                 user_data = user_resp.json()
                 login = user_data.get("login")
                 nodes.append(Node(id=login, name=login, type=NodeType.USER, path=login, has_children=True, url=user_data.get("html_url")))
 
-            orgs_resp = await client.get("https://api.github.com/user/orgs", headers=headers)
-            if orgs_resp.status_code == 200:
-                for org in orgs_resp.json():
-                    login = org.get("login")
-                    nodes.append(Node(id=login, name=login, type=NodeType.ORGANIZATION, path=login, has_children=True, url=org.get("url")))
+            orgs = await _fetch_all_github_pages(client, "https://api.github.com/user/orgs?per_page=100", headers)
+            for org in orgs:
+                login = org.get("login")
+                nodes.append(Node(id=login, name=login, type=NodeType.ORGANIZATION, path=login, has_children=True, url=org.get("url")))
             return nodes
         elif len(parts) == 1:
             # Owner: List repositories
             owner = parts[0]
-            repos_resp = await client.get(f"https://api.github.com/users/{owner}/repos?per_page=100", headers=headers)
-            if repos_resp.status_code == 200:
-                return [Node(id=r.get("name"), name=r.get("name"), type=NodeType.REPOSITORY, path=f"{owner}/{r.get('name')}", has_children=True, url=r.get("html_url")) for r in repos_resp.json()]
-            raise ProviderPathNotFoundError(f"Owner {owner} not found or no access")
+            repos = await _fetch_all_github_pages(client, f"https://api.github.com/users/{owner}/repos?per_page=100", headers)
+            if repos:
+                return [Node(id=r.get("name"), name=r.get("name"), type=NodeType.REPOSITORY, path=f"{owner}/{r.get('name')}", has_children=True, url=r.get("html_url")) for r in repos]
+            raise ProviderPathNotFoundError(f"Owner {owner} not found, has no repos, or rate limited")
         elif len(parts) == 2:
             # Repo: List workflows
             owner, repo = parts[0], parts[1]
-            wf_resp = await client.get(f"https://api.github.com/repos/{owner}/{repo}/actions/workflows?per_page=100", headers=headers)
-            if wf_resp.status_code == 200:
-                wfs = wf_resp.json().get("workflows", [])
+            wfs = await _fetch_all_github_pages(client, f"https://api.github.com/repos/{owner}/{repo}/actions/workflows?per_page=100", headers, is_workflow=True)
+            if wfs:
                 return [Node(id=str(w.get("id")), name=w.get("name"), type=NodeType.WORKFLOW, path=f"{owner}/{repo}/{w.get('id')}", has_children=False, url=w.get("html_url")) for w in wfs]
-            raise ProviderPathNotFoundError(f"Workflows for {owner}/{repo} not found")
+            raise ProviderPathNotFoundError(f"Workflows for {owner}/{repo} not found or rate limited")
 
     return []
 
