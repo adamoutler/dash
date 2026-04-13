@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dash Configuration</title>
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#ffffff" id="theme-color-meta">
+    <link rel="apple-touch-icon" href="/static/img/icon-192.png">
     <link rel="stylesheet" href="/static/design-system.css">
     <script>
         (function() {
@@ -218,6 +221,16 @@
 
         loadData();
         loadProviderStatus();
+
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js').then(reg => {
+                    console.log('ServiceWorker registered in config:', reg.scope);
+                }).catch(err => {
+                    console.log('ServiceWorker registration failed in config:', err);
+                });
+            });
+        }
     </script>
 </body>
 </html>

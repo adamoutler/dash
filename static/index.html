@@ -2,7 +2,11 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dash</title>
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#ffffff" id="theme-color-meta">
+    <link rel="apple-touch-icon" href="/static/img/icon-192.png">
     <link rel="stylesheet" href="/static/design-system.css">
     <script>
         (function() {
@@ -631,6 +635,47 @@
             modal.style.display = "none";
         }
     }
+
+    // PWA Service Worker Registration & Installation
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/sw.js').then(reg => {
+                console.log('ServiceWorker registered:', reg.scope);
+            }).catch(err => {
+                console.log('ServiceWorker registration failed:', err);
+            });
+        });
+    }
+
+    let deferredPrompt;
+    window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+        const installBtn = document.getElementById('installAppBtn');
+        if (installBtn) {
+            installBtn.style.display = 'inline-block';
+            installBtn.addEventListener('click', async () => {
+                installBtn.style.display = 'none';
+                deferredPrompt.prompt();
+                const { outcome } = await deferredPrompt.userChoice;
+                console.log(`User response to the install prompt: ${outcome}`);
+                deferredPrompt = null;
+            });
+        }
+    });
+
+    window.addEventListener('appinstalled', (evt) => {
+        console.log('App installed');
+    });
+
+    window.addEventListener('online', () => {
+        const offlineBanner = document.getElementById('offline-banner');
+        if (offlineBanner) offlineBanner.style.display = 'none';
+    });
+    window.addEventListener('offline', () => {
+        const offlineBanner = document.getElementById('offline-banner');
+        if (offlineBanner) offlineBanner.style.display = 'block';
+    });
 </script>
 </body>
 </html>
