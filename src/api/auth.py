@@ -10,8 +10,10 @@ from starlette.requests import Request
 
 security_basic = HTTPBasic(auto_error=False)
 
+DATA_DIR = os.getenv("DATA_DIR", "data")
+
 class TokenManager:
-    def __init__(self, filepath="data/tokens.json"):
+    def __init__(self, filepath=os.path.join(DATA_DIR, "tokens.json")):
         self.filepath = filepath
         self.lockpath = f"{filepath}.lock"
         os.makedirs(os.path.dirname(self.filepath), exist_ok=True)

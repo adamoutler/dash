@@ -11,6 +11,7 @@ services:
       JENKINS_TOKEN: "${JENKINS_TOKEN}"
       JENKINS_URL: "${JENKINS_URL}"
       LOGS_DIR: "/app/logs"
+      DATA_DIR: "/app/data"
     volumes:
       - dashboard_data:/app/data
       - dashboard_logs:/app/logs

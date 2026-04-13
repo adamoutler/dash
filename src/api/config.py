@@ -5,8 +5,10 @@ from filelock import FileLock
 
 logger = logging.getLogger(__name__)
 
+DATA_DIR = os.getenv("DATA_DIR", "data")
+
 class ConfigManager:
-    def __init__(self, filepath="data/settings.json"):
+    def __init__(self, filepath=os.path.join(DATA_DIR, "settings.json")):
         self.filepath = filepath
         self.lockpath = f"{filepath}.lock"
         os.makedirs(os.path.dirname(self.filepath), exist_ok=True)

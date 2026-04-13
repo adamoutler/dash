@@ -1,6 +1,8 @@
 import json
 import os
-from filelock import FileLock
+from filelock import FileLock, Timeout
+
+DATA_DIR = os.getenv("DATA_DIR", "data")
 
 class RepoStorage:
     """
@@ -19,7 +21,7 @@ class RepoStorage:
     - `Timeout`: Raised if the file lock cannot be acquired within the timeout period.
     - `json.JSONDecodeError`: Can occur if the underlying JSON file becomes corrupted.
     """
-    def __init__(self, file_path="data/repos.json"):
+    def __init__(self, file_path=os.path.join(DATA_DIR, "repos.json")):
         self.file_path = os.path.abspath(file_path)
         self.lock_path = f"{self.file_path}.lock"
         os.makedirs(os.path.dirname(self.file_path), exist_ok=True)
