@@ -5,6 +5,8 @@ services:
       - "28080:8000" # High port mapping to the container's 8000 port
     environment:
       GITHUB_TOKEN: "${GITHUB_TOKEN}"
+      FORGEJO_URL: "https://git.adamoutler.com"
+      FORGEJO_TOKEN: "${FORGEJO_TOKEN}"
       JENKINS_USER: "adamoutler@gmail.com"
       JENKINS_TOKEN: "${JENKINS_TOKEN}"
       JENKINS_URL: "${JENKINS_URL}"

@@ -7,6 +7,7 @@ pipeline {
         stage('Deploy') {
             environment {
                 GITHUB_TOKEN = credentials('github-adamoutler-token')
+                FORGEJO_TOKEN = credentials('forgejo-token-aoutler')
                 JENKINS_URL = "${env.JENKINS_URL}"
             }
             steps {
