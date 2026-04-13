@@ -510,16 +510,16 @@
                     ${progressHtml}
                 </a>                <div class="info-block">
                     <div class="info-header">
-                        <a href="${item.repo_url}" target="_blank" style="text-decoration: none; color: inherit; flex-grow: 1; display: flex; align-items: center; min-width: 0;">
-                            ${faviconHtml}<span class="repo-name">${displayName}${wfDisplay}</span>
-                        </a>
-                        <div style="display: flex; align-items: center; gap: 15px; flex-shrink: 0;">
+                        <div style="display: flex; flex-direction: column; flex-grow: 1; min-width: 0; gap: 2px;">
+                            <a href="${item.repo_url}" target="_blank" style="text-decoration: none; color: inherit; display: flex; align-items: center; min-width: 0;">
+                                ${faviconHtml}<span class="repo-name">${displayName}${wfDisplay}</span>
+                            </a>
                             <span class="time-text">${formatTime(item.updated_at)}</span>
-                            <div class="actions-container">
-                                <button class="icon-btn" style="color: #6a737d;" onclick="fetchLogs('${item.provider}', '${item.owner}', '${item.repo}', '${item.workflow_id || ''}')" title="View Logs">📄</button>
-                                <button class="icon-btn edit-btn" onclick="toggleForm(true, '${item.provider}', '${item.owner}', '${item.repo}', '${customLinksEncoded}', '${item.workflow_id || ''}', '${item.workflow_name || ''}')" title="Edit">✎</button>
-                                <button class="icon-btn delete-btn" onclick="removeRepo('${item.provider}', '${item.owner}', '${item.repo}', '${item.workflow_id || ''}')" title="Remove">✕</button>
-                            </div>
+                        </div>
+                        <div class="actions-container">
+                            <button class="icon-btn" style="color: #6a737d;" onclick="fetchLogs('${item.provider}', '${item.owner}', '${item.repo}', '${item.workflow_id || ''}')" title="View Logs">📄</button>
+                            <button class="icon-btn edit-btn" onclick="toggleForm(true, '${item.provider}', '${item.owner}', '${item.repo}', '${customLinksEncoded}', '${item.workflow_id || ''}', '${item.workflow_name || ''}')" title="Edit">✎</button>
+                            <button class="icon-btn delete-btn" onclick="removeRepo('${item.provider}', '${item.owner}', '${item.repo}', '${item.workflow_id || ''}')" title="Remove">✕</button>
                         </div>
                     </div>
                     <a href="${item.repo_url}" target="_blank" style="text-decoration: none; color: inherit;">

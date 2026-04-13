@@ -109,10 +109,10 @@ h1 { margin: 0; }
 .status-error { background: var(--status-error-bg); color: var(--status-error-color); border-left-color: var(--status-error-border); }
 
 .info-block { flex-grow: 1; padding: 12px 15px; text-decoration: none; color: inherit; display: flex; flex-direction: column; justify-content: center; position: relative; min-width: 0; transition: color 0.3s ease;}
-.info-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; min-width: 0; gap: 15px; }
-.repo-name { font-weight: bold; font-size: 18px; color: var(--link-color); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; transition: color 0.3s ease; }
-.time-text { color: var(--text-secondary); font-size: 14px; white-space: nowrap; transition: color 0.3s ease; }
-.commit-msg { color: var(--text-secondary); font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 600px; transition: color 0.3s ease; }
+.info-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; min-width: 0; gap: 15px; }
+.repo-name { font-weight: bold; font-size: 18px; color: var(--link-color); white-space: normal; word-break: break-word; transition: color 0.3s ease; line-height: 1.2; }
+.time-text { color: var(--text-secondary); font-size: 13px; transition: color 0.3s ease; }
+.commit-msg { color: var(--text-secondary); font-size: 14px; word-break: break-word; transition: color 0.3s ease; margin-top: 4px; line-height: 1.4; }
 
 .actions-container { display: flex; gap: 15px; align-items: center; flex-shrink: 0; }
 .icon-btn { background: none; border: none; cursor: pointer; font-size: 18px; padding: 0; opacity: 0.6; transition: opacity 0.2s; font-weight: bold; color: var(--text-primary); }
