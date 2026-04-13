@@ -21,3 +21,6 @@ __pycache__/
 logs/
 data/
 *.log
+
+# Sensitive Files
+.gemini/settings.json
