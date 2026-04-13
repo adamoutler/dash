@@ -40,6 +40,19 @@ import time
 
 # Simple TTL Cache
 class SimpleTTLCache:
+    """
+    A simple thread-safe, time-to-live (TTL) memory cache for API responses.
+
+    Behavioral Contracts:
+    - Evicts items lazily upon attempted access after their TTL has expired.
+
+    Performance Expectations:
+    - O(1) read and write performance.
+    - Not suitable for distributed caching across multiple worker processes.
+
+    Failure Modes:
+    - Unbounded memory growth if items are never accessed again (no active cleanup loop).
+    """
     def __init__(self, ttl):
         self.ttl = ttl
         self.cache = {}
@@ -71,6 +84,18 @@ class ProviderNotImplementedError(Exception):
     pass
 
 async def github_explore(path: str) -> List[Node]:
+    """
+    Explores the GitHub hierarchy (User -> Orgs -> Repos -> Workflows) given a generic path.
+
+    Behavioral Contracts:
+    - Maps GitHub's nested structures into a flat `NodeList` for tree navigation.
+
+    Performance Expectations:
+    - Performs HTTP requests dynamically based on the path depth. Responses are cached by the caller.
+
+    Failure Modes:
+    - Raises `ProviderPathNotFoundError` if authentication tokens are missing or the API returns 404.
+    """
     token = config_manager.get_value("github_token", "GITHUB_TOKEN")
     if not token:
         raise ProviderPathNotFoundError("GitHub token not configured")

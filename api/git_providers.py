@@ -94,6 +94,20 @@ async def fetch_github_status(owner: str, repo: str, token: str, workflow_id: st
         return _error_result("github", owner, repo)
 
 async def fetch_forgejo_status(owner: str, repo: str, token: str, forgejo_url: str, workflow_id: str = None):
+    """
+    Fetches the CI status for a specific Forgejo repository and workflow.
+
+    Behavioral Contracts:
+    - Returns a standardized dictionary representing the repository's CI state.
+    - Handles mapping of Forgejo-specific statuses (e.g., 'waiting') to common UI statuses.
+
+    Performance Expectations:
+    - Makes two concurrent HTTP requests to the Forgejo API (runs and commits).
+    - Expect response within < 10 seconds (enforced by httpx timeout).
+
+    Failure Modes:
+    - Returns a fallback `_error_result` dict if `forgejo_url` is missing or requests fail/timeout.
+    """
     if workflow_id == "any":
         workflow_id = None
     if not forgejo_url:
