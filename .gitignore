@@ -1,2 +1,23 @@
 .worktrees/
 ~/
+
+# Environments
+.venv/
+env/
+venv/
+env.bak/
+venv.bak/
+
+# Caches and Temp Files
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.ruff_cache/
+.coverage
+.coveragerc
+.superpowers/
+.pre-commit-config.yaml
+logs/
+data/
+*.log

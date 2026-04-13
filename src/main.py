@@ -71,8 +71,9 @@ os.makedirs(LOGS_DIR, exist_ok=True)
 MAX_LOG_SIZE = 2 * 1024 * 1024  # 2MB
 
 # Mount static files
-os.makedirs("static", exist_ok=True)
-app.mount("/static", StaticFiles(directory="static"), name="static")
+STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
+os.makedirs(STATIC_DIR, exist_ok=True)
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 def get_log_filename(provider, owner, repo, workflow_id=None):
     safe_provider = "".join(c for c in provider if c.isalnum() or c in "-_")
@@ -83,23 +84,23 @@ def get_log_filename(provider, owner, repo, workflow_id=None):
 
 @app.get("/", summary="Dashboard UI", description="Serves the main HTML interface for the Dash.", include_in_schema=False)
 async def read_index(user: str = Depends(require_basic_auth)):
-    return FileResponse("static/index.html")
+    return FileResponse(os.path.join(STATIC_DIR, "index.html"))
 
 @app.get("/sw.js", summary="Service Worker", description="Serves the Service Worker for PWA.", include_in_schema=False)
 async def read_sw():
-    return FileResponse("static/sw.js")
+    return FileResponse(os.path.join(STATIC_DIR, "sw.js"))
 
 @app.get("/manifest.json", summary="Web App Manifest", description="Serves the Web App Manifest for PWA.", include_in_schema=False)
 async def read_manifest():
-    return FileResponse("static/manifest.json")
+    return FileResponse(os.path.join(STATIC_DIR, "manifest.json"))
 
 @app.get("/favicon.ico", summary="Favicon", description="Serves the project icon for the browser.", include_in_schema=False)
 async def read_favicon():
-    return FileResponse("favicon.ico")
+    return FileResponse(os.path.join(os.path.dirname(__file__), "favicon.ico"))
 
 @app.get("/llms.txt", summary="LLM Agent Instructions", description="Serves a text file containing instructions on how LLMs and autonomous agents can interface with this system.")
 async def read_llms_txt():
-    return FileResponse("static/llms.txt")
+    return FileResponse(os.path.join(STATIC_DIR, "llms.txt"))
 
 @app.get("/api", summary="Redirect to Documentation", description="Redirects visitors accessing the base /api path directly to the interactive Swagger UI at /docs.", include_in_schema=False)
 async def redirect_to_docs(user: str = Depends(get_current_user)):
@@ -330,7 +331,7 @@ class TokenCreateRequest(BaseModel):
 
 @app.get("/configure", summary="Configuration UI", description="Serves the configuration UI", include_in_schema=False)
 async def read_configure(user: str = Depends(require_basic_auth)):
-    return FileResponse("static/configure.html")
+    return FileResponse(os.path.join(STATIC_DIR, "configure.html"))
 
 @app.post("/configure/tokens")
 async def create_new_token(req: TokenCreateRequest, user: str = Depends(require_basic_auth)):
