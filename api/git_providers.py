@@ -34,8 +34,8 @@ async def fetch_github_status(owner: str, repo: str, token: str, workflow_id: st
 
             runs = runs_data.get("workflow_runs", [])
             def get_status_weight(r):
-                st = r.get("status", "").lower()
-                conclusion = r.get("conclusion", "").lower()
+                st = (r.get("status") or "").lower()
+                conclusion = (r.get("conclusion") or "").lower()
                 # Treat in_progress, queued, etc. as running
                 if st in ["in_progress", "queued", "requested", "waiting", "running"]:
                     return 3
@@ -123,8 +123,8 @@ async def fetch_forgejo_status(owner: str, repo: str, token: str, forgejo_url: s
             # Use runs[0] if exists. (Previously the codebase sometimes used runs[-1] incorrectly depending on ordering,
             # but usually API returns newest first. Let's use the first match).
             def get_status_weight(r):
-                st = r.get("status", "").lower()
-                conclusion = r.get("conclusion", "").lower()
+                st = (r.get("status") or "").lower()
+                conclusion = (r.get("conclusion") or "").lower()
                 # Treat in_progress, queued, etc. as running
                 if st in ["in_progress", "queued", "requested", "waiting", "running"]:
                     return 3
@@ -142,7 +142,7 @@ async def fetch_forgejo_status(owner: str, repo: str, token: str, forgejo_url: s
             ), reverse=True)[0] if runs else {}
             commit_msg = commits_data[0].get("commit", {}).get("message", "No commit message").split("\n")[0] if commits_data else ""
 
-            status = run.get("status", "unknown")
+            status = run.get("status") or "unknown"
             # Map Forgejo status (success, failure, running, etc)
             common_status = status.lower()
             if common_status in ["success", "failure", "running"]:
@@ -153,7 +153,7 @@ async def fetch_forgejo_status(owner: str, repo: str, token: str, forgejo_url: s
             expected_duration_sec = None
             started_at = run.get("started") or run.get("created", "")
 
-            successful_runs = [r for r in runs if r.get("status", "").lower() == "success"]
+            successful_runs = [r for r in runs if (r.get("status") or "").lower() == "success"]
             if successful_runs:
                 total_duration = 0
                 valid_runs = 0
@@ -287,8 +287,8 @@ async def fetch_forgejo_artifacts(owner: str, repo: str, token: str, forgejo_url
                     runs.append(r)
 
             def get_status_weight(r):
-                st = r.get("status", "").lower()
-                conclusion = r.get("conclusion", "").lower()
+                st = (r.get("status") or "").lower()
+                conclusion = (r.get("conclusion") or "").lower()
                 # Treat in_progress, queued, etc. as running
                 if st in ["in_progress", "queued", "requested", "waiting", "running"]:
                     return 3
