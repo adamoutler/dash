@@ -13,6 +13,15 @@ def _error_result(provider, owner, repo):
         "commit_message": "Failed to fetch"
     }
 
+def _get_status_weight(r):
+    st = (r.get("status") or "").lower()
+    conclusion = (r.get("conclusion") or "").lower()
+    if st in ["in_progress", "queued", "requested", "waiting", "running"]:
+        return 3
+    if conclusion in ["success", "failure", "action_required"] or st in ["success", "failure"]:
+        return 2
+    return 1
+
 async def fetch_github_status(owner: str, repo: str, token: str, workflow_id: str = None):
     if workflow_id == "any":
         workflow_id = None
@@ -33,22 +42,12 @@ async def fetch_github_status(owner: str, repo: str, token: str, workflow_id: st
             commits_data = commits_resp.json()
 
             runs = runs_data.get("workflow_runs", [])
-            def get_status_weight(r):
-                st = (r.get("status") or "").lower()
-                conclusion = (r.get("conclusion") or "").lower()
-                # Treat in_progress, queued, etc. as running
-                if st in ["in_progress", "queued", "requested", "waiting", "running"]:
-                    return 3
-                if conclusion in ["success", "failure", "action_required"] or st in ["success", "failure"]:
-                    return 2
-                return 1
-
             # Sort by created_at first. Since runs from the same push might be 1-2 seconds apart,
             # we just take the newest run's time, then find all runs within a small window and pick the highest weight.
             # A simpler robust sort: just sort by (created_at[:16], weight, updated_at) to group by minute.
             run = sorted(runs, key=lambda x: (
                 (x.get("created_at") or x.get("created", ""))[:16], # Group by minute "YYYY-MM-DDTHH:MM"
-                get_status_weight(x),
+                _get_status_weight(x),
                 x.get("updated_at") or x.get("updated", "")
             ), reverse=True)[0] if runs else {}
             commit_msg = commits_data[0].get("commit", {}).get("message", "No commit message").split("\n")[0] if commits_data else ""
@@ -122,22 +121,13 @@ async def fetch_forgejo_status(owner: str, repo: str, token: str, forgejo_url: s
 
             # Use runs[0] if exists. (Previously the codebase sometimes used runs[-1] incorrectly depending on ordering,
             # but usually API returns newest first. Let's use the first match).
-            def get_status_weight(r):
-                st = (r.get("status") or "").lower()
-                conclusion = (r.get("conclusion") or "").lower()
-                # Treat in_progress, queued, etc. as running
-                if st in ["in_progress", "queued", "requested", "waiting", "running"]:
-                    return 3
-                if conclusion in ["success", "failure", "action_required"] or st in ["success", "failure"]:
-                    return 2
-                return 1
 
             # Sort by created_at first. Since runs from the same push might be 1-2 seconds apart,
             # we just take the newest run's time, then find all runs within a small window and pick the highest weight.
             # A simpler robust sort: just sort by (created_at[:16], weight, updated_at) to group by minute.
             run = sorted(runs, key=lambda x: (
                 (x.get("created_at") or x.get("created", ""))[:16], # Group by minute "YYYY-MM-DDTHH:MM"
-                get_status_weight(x),
+                _get_status_weight(x),
                 x.get("updated_at") or x.get("updated", "")
             ), reverse=True)[0] if runs else {}
             commit_msg = commits_data[0].get("commit", {}).get("message", "No commit message").split("\n")[0] if commits_data else ""
@@ -286,22 +276,12 @@ async def fetch_forgejo_artifacts(owner: str, repo: str, token: str, forgejo_url
                 if not workflow_id or r.get("name") == workflow_id or str(r.get("workflow_id")) == workflow_id:
                     runs.append(r)
 
-            def get_status_weight(r):
-                st = (r.get("status") or "").lower()
-                conclusion = (r.get("conclusion") or "").lower()
-                # Treat in_progress, queued, etc. as running
-                if st in ["in_progress", "queued", "requested", "waiting", "running"]:
-                    return 3
-                if conclusion in ["success", "failure", "action_required"] or st in ["success", "failure"]:
-                    return 2
-                return 1
-
             # Sort by created_at first. Since runs from the same push might be 1-2 seconds apart,
             # we just take the newest run's time, then find all runs within a small window and pick the highest weight.
             # A simpler robust sort: just sort by (created_at[:16], weight, updated_at) to group by minute.
             run = sorted(runs, key=lambda x: (
                 (x.get("created_at") or x.get("created", ""))[:16], # Group by minute "YYYY-MM-DDTHH:MM"
-                get_status_weight(x),
+                _get_status_weight(x),
                 x.get("updated_at") or x.get("updated", "")
             ), reverse=True)[0] if runs else {}
             if not run.get('id'):

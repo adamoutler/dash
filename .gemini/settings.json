@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "kanban": {
+      "url": "https://kanban.hackedyour.info/mcp/agent/api-key/mcp",
+      "headers": {
+        "Authorization": "Bearer plane_api_9488f3d6cbb64a419eac0eebe7e732c5",
+        "X-Workspace-slug": "general"
+      }
+    },
+    "dash": {
+      "url": "https://dash.hackedyour.info/mcp"
+    }
+  }
+}
