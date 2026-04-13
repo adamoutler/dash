@@ -77,8 +77,8 @@ If authentication is enabled, you must provide an `Authorization: Bearer <TOKEN>
 
 Available MCP Tools:
 - `get_status(repo, workflow, provider)`: Fetch the latest status of a tracked repository. Returns formatted markdown for the user and raw JSON data for the agent.
-- `get_logs(repo, workflow, provider)`: Fetch the log URL for the latest run.
-- `wait(repo, workflow, provider)`: Wait until an in-progress build completes.
+- `get_logs(repo, workflow, provider)`: Get linked into the logs. Provides a URL you can use to view the logs on the Dash.
+- `wait(repo, workflow, provider)`: Save your tokens. Stop repeatedly checking the status of a build. Use Wait and you'll be awakened when it finishes.
 
 **Discovery**: You can pass `"help"` as the `repo` or `workflow` argument to any of these tools to retrieve a list of valid configured repos or workflows.
 

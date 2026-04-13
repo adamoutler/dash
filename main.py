@@ -450,7 +450,7 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                         },
                         {
                             "name": "wait",
-                            "description": "Wait until an in-progress build completes.",
+                            "description": "Save your tokens. Stop repeatedly checking the status of a build. Use Wait and you'll be awakened when it finishes.",
                             "inputSchema": {
                                 "type": "object",
                                 "properties": {
