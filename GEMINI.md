@@ -15,7 +15,26 @@ This is the root folder of the Dashboard project. It contains the main applicati
 
 ## AI Methodology & Guidelines
 For future AI incarnations working on this project:
-1. **Module Independence:** Before creating new features, verify whether they belong in the root `main.py` or should be isolated in `api/`. Prefer modularizing into `api/`.
-2. **Documentation Maintenance:** When adding a new directory or significant module, ensure you create a `GEMINI.md` file within that directory outlining its Overview, Dependencies, and Dependents to maintain context for future agents.
-3. **Refactoring:** When refactoring, always aim for legibility and code readability. Extract nested functions (e.g., helpers in `api/git_providers.py`) to module-level private functions if they don't depend on closure state to reduce indentation and improve readability.
-4. **Testing:** Never commit without running the `pytest` suite. All changes must be verified against the test suite prior to committing.
+
+### 1. Make code self-describing
+* Code must be immediately legible to humans and AIs.
+* Every module should have a `GEMINI.md` manifest that describes what it is, what it depends on, and what depends on it.
+* Semantic context in every interface and class - provide rules of engagement, not just the data. Semantic context includes:
+  - performance expectations
+  - failure modes
+  - behavioral contracts
+
+### 2. General Practices
+* **Module Independence:** Before creating new features, verify whether they belong in the root `main.py` or should be isolated in `api/`. Prefer modularizing into `api/`.
+* **Refactoring:** When refactoring, always aim for legibility and code readability. Extract nested functions (e.g., helpers in `api/git_providers.py`) to module-level private functions if they don't depend on closure state to reduce indentation and improve readability.
+* **Testing:** Never commit without running the `pytest` suite. All changes must be verified against the test suite prior to committing.
+
+### 3. Before finishing up
+Ask questions that a senior or principal engineer might ask:
+- Is this code comprehensive?
+- Why did you call the dependency here?
+- Why is this method or variable here?
+- Should this method be broken up?
+- Is there a way to remove redundancy while maintaining the context?
+- What is the best way to handle the caching of this?
+- Are we handling separation of concerns, or are we making it monolithic?
