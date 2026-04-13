@@ -93,6 +93,10 @@ async def read_sw():
 async def read_manifest():
     return FileResponse("static/manifest.json")
 
+@app.get("/favicon.ico", summary="Favicon", description="Serves the project icon for the browser.", include_in_schema=False)
+async def read_favicon():
+    return FileResponse("favicon.ico")
+
 @app.get("/llms.txt", summary="LLM Agent Instructions", description="Serves a text file containing instructions on how LLMs and autonomous agents can interface with this system.")
 async def read_llms_txt():
     return FileResponse("static/llms.txt")
