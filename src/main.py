@@ -158,7 +158,7 @@ async def get_artifacts(provider: str, owner: str, repo: str, workflow_id: Optio
     elif provider == "forgejo":
         return await fetch_forgejo_artifacts(owner, repo, forgejo_token, forgejo_url, workflow_id)
     elif provider == "jenkins":
-        return await fetch_jenkins_artifacts(owner, repo, jenkins_user, jenkins_token, workflow_id)
+        return await fetch_jenkins_artifacts(owner, repo, jenkins_user, jenkins_token, config_manager.get_value("jenkins_url", "JENKINS_URL"), workflow_id)
     return {"error": "Unknown provider"}
 
 @app.post("/api/logs", summary="Upload External Logs", description="Allows external systems to push raw log data (up to 2MB) for a specific repository workflow run. Old logs are overwritten.")
@@ -215,7 +215,7 @@ async def get_logs(provider: str, owner: str, repo: str, workflow_id: Optional[s
     elif provider == "forgejo":
         return {"log": await fetch_forgejo_logs(owner, repo, forgejo_token, forgejo_url, workflow_id)}
     elif provider == "jenkins":
-        return {"log": await fetch_jenkins_logs(owner, repo, jenkins_user, jenkins_token, workflow_id)}
+        return {"log": await fetch_jenkins_logs(owner, repo, jenkins_user, jenkins_token, config_manager.get_value("jenkins_url", "JENKINS_URL"), workflow_id)}
     return {"log": "Unknown provider"}
 
 @app.get("/api/status", summary="Retrieve System Status", description="Polls all configured repositories and their workflows to fetch their current execution status, timings, and commit metadata. Used by the frontend dashboard.")
@@ -234,7 +234,7 @@ async def get_status(user: str = Depends(get_current_user)):
         elif r["provider"] == "forgejo":
             tasks.append(fetch_forgejo_status(r["owner"], r["repo"], forgejo_token, forgejo_url, r.get("workflow_id")))
         elif r["provider"] == "jenkins":
-            tasks.append(fetch_jenkins_status(r["owner"], r["repo"], jenkins_user, jenkins_token, r.get("workflow_id")))
+            tasks.append(fetch_jenkins_status(r["owner"], r["repo"], jenkins_user, jenkins_token, config_manager.get_value("jenkins_url", "JENKINS_URL"), r.get("workflow_id")))
 
     results = await asyncio.gather(*tasks)
 
@@ -297,7 +297,7 @@ async def wait_status(provider: str, owner: str, repo: str, workflow_id: Optiona
             elif provider == "forgejo":
                 result = await fetch_forgejo_status(owner, repo, forgejo_token, forgejo_url, workflow_id)
             elif provider == "jenkins":
-                result = await fetch_jenkins_status(owner, repo, jenkins_user, jenkins_token, workflow_id)
+                result = await fetch_jenkins_status(owner, repo, jenkins_user, jenkins_token, config_manager.get_value("jenkins_url", "JENKINS_URL"), workflow_id)
             else:
                 yield "\nError: Unknown provider\n"
                 break
@@ -363,7 +363,7 @@ class JsonRpcRequest(BaseModel):
 def resolve_provider_conflict(repo: str, repos: list, req_id: Any):
     matched_providers = set()
     for r in repos:
-        if r["repo"] == repo or f"{r['owner']}/{r['repo']}" == repo:
+        if r["repo"] == repo or f"{r['owner']}/{r['repo']}" == repo or (r.get("provider") == "jenkins" and r["owner"] == repo):
             matched_providers.add(r["provider"])
 
     if len(matched_providers) > 1:
@@ -536,7 +536,7 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
             if repo:
                 for r in repos:
                     # Match exact repo name or owner/repo, and check provider if specified
-                    if (r["repo"] == repo or f"{r['owner']}/{r['repo']}" == repo) and (not provider_arg or r["provider"] == provider_arg):
+                    if (r["repo"] == repo or f"{r['owner']}/{r['repo']}" == repo or (r.get("provider") == "jenkins" and r["owner"] == repo)) and (not provider_arg or r["provider"] == provider_arg):
                         target_repo_matched = True
                         if not workflow or r.get("workflow_name") == workflow or r.get("workflow_id") == workflow:
                             matched_repo = r
@@ -591,7 +591,7 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                 elif provider == "forgejo":
                     result = await fetch_forgejo_status(owner, repo_name, forgejo_token, forgejo_url, wf_id)
                 elif provider == "jenkins":
-                    result = await fetch_jenkins_status(owner, repo_name, jenkins_user, jenkins_token, wf_id)
+                    result = await fetch_jenkins_status(owner, repo_name, jenkins_user, jenkins_token, config_manager.get_value("jenkins_url", "JENKINS_URL"), wf_id)
                 else:
                     raise Exception("Unknown provider")
 
@@ -660,7 +660,7 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                         elif provider == "forgejo":
                             result = await fetch_forgejo_status(owner, repo_name, forgejo_token, forgejo_url, wf_id)
                         elif provider == "jenkins":
-                            result = await fetch_jenkins_status(owner, repo_name, jenkins_user, jenkins_token, wf_id)
+                            result = await fetch_jenkins_status(owner, repo_name, jenkins_user, jenkins_token, config_manager.get_value("jenkins_url", "JENKINS_URL"), wf_id)
                         else:
                             yield json.dumps({
                                 "jsonrpc": "2.0",

@@ -314,11 +314,18 @@ async def fetch_forgejo_artifacts(owner: str, repo: str, token: str, forgejo_url
     except Exception as e:
         return {"error": f"Error fetching Forgejo artifacts: {str(e)}"}
 
-async def fetch_jenkins_status(owner: str, repo: str, user: str, token: str, workflow_id: str = None):
+async def fetch_jenkins_status(owner: str, repo: str, user: str, token: str, jenkins_url: str, workflow_id: str = None):
     if workflow_id == "any":
         workflow_id = None
-    # repo is treated as the base URL of the Jenkins job/folder
-    base_url = repo.rstrip('/')
+        
+    if jenkins_url and repo and not repo.startswith("http"):
+        job_path_parts = repo.strip('/').split('/')
+        job_path = "/".join(f"job/{p}" for p in job_path_parts if p)
+        base_url = f"{jenkins_url.rstrip('/')}/{job_path}"
+    else:
+        # Backward compatibility for old repo definitions
+        base_url = repo.rstrip('/')
+        
     auth = (user, token) if user and token else None
 
     try:
@@ -427,11 +434,18 @@ async def _resolve_jenkins_status(client, url, owner, repo_field, max_depth=3):
 
     return _error_result("jenkins", owner, repo_field)
 
-async def fetch_jenkins_logs(owner: str, repo: str, user: str, token: str, workflow_id: str = None):
+async def fetch_jenkins_logs(owner: str, repo: str, user: str, token: str, jenkins_url: str, workflow_id: str = None):
     if workflow_id == "any":
         workflow_id = None
-    # repo is treated as the base URL of the Jenkins job/folder
-    base_url = repo.rstrip('/')
+        
+    if jenkins_url and repo and not repo.startswith("http"):
+        job_path_parts = repo.strip('/').split('/')
+        job_path = "/".join(f"job/{p}" for p in job_path_parts if p)
+        base_url = f"{jenkins_url.rstrip('/')}/{job_path}"
+    else:
+        # Backward compatibility for old repo definitions
+        base_url = repo.rstrip('/')
+        
     auth = (user, token) if user and token else None
 
     try:
@@ -473,7 +487,7 @@ async def _resolve_jenkins_logs(client, url, max_depth=3):
 
     return "Unsupported Jenkins object class."
 
-async def fetch_jenkins_artifacts(owner: str, repo: str, user: str, token: str, workflow_id: str = None):
+async def fetch_jenkins_artifacts(owner: str, repo: str, user: str, token: str, jenkins_url: str = None, workflow_id: str = None):
     if workflow_id == "any":
         workflow_id = None
     return {"error": "Jenkins artifacts not implemented yet."}

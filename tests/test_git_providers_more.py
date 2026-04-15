@@ -91,7 +91,7 @@ async def test_fetch_forgejo_artifacts(mock_get):
 @patch('api.git_providers._resolve_jenkins_status')
 async def test_fetch_jenkins_status(mock_resolve):
     mock_resolve.return_value = {"status": "success"}
-    res = await fetch_jenkins_status("owner", "repo", "user", "token")
+    res = await fetch_jenkins_status("owner", "repo", "user", "token", "http://jenkins")
     assert res["status"] == "success"
 
 @pytest.mark.asyncio
@@ -136,7 +136,7 @@ async def test_resolve_jenkins_status_folder(mock_get):
 @patch('api.git_providers._resolve_jenkins_logs')
 async def test_fetch_jenkins_logs(mock_resolve):
     mock_resolve.return_value = "logs here"
-    res = await fetch_jenkins_logs("owner", "repo", "user", "token")
+    res = await fetch_jenkins_logs("owner", "repo", "user", "token", "http://jenkins")
     assert res == "logs here"
 
 @pytest.mark.asyncio
@@ -161,5 +161,5 @@ async def test_resolve_jenkins_logs(mock_get):
 
 @pytest.mark.asyncio
 async def test_fetch_jenkins_artifacts():
-    res = await fetch_jenkins_artifacts("o", "r", "u", "t")
+    res = await fetch_jenkins_artifacts("o", "r", "u", "t", "http://jenkins")
     assert "error" in res

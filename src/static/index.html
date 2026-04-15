@@ -203,8 +203,8 @@
                     }
                 }
                 if (parts.length > 0) {
-                    owner = parts.join('/');
-                    repo = finalUrl;
+                    owner = '';
+                    repo = parts.join('/');
                 }
             } else {
                 if (this.levels[0] && this.levels[0].selectedIndex > 0) {
@@ -487,7 +487,7 @@
             }
 
             const wfDisplay = item.workflow_name ? ` <span style="font-size: 14px; color: #586069; font-weight: normal;">(${item.workflow_name})</span>` : '';
-            const displayName = item.display_name ? item.display_name : (item.provider === 'jenkins' ? item.owner : `${item.owner}/${item.repo}`);
+            const displayName = item.display_name ? item.display_name : (item.provider === 'jenkins' ? item.repo : `${item.owner}/${item.repo}`);
 
             let baseUrl = '';
             try {
