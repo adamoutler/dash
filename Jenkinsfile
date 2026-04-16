@@ -3,6 +3,11 @@ pipeline {
         label 'shark-wrangler'
     }
 
+    options {
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+        buildName "${env.JOB_NAME}#${env.BUILD_NUMBER}"
+    }
+
     stages {
         stage('Deploy') {
             environment {
