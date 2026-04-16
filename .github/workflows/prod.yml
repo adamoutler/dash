@@ -50,13 +50,18 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
 
     - name: Lowercase repository owner
       id: lowercase
       run: echo "OWNER=${GITHUB_REPOSITORY_OWNER,,}" >> $GITHUB_ENV
 
     - name: Set Version
-      run: echo "VERSION=v1.0.${{ github.run_number }}" >> $GITHUB_ENV
+      run: |
+        PREFIX=$(cat VERSION)
+        COMMIT_COUNT=$(git rev-list --count HEAD)
+        echo "VERSION=${PREFIX}.${COMMIT_COUNT}" >> $GITHUB_ENV
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
