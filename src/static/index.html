@@ -350,7 +350,8 @@
             }
         });
 
-        if(!owner || !repo) return;
+        if (!repo) return;
+        if (provider !== 'jenkins' && !owner) return;
 
         await fetch('/api/repos', {
             method: 'POST',
