@@ -102,6 +102,10 @@ async def read_favicon():
 async def read_llms_txt():
     return FileResponse(os.path.join(STATIC_DIR, "llms.txt"))
 
+@app.get("/gemini-kanban.txt", summary="Gemini Kanban Operational Example", description="Serves an operational example for Gemini CLI Kanban workflow.", include_in_schema=False)
+async def read_gemini_kanban():
+    return FileResponse(os.path.join(STATIC_DIR, "gemini-kanban.txt"))
+
 @app.get("/api", summary="Redirect to Documentation", description="Redirects visitors accessing the base /api path directly to the interactive Swagger UI at /docs.", include_in_schema=False)
 async def redirect_to_docs(user: str = Depends(get_current_user)):
     return RedirectResponse(url="/docs")

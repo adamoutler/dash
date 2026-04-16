@@ -119,3 +119,6 @@ Once the quality gate and its hook configuration (e.g., a JSON settings file) ar
 Finally, you must establish and verify positive and negative test criteria. Failing to explicitly define and test these conditions could result in a state where the quality gate can never be passed, permanently blocking resolution. To verify the gate works:
 - **Positive Test:** Create a trivial task where the act of viewing the task is itself proof of resolution. Attempt to transition or complete it to ensure the gate allows valid closures.
 - **Negative Test:** Create an impossible task (e.g., "Single-handedly construct a rocketship to serve ice cream on the moon"). Attempt to transition or complete it to ensure the gate properly rejects invalid or unsubstantiated closures.
+
+## 8.5 Further Reading
+For a complete operational example of what this system can look like when paired with a ticketing system or similar via the Gemini CLI Kanban workflow, see: [/gemini-kanban.txt](/gemini-kanban.txt)
