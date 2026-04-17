@@ -14,15 +14,54 @@ from api.storage import RepoStorage
 from api.git_providers import fetch_github_status, fetch_forgejo_status, fetch_github_logs, fetch_forgejo_logs, fetch_github_artifacts, fetch_forgejo_artifacts, fetch_jenkins_status, fetch_jenkins_logs, fetch_jenkins_artifacts, fetch_github_branches, fetch_forgejo_branches, fetch_jenkins_branches
 from api.explore import router as explore_router
 
+import subprocess
+
+def _get_app_version():
+    # Try to read baked version first (e.g., from Docker build)
+    try:
+        with open(os.path.join(os.path.dirname(__file__), "VERSION"), "r") as f:
+            return f.read().strip()
+    except Exception:
+        pass
+
+    # Fallback to dynamic calculation
+    try:
+        with open(os.path.join(os.path.dirname(__file__), "..", "VERSION"), "r") as f:
+            hc = f.read().strip()
+    except Exception:
+        hc = "0.1"
+
+    releases_count = "0"
+    commits_count = "0"
+
+    try:
+        releases = subprocess.check_output(["gh", "release", "list"], stderr=subprocess.DEVNULL).decode().strip().split("\n")
+        count = len([r for r in releases if r.strip()])
+        releases_count = str(count)
+    except Exception:
+        pass
+
+    try:
+        commits_count = subprocess.check_output(["git", "rev-list", "--count", "HEAD"], stderr=subprocess.DEVNULL).decode().strip()
+    except Exception:
+        pass
+
+    return f"v{hc}.{releases_count}.{commits_count}"
+
+APP_VERSION = _get_app_version()
+
 app = FastAPI(
     title="Dash API",
     description="API for tracking and monitoring continuous integration workflows across GitHub and Forgejo repositories.",
-    version="1.0.0"
+    version=APP_VERSION
 )
 app.include_router(explore_router)
 storage = RepoStorage()
 config_manager = ConfigManager()
 
+@app.get("/api/version", summary="Get App Version", description="Returns the application version.")
+async def get_version():
+    return {"version": APP_VERSION}
 
 class SettingsUpdate(BaseModel):
     github_token: Optional[str] = None
@@ -113,7 +152,7 @@ async def redirect_to_docs(user: str = Depends(get_current_user)):
     return RedirectResponse(url="/docs")
 
 @app.get("/api/workflows", summary="List Available Workflows", description="Queries the specified provider to discover available CI workflows for a given repository. Often used to populate selection dropdowns.")
-async def get_workflows(provider: ProviderType, owner: str, repo: str, user: str = Depends(get_current_user)):
+async def get_workflows(provider: ProviderType, owner: str, repo: str, branch: Optional[str] = None, user: str = Depends(get_current_user)):
     github_token = config_manager.get_value("github_token", "GITHUB_TOKEN")
     forgejo_token = config_manager.get_value("forgejo_token", "FORGEJO_TOKEN")
     forgejo_url = config_manager.get_value("forgejo_url", "FORGEJO_URL")
@@ -135,9 +174,12 @@ async def get_workflows(provider: ProviderType, owner: str, repo: str, user: str
             return []
         headers = {"Authorization": f"token {forgejo_token}", "Accept": "application/json"} if forgejo_token else {}
         base_url = f"{forgejo_url.rstrip('/')}/api/v1/repos/{owner}/{repo}"
+        runs_url = f"{base_url}/actions/runs?limit=50"
+        if branch:
+            runs_url += f"&branch={branch}"
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
-                resp = await client.get(f"{base_url}/actions/runs?limit=50", headers=headers)
+                resp = await client.get(runs_url, headers=headers)
                 if resp.status_code == 200:
                     runs = resp.json().get("workflow_runs", [])
                     workflows = {}
@@ -202,8 +244,8 @@ async def post_logs(provider: ProviderType, owner: str, repo: str, request: Requ
     return {"message": "Log saved successfully", "file": filename}
 
 @app.get("/api/logs", summary="Retrieve Workflow Logs", description="Fetches the execution logs for the most recent workflow run. Checks local storage first, then falls back to pulling from the git provider.")
-async def get_logs(provider: ProviderType, owner: str, repo: str, workflow_id: Optional[str] = None, user: str = Depends(get_current_user)):
-    filename = get_log_filename(provider, owner, repo, workflow_id)
+async def get_logs(provider: ProviderType, owner: str, repo: str, workflow_id: Optional[str] = None, branch: Optional[str] = None, user: str = Depends(get_current_user)):
+    filename = get_log_filename(provider, owner, repo, workflow_id, branch)
     filepath = os.path.join(LOGS_DIR, filename)
 
     if os.path.exists(filepath):
@@ -217,9 +259,9 @@ async def get_logs(provider: ProviderType, owner: str, repo: str, workflow_id: O
     jenkins_token = config_manager.get_value("jenkins_token", "JENKINS_TOKEN")
 
     if provider == "github":
-        return {"log": await fetch_github_logs(owner, repo, github_token, workflow_id)}
+        return {"log": await fetch_github_logs(owner, repo, github_token, workflow_id, branch)}
     elif provider == "forgejo":
-        return {"log": await fetch_forgejo_logs(owner, repo, forgejo_token, forgejo_url, workflow_id)}
+        return {"log": await fetch_forgejo_logs(owner, repo, forgejo_token, forgejo_url, workflow_id, branch)}
     elif provider == "jenkins":
         return {"log": await fetch_jenkins_logs(owner, repo, jenkins_user, jenkins_token, config_manager.get_value("jenkins_url", "JENKINS_URL"), workflow_id)}
     return {"log": "Unknown provider"}
@@ -292,12 +334,12 @@ async def get_status(user: str = Depends(get_current_user)):
 
 @app.post("/api/repos", summary="Track a Repository", description="Adds a new repository and/or specific workflow to the dashboard tracking list.")
 async def add_repo(item: RepoItem, user: str = Depends(get_current_user)):
-    storage.add_repo(item.provider, item.owner, item.repo, item.custom_links, item.workflow_id, item.workflow_name)
+    storage.add_repo(item.provider, item.owner, item.repo, item.custom_links, item.workflow_id, item.workflow_name, item.branch)
     return {"message": "added"}
 
 @app.delete("/api/repos", summary="Untrack a Repository", description="Removes a specific repository and workflow combination from the dashboard tracking list.")
 async def remove_repo(item: RepoItem, user: str = Depends(get_current_user)):
-    storage.remove_repo(item.provider, item.owner, item.repo, item.workflow_id)
+    storage.remove_repo(item.provider, item.owner, item.repo, item.workflow_id, item.branch)
     return {"message": "removed"}
 
 @app.get("/api/wait", summary="Stream Execution Status", description="Provides a real-time event stream that periodically checks a workflow's status and pushes an update to the client once it has completed.")

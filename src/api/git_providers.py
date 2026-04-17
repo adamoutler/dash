@@ -239,8 +239,9 @@ async def fetch_github_logs(owner: str, repo: str, token: str, workflow_id: str 
     except Exception as e:
         return f"Error fetching GitHub logs: {str(e)}"
 
-async def fetch_forgejo_logs(owner: str, repo: str, token: str, forgejo_url: str, workflow_id: str = None):
+async def fetch_forgejo_logs(owner: str, repo: str, token: str, forgejo_url: str, workflow_id: str = None, branch: str = None):
     wf_param = f"&workflow_id={workflow_id}" if workflow_id and workflow_id != "any" else ""
+    branch_param = f"&branch={branch}" if branch else ""
 
     return f"""Forgejo/Gitea logs are not natively available via API in this version.
 
@@ -248,7 +249,7 @@ To view logs here, please configure your CI pipeline to upload logs to the dashb
 You can do this by adding a step that runs on failure using the always() method.
 
 Example curl command to upload logs:
-curl -X POST "${{DASH_API_URL}}/api/logs?provider=forgejo&owner={owner}&repo={repo}{wf_param}" \\
+curl -X POST "${{DASH_API_URL}}/api/logs?provider=forgejo&owner={owner}&repo={repo}{wf_param}{branch_param}" \\
      -H "Authorization: Bearer ${{DASH_API_TOKEN}}" \\
      -H "Content-Type: text/plain" \\
      --data-binary @path/to/your/logfile.log
@@ -329,7 +330,7 @@ async def fetch_forgejo_artifacts(owner: str, repo: str, token: str, forgejo_url
     except Exception as e:
         return {"error": f"Error fetching Forgejo artifacts: {str(e)}"}
 
-async def fetch_jenkins_status(owner: str, repo: str, user: str, token: str, jenkins_url: str, workflow_id: str = None):
+async def fetch_jenkins_status(owner: str, repo: str, user: str, token: str, jenkins_url: str, workflow_id: str = None, branch: str = None):
     if workflow_id == "any":
         workflow_id = None
         

@@ -60,12 +60,12 @@ class RepoStorage:
             with open(self.file_path, "w") as f:
                 json.dump(repos, f, indent=2)
 
-    def add_repo(self, provider, owner, repo, custom_links=None, workflow_id=None, workflow_name=None):
+    def add_repo(self, provider, owner, repo, custom_links=None, workflow_id=None, workflow_name=None, branch=None):
         """
         Adds a new repository or updates an existing one if it matches the unique constraints.
 
         Behavioral Contracts:
-        - Uniqueness is defined by (provider, owner, repo, workflow_id).
+        - Uniqueness is defined by (provider, owner, repo, workflow_id, branch).
         - If a match is found, the repository's configuration is updated.
         """
         repos = self.get_repos()
@@ -76,9 +76,11 @@ class RepoStorage:
             new_repo["workflow_id"] = workflow_id
         if workflow_name:
             new_repo["workflow_name"] = workflow_name
+        if branch:
+            new_repo["branch"] = branch
 
         for i, r in enumerate(repos):
-            if r["provider"] == provider and r["owner"] == owner and r["repo"] == repo and r.get("workflow_id") == workflow_id:
+            if r["provider"] == provider and r["owner"] == owner and r["repo"] == repo and r.get("workflow_id") == workflow_id and r.get("branch") == branch:
                 repos[i] = new_repo
                 self._save_repos(repos)
                 return
@@ -86,7 +88,7 @@ class RepoStorage:
         repos.append(new_repo)
         self._save_repos(repos)
 
-    def remove_repo(self, provider, owner, repo, workflow_id=None):
+    def remove_repo(self, provider, owner, repo, workflow_id=None, branch=None):
         """
         Removes a repository from tracking.
 
@@ -94,7 +96,7 @@ class RepoStorage:
         - Silently does nothing if the repository is not found.
         """
         repos = self.get_repos()
-        repos = [r for r in repos if not (r["provider"] == provider and r["owner"] == owner and r["repo"] == repo and r.get("workflow_id") == workflow_id)]
+        repos = [r for r in repos if not (r["provider"] == provider and r["owner"] == owner and r["repo"] == repo and r.get("workflow_id") == workflow_id and r.get("branch") == branch)]
         self._save_repos(repos)
 
     def update_repo_run_url(self, provider, owner, repo, run_url, workflow_id=None):

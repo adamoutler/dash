@@ -132,6 +132,16 @@ def test_mcp_get_logs():
     assert "error" not in data
     assert "api/logs?provider=github&owner=testowner&repo=testrepo&workflow_id=wf_1" in data["result"]
 
+def test_mcp_get_logs_with_branch():
+    storage.add_repo("github", "testowner", "testrepo", None, "wf_1", "feature-branch")
+    response = client.post("/mcp",
+                           json={"jsonrpc": "2.0", "method": "get_logs", "id": 5, "params": {"repo": "testrepo", "branch": "feature-branch"}},
+                           auth=("testuser", "testpass"))
+    assert response.status_code == 200
+    data = response.json()
+    assert "error" not in data
+    assert "branch=feature-branch" in data["result"]
+
 import asyncio
 original_sleep = asyncio.sleep
 

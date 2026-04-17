@@ -98,3 +98,13 @@ def test_get_branches():
     response = client.get("/api/branches?provider=github&owner=test&repo=testrepo", auth=auth)
     assert response.status_code == 200
     assert "branches" in response.json() or isinstance(response.json(), list)
+
+def test_log_filename_isolation():
+    from main import get_log_filename
+    name_no_branch = get_log_filename("github", "owner", "repo")
+    name_with_branch = get_log_filename("github", "owner", "repo", branch="main")
+    name_with_other_branch = get_log_filename("github", "owner", "repo", branch="feature")
+    assert name_no_branch != name_with_branch
+    assert name_with_branch != name_with_other_branch
+    assert "_main_" in name_with_branch
+    assert "_feature_" in name_with_other_branch

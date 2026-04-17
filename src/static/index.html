@@ -83,6 +83,9 @@
         <input type="hidden" id="repo" value="">
         <input type="hidden" id="workflow" value="">
         <input type="hidden" id="workflowName" value="">
+        <div style="margin-top: 10px; margin-bottom: 10px;">
+            <input type="text" id="branchInput" placeholder="Branch (optional, e.g. main)" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; background-color: var(--bg-surface); color: var(--text-primary); box-sizing: border-box;">
+        </div>
         <div id="linksContainer">
             <!-- Dynamic links go here -->
         </div>
@@ -100,7 +103,8 @@
     <footer style="margin-top: 40px; margin-bottom: 20px; text-align: center; font-size: 12px;">
         <a href="/configure" aria-label="Dashboard configuration" style="color: #bbb; text-decoration: none; transition: color 0.2s; margin-right: 15px;" onmouseover="this.style.color='#666'" onmouseout="this.style.color='#bbb'">⚙️ Configure Dashboard</a>
         <a href="/api" aria-label="API Documentation" style="color: #bbb; text-decoration: none; transition: color 0.2s; margin-right: 15px;" onmouseover="this.style.color='#666'" onmouseout="this.style.color='#bbb'">📚 API Docs</a>
-        <a href="/llms.txt" aria-label="API automation instructions for AI and LLM agents" style="color: #bbb; text-decoration: none; transition: color 0.2s;" onmouseover="this.style.color='#666'" onmouseout="this.style.color='#bbb'">🤖 LLM API Instructions</a>
+        <a href="/llms.txt" aria-label="API automation instructions for AI and LLM agents" style="color: #bbb; text-decoration: none; transition: color 0.2s; margin-right: 15px;" onmouseover="this.style.color='#666'" onmouseout="this.style.color='#bbb'">🤖 LLM API Instructions</a>
+        <span id="appVersionDisplay" style="color: #bbb;">v0.0.0</span>
     </footer>
 </div>
 
@@ -284,7 +288,7 @@
         container.appendChild(row);
     }
 
-    function toggleForm(isEdit = false, provider = 'github', owner = '', repo = '', customLinksRaw = '', workflowId = '', workflowName = '') {
+    function toggleForm(isEdit = false, provider = 'github', owner = '', repo = '', customLinksRaw = '', workflowId = '', workflowName = '', branch = '') {
         const form = document.getElementById('addForm');
         const addBtn = document.getElementById('addRepoBtn');
         document.getElementById('linksContainer').innerHTML = ''; // clear links
@@ -302,6 +306,7 @@
             document.getElementById('provider').value = provider;
             document.getElementById('provider').disabled = true;
             document.getElementById('submitBtn').innerText = 'Update';
+            document.getElementById('branchInput').value = branch;
 
             pathBrowser.setEditMode(owner, repo, workflowId, workflowName);
 
@@ -322,6 +327,7 @@
                 document.getElementById('provider').value = 'github';
                 document.getElementById('provider').disabled = false;
                 document.getElementById('submitBtn').innerText = 'Add';
+                document.getElementById('branchInput').value = '';
 
                 pathBrowser.reset();
 
@@ -339,6 +345,7 @@
         const repo = document.getElementById('repo').value.trim();
         const workflow_id = document.getElementById('workflow').value.trim();
         const workflow_name = document.getElementById('workflowName').value.trim();
+        const branch = document.getElementById('branchInput').value.trim();
 
         const linkRows = document.querySelectorAll('.link-row');
         const custom_links = [];
@@ -356,7 +363,7 @@
         await fetch('/api/repos', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({provider, owner, repo, custom_links, workflow_id, workflow_name})
+            body: JSON.stringify({provider, owner, repo, custom_links, workflow_id, workflow_name, branch: branch || null})
         });
 
         document.getElementById('submitBtn').innerText = 'Add';
@@ -373,11 +380,11 @@
         fetchStatuses();
     }
 
-    async function removeRepo(provider, owner, repo, workflowId) {
+    async function removeRepo(provider, owner, repo, workflowId, branch) {
         await fetch('/api/repos', {
             method: 'DELETE',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({provider, owner, repo, workflow_id: workflowId || null})
+            body: JSON.stringify({provider, owner, repo, workflow_id: workflowId || null, branch: branch || null})
         });
         fetchStatuses();
     }
@@ -473,7 +480,7 @@
                 </div>` : '';
 
             const customLinksEncoded = encodeURIComponent(JSON.stringify(item.custom_links || []));
-            const repoId = `${item.provider}-${item.owner}-${item.repo}-${item.workflow_id || 'all'}`.replace(/[^a-zA-Z0-9-]/g, '-');
+            const repoId = `${item.provider}-${item.owner}-${item.repo}-${item.workflow_id || 'all'}-${item.branch || 'all'}`.replace(/[^a-zA-Z0-9-]/g, '-');
 
             let progressHtml = '';
             let duration = item.expected_duration_sec || item.average_recent_duration || 0;
@@ -488,6 +495,7 @@
             }
 
             const wfDisplay = item.workflow_name ? ` <span style="font-size: 14px; color: #586069; font-weight: normal;">(${item.workflow_name})</span>` : '';
+            const branchDisplay = item.branch ? ` <span style="font-size: 14px; color: #586069; font-weight: normal;">[${item.branch}]</span>` : '';
             const displayName = item.display_name ? item.display_name : (item.provider === 'jenkins' ? item.repo : `${item.owner}/${item.repo}`);
 
             let baseUrl = '';
@@ -513,14 +521,14 @@
                     <div class="info-header">
                         <div style="display: flex; flex-direction: column; flex-grow: 1; min-width: 0; gap: 2px;">
                             <a href="${item.repo_url}" target="_blank" style="text-decoration: none; color: inherit; display: flex; align-items: center; min-width: 0;">
-                                ${faviconHtml}<span class="repo-name">${displayName}${wfDisplay}</span>
+                                ${faviconHtml}<span class="repo-name">${displayName}${branchDisplay}${wfDisplay}</span>
                             </a>
                             <span class="time-text">${formatTime(item.updated_at)}</span>
                         </div>
                         <div class="actions-container">
                             <button class="icon-btn" style="color: #6a737d;" onclick="fetchLogs('${item.provider}', '${item.owner}', '${item.repo}', '${item.workflow_id || ''}')" title="View Logs">📄</button>
-                            <button class="icon-btn edit-btn" onclick="toggleForm(true, '${item.provider}', '${item.owner}', '${item.repo}', '${customLinksEncoded}', '${item.workflow_id || ''}', '${item.workflow_name || ''}')" title="Edit">✎</button>
-                            <button class="icon-btn delete-btn" onclick="removeRepo('${item.provider}', '${item.owner}', '${item.repo}', '${item.workflow_id || ''}')" title="Remove">✕</button>
+                            <button class="icon-btn edit-btn" onclick="toggleForm(true, '${item.provider}', '${item.owner}', '${item.repo}', '${customLinksEncoded}', '${item.workflow_id || ''}', '${item.workflow_name || ''}', '${item.branch || ''}')" title="Edit">✎</button>
+                            <button class="icon-btn delete-btn" onclick="removeRepo('${item.provider}', '${item.owner}', '${item.repo}', '${item.workflow_id || ''}', '${item.branch || ''}')" title="Remove">✕</button>
                         </div>
                     </div>
                     <a href="${item.repo_url}" target="_blank" style="text-decoration: none; color: inherit;">
@@ -594,7 +602,20 @@
         }
     }
 
+    async function fetchVersion() {
+        try {
+            const res = await fetch('/api/version');
+            if (res.ok) {
+                const data = await res.json();
+                document.getElementById('appVersionDisplay').innerText = `v${data.version}`;
+            }
+        } catch (e) {
+            console.error("Error fetching version:", e);
+        }
+    }
+
     fetchProviders();
+    fetchVersion();
 
     // Initial fetch and poll every 30s
     fetchStatuses();

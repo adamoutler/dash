@@ -1,4 +1,4 @@
-# 🛑 Stop AI Hallucinations! Your Ultimate Dash & Agent Guardrail 🚀
+# <img src="docs/icon.jpg" width="40" height="40" alt="Dash Logo" style="vertical-align: middle"> 🛑 Stop AI Hallucinations! Your Ultimate Dash & Agent Guardrail 🚀
 
 > **The essential CI feedback loop and guardrail for autonomous AI development.**
 
