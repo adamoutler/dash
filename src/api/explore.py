@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, HTTPException, Query, Path, Depends
 from api.auth import get_current_user
-from api.config import ConfigManager
+from api.config import ConfigManager, ProviderType
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +32,7 @@ class Node(BaseModel):
     metadata: Optional[Dict[str, Any]] = Field(default=None, description="Provider-specific metadata")
 
 class NodeList(BaseModel):
-    provider: str = Field(..., description="The git provider (github, forgejo, jenkins)")
+    provider: ProviderType = Field(..., description="The git provider")
     path: str = Field(..., description="The path that was explored")
     nodes: List[Node] = Field(..., description="List of child nodes under the given path")
 
@@ -237,24 +237,24 @@ async def jenkins_explore(path: str) -> List[Node]:
             raise HTTPException(status_code=401, detail="Jenkins authentication failed. Please verify your User and Token in the configuration.")
         raise ProviderPathNotFoundError(f"Jenkins path {path} not found")
 
-async def fetch_provider_nodes(provider: str, path: str) -> List[Node]:
-    if provider == "github":
+async def fetch_provider_nodes(provider: ProviderType, path: str) -> List[Node]:
+    if provider == ProviderType.github:
         return await github_explore(path)
-    elif provider == "forgejo":
+    elif provider in (ProviderType.forgejo, ProviderType.gitea):
         return await forgejo_explore(path)
-    elif provider == "jenkins":
+    elif provider == ProviderType.jenkins:
         return await jenkins_explore(path)
     else:
         raise ValueError(f"Unknown provider routing: {provider}")
 
 @router.get("/{provider}/nodes", response_model=NodeList)
 async def get_nodes(
-    provider: str = Path(..., description="The provider name (github, forgejo, jenkins)"),
-    path: str = Query("", description="The hierarchical path to explore. Use an empty string for the root level."),
+    provider: ProviderType = Path(..., description="The provider name"),
+    path: str = Query("", description="The hierarchical path to explore. Leave empty for the root level. GitHub/Gitea/Forgejo expect 'owner/repo'. Jenkins expects 'job/name-of-job' (the 'job/' prefix is required by its API)."),
     user: str = Depends(get_current_user)
 ):
-    provider_lower = provider.lower()
-    if provider_lower not in ["github", "forgejo", "jenkins"]:
+    provider_lower = provider.value.lower()
+    if provider_lower not in ["github", "forgejo", "gitea", "jenkins"]:
         raise HTTPException(status_code=400, detail=f"Unsupported provider: {provider}")
 
     cache_key = f"{provider_lower}:{path}"
@@ -262,8 +262,8 @@ async def get_nodes(
         return explore_cache[cache_key]
 
     try:
-        nodes = await fetch_provider_nodes(provider_lower, path)
-        result = NodeList(provider=provider_lower, path=path, nodes=nodes)
+        nodes = await fetch_provider_nodes(provider, path)
+        result = NodeList(provider=provider, path=path, nodes=nodes)
         explore_cache[cache_key] = result
         return result
     except ProviderPathNotFoundError as e:

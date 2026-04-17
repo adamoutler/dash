@@ -8,7 +8,7 @@ import httpx
 from pydantic import BaseModel, Field
 from typing import Optional, Any
 from api.auth import require_basic_auth, get_current_user
-from api.config import ConfigManager
+from api.config import ConfigManager, ProviderType
 from fastapi import Depends
 from api.storage import RepoStorage
 from api.git_providers import fetch_github_status, fetch_forgejo_status, fetch_github_logs, fetch_forgejo_logs, fetch_github_artifacts, fetch_forgejo_artifacts, fetch_jenkins_status, fetch_jenkins_logs, fetch_jenkins_artifacts
@@ -58,7 +58,7 @@ async def get_enabled_providers(user: str = Depends(get_current_user)):
     return {"providers": providers}
 
 class RepoItem(BaseModel):
-    provider: str = Field(..., description="The git provider, e.g., 'github' or 'forgejo'")
+    provider: ProviderType = Field(..., description="The git provider")
     owner: str = Field(..., description="The repository owner or organization name")
     repo: str = Field(..., description="The repository name")
     custom_links: Optional[list] = Field(None, description="An optional list of custom links (name and url) to display alongside the repository")
@@ -111,7 +111,7 @@ async def redirect_to_docs(user: str = Depends(get_current_user)):
     return RedirectResponse(url="/docs")
 
 @app.get("/api/workflows", summary="List Available Workflows", description="Queries the specified provider to discover available CI workflows for a given repository. Often used to populate selection dropdowns.")
-async def get_workflows(provider: str, owner: str, repo: str, user: str = Depends(get_current_user)):
+async def get_workflows(provider: ProviderType, owner: str, repo: str, user: str = Depends(get_current_user)):
     github_token = config_manager.get_value("github_token", "GITHUB_TOKEN")
     forgejo_token = config_manager.get_value("forgejo_token", "FORGEJO_TOKEN")
     forgejo_url = config_manager.get_value("forgejo_url", "FORGEJO_URL")
@@ -150,7 +150,7 @@ async def get_workflows(provider: str, owner: str, repo: str, user: str = Depend
     return []
 
 @app.get("/api/artifacts", summary="Fetch Workflow Artifacts", description="Retrieves a list of generated artifacts for the latest run of a specific repository or workflow.")
-async def get_artifacts(provider: str, owner: str, repo: str, workflow_id: Optional[str] = None, user: str = Depends(get_current_user)):
+async def get_artifacts(provider: ProviderType, owner: str, repo: str, workflow_id: Optional[str] = None, user: str = Depends(get_current_user)):
     github_token = config_manager.get_value("github_token", "GITHUB_TOKEN")
     forgejo_token = config_manager.get_value("forgejo_token", "FORGEJO_TOKEN")
     forgejo_url = config_manager.get_value("forgejo_url", "FORGEJO_URL")
@@ -166,7 +166,7 @@ async def get_artifacts(provider: str, owner: str, repo: str, workflow_id: Optio
     return {"error": "Unknown provider"}
 
 @app.post("/api/logs", summary="Upload External Logs", description="Allows external systems to push raw log data (up to 2MB) for a specific repository workflow run. Old logs are overwritten.")
-async def post_logs(provider: str, owner: str, repo: str, request: Request, workflow_id: Optional[str] = None, user: str = Depends(get_current_user)):
+async def post_logs(provider: ProviderType, owner: str, repo: str, request: Request, workflow_id: Optional[str] = None, user: str = Depends(get_current_user)):
     # To prevent DDOS from massive payloads, read the request stream in chunks
     # and buffer only the last MAX_LOG_SIZE bytes in a cyclic buffer
     buffer = bytearray()
@@ -200,7 +200,7 @@ async def post_logs(provider: str, owner: str, repo: str, request: Request, work
     return {"message": "Log saved successfully", "file": filename}
 
 @app.get("/api/logs", summary="Retrieve Workflow Logs", description="Fetches the execution logs for the most recent workflow run. Checks local storage first, then falls back to pulling from the git provider.")
-async def get_logs(provider: str, owner: str, repo: str, workflow_id: Optional[str] = None, user: str = Depends(get_current_user)):
+async def get_logs(provider: ProviderType, owner: str, repo: str, workflow_id: Optional[str] = None, user: str = Depends(get_current_user)):
     filename = get_log_filename(provider, owner, repo, workflow_id)
     filepath = os.path.join(LOGS_DIR, filename)
 
@@ -283,7 +283,7 @@ async def remove_repo(item: RepoItem, user: str = Depends(get_current_user)):
     return {"message": "removed"}
 
 @app.get("/api/wait", summary="Stream Execution Status", description="Provides a real-time event stream that periodically checks a workflow's status and pushes an update to the client once it has completed.")
-async def wait_status(provider: str, owner: str, repo: str, workflow_id: Optional[str] = None, user: str = Depends(get_current_user)):
+async def wait_status(provider: ProviderType, owner: str, repo: str, workflow_id: Optional[str] = None, user: str = Depends(get_current_user)):
     github_token = config_manager.get_value("github_token", "GITHUB_TOKEN")
     forgejo_token = config_manager.get_value("forgejo_token", "FORGEJO_TOKEN")
     forgejo_url = config_manager.get_value("forgejo_url", "FORGEJO_URL")
