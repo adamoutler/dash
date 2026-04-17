@@ -11,7 +11,7 @@ from api.auth import require_basic_auth, get_current_user
 from api.config import ConfigManager, ProviderType
 from fastapi import Depends
 from api.storage import RepoStorage
-from api.git_providers import fetch_github_status, fetch_forgejo_status, fetch_github_logs, fetch_forgejo_logs, fetch_github_artifacts, fetch_forgejo_artifacts, fetch_jenkins_status, fetch_jenkins_logs, fetch_jenkins_artifacts
+from api.git_providers import fetch_github_status, fetch_forgejo_status, fetch_github_logs, fetch_forgejo_logs, fetch_github_artifacts, fetch_forgejo_artifacts, fetch_jenkins_status, fetch_jenkins_logs, fetch_jenkins_artifacts, fetch_github_branches, fetch_forgejo_branches, fetch_jenkins_branches
 from api.explore import router as explore_router
 
 app = FastAPI(
@@ -61,6 +61,7 @@ class RepoItem(BaseModel):
     provider: ProviderType = Field(..., description="The git provider")
     owner: str = Field(..., description="The repository owner or organization name")
     repo: str = Field(..., description="The repository name")
+    branch: Optional[str] = Field(None, description="The specific branch to track. If omitted, uses the default branch.")
     custom_links: Optional[list] = Field(None, description="An optional list of custom links (name and url) to display alongside the repository")
     workflow_id: Optional[str] = Field(None, description="The specific workflow ID or filename to track. If omitted, the dashboard tracks the most recent run of any workflow.")
     workflow_name: Optional[str] = Field(None, description="A friendly, human-readable name for the selected workflow")
@@ -75,12 +76,13 @@ STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 os.makedirs(STATIC_DIR, exist_ok=True)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
-def get_log_filename(provider, owner, repo, workflow_id=None):
+def get_log_filename(provider, owner, repo, workflow_id=None, branch=None):
     safe_provider = "".join(c for c in provider if c.isalnum() or c in "-_")
     safe_owner = "".join(c for c in owner if c.isalnum() or c in "-_")
     safe_repo = "".join(c for c in repo if c.isalnum() or c in "-_")
     safe_wf = ("_" + "".join(c for c in workflow_id if c.isalnum() or c in "-_")) if workflow_id else ""
-    return f"{safe_provider}_{safe_owner}_{safe_repo}{safe_wf}_latest.log"
+    safe_branch = ("_" + "".join(c for c in branch if c.isalnum() or c in "-_")) if branch else ""
+    return f"{safe_provider}_{safe_owner}_{safe_repo}{safe_branch}{safe_wf}_latest.log"
 
 @app.get("/", summary="Dashboard UI", description="Serves the main HTML interface for the Dash.", include_in_schema=False)
 async def read_index(user: str = Depends(require_basic_auth)):
@@ -150,7 +152,7 @@ async def get_workflows(provider: ProviderType, owner: str, repo: str, user: str
     return []
 
 @app.get("/api/artifacts", summary="Fetch Workflow Artifacts", description="Retrieves a list of generated artifacts for the latest run of a specific repository or workflow.")
-async def get_artifacts(provider: ProviderType, owner: str, repo: str, workflow_id: Optional[str] = None, user: str = Depends(get_current_user)):
+async def get_artifacts(provider: ProviderType, owner: str, repo: str, workflow_id: Optional[str] = None, branch: Optional[str] = None, user: str = Depends(get_current_user)):
     github_token = config_manager.get_value("github_token", "GITHUB_TOKEN")
     forgejo_token = config_manager.get_value("forgejo_token", "FORGEJO_TOKEN")
     forgejo_url = config_manager.get_value("forgejo_url", "FORGEJO_URL")
@@ -158,15 +160,15 @@ async def get_artifacts(provider: ProviderType, owner: str, repo: str, workflow_
     jenkins_token = config_manager.get_value("jenkins_token", "JENKINS_TOKEN")
 
     if provider == "github":
-        return await fetch_github_artifacts(owner, repo, github_token, workflow_id)
+        return await fetch_github_artifacts(owner, repo, github_token, workflow_id, branch)
     elif provider == "forgejo":
-        return await fetch_forgejo_artifacts(owner, repo, forgejo_token, forgejo_url, workflow_id)
+        return await fetch_forgejo_artifacts(owner, repo, forgejo_token, forgejo_url, workflow_id, branch)
     elif provider == "jenkins":
-        return await fetch_jenkins_artifacts(owner, repo, jenkins_user, jenkins_token, config_manager.get_value("jenkins_url", "JENKINS_URL"), workflow_id)
+        return await fetch_jenkins_artifacts(owner, repo, jenkins_user, jenkins_token, config_manager.get_value("jenkins_url", "JENKINS_URL"), workflow_id, branch)
     return {"error": "Unknown provider"}
 
 @app.post("/api/logs", summary="Upload External Logs", description="Allows external systems to push raw log data (up to 2MB) for a specific repository workflow run. Old logs are overwritten.")
-async def post_logs(provider: ProviderType, owner: str, repo: str, request: Request, workflow_id: Optional[str] = None, user: str = Depends(get_current_user)):
+async def post_logs(provider: ProviderType, owner: str, repo: str, request: Request, workflow_id: Optional[str] = None, branch: Optional[str] = None, user: str = Depends(get_current_user)):
     # To prevent DDOS from massive payloads, read the request stream in chunks
     # and buffer only the last MAX_LOG_SIZE bytes in a cyclic buffer
     buffer = bytearray()
@@ -191,7 +193,7 @@ async def post_logs(provider: ProviderType, owner: str, repo: str, request: Requ
     if not safe_provider or not safe_owner or not safe_repo:
         raise HTTPException(status_code=400, detail="Invalid provider, owner, or repo.")
 
-    filename = get_log_filename(provider, owner, repo, workflow_id)
+    filename = get_log_filename(provider, owner, repo, workflow_id, branch)
     filepath = os.path.join(LOGS_DIR, filename)
 
     with open(filepath, "w", encoding="utf-8") as f:
@@ -222,7 +224,23 @@ async def get_logs(provider: ProviderType, owner: str, repo: str, workflow_id: O
         return {"log": await fetch_jenkins_logs(owner, repo, jenkins_user, jenkins_token, config_manager.get_value("jenkins_url", "JENKINS_URL"), workflow_id)}
     return {"log": "Unknown provider"}
 
-@app.get("/api/status", summary="Retrieve System Status", description="Polls all configured repositories and their workflows to fetch their current execution status, timings, and commit metadata. Used by the frontend dashboard.")
+@app.get("/api/branches", summary="List Available Branches", description="Queries the specified provider to discover available branches for a given repository.")
+async def get_branches(provider: ProviderType, owner: str, repo: str, user: str = Depends(get_current_user)):
+    github_token = config_manager.get_value("github_token", "GITHUB_TOKEN")
+    forgejo_token = config_manager.get_value("forgejo_token", "FORGEJO_TOKEN")
+    forgejo_url = config_manager.get_value("forgejo_url", "FORGEJO_URL")
+    jenkins_user = config_manager.get_value("jenkins_user", "JENKINS_USER")
+    jenkins_token = config_manager.get_value("jenkins_token", "JENKINS_TOKEN")
+
+    if provider == "github":
+        return await fetch_github_branches(owner, repo, github_token)
+    elif provider == "forgejo" or provider == "gitea":
+        return await fetch_forgejo_branches(owner, repo, forgejo_token, forgejo_url)
+    elif provider == "jenkins":
+        return await fetch_jenkins_branches(owner, repo, jenkins_user, jenkins_token, config_manager.get_value("jenkins_url", "JENKINS_URL"))
+    return []
+
+@app.get("/api/status", summary="Retrieve all build statuses.", description="Polls all configured repositories and their workflows to fetch their current execution status, timings, and commit metadata. Used by the frontend dashboard.")
 async def get_status(user: str = Depends(get_current_user)):
     repos = storage.get_repos()
     tasks = []
@@ -234,11 +252,11 @@ async def get_status(user: str = Depends(get_current_user)):
 
     for r in repos:
         if r["provider"] == "github":
-            tasks.append(fetch_github_status(r["owner"], r["repo"], github_token, r.get("workflow_id")))
+            tasks.append(fetch_github_status(r["owner"], r["repo"], github_token, r.get("workflow_id"), r.get("branch")))
         elif r["provider"] == "forgejo":
-            tasks.append(fetch_forgejo_status(r["owner"], r["repo"], forgejo_token, forgejo_url, r.get("workflow_id")))
+            tasks.append(fetch_forgejo_status(r["owner"], r["repo"], forgejo_token, forgejo_url, r.get("workflow_id"), r.get("branch")))
         elif r["provider"] == "jenkins":
-            tasks.append(fetch_jenkins_status(r["owner"], r["repo"], jenkins_user, jenkins_token, config_manager.get_value("jenkins_url", "JENKINS_URL"), r.get("workflow_id")))
+            tasks.append(fetch_jenkins_status(r["owner"], r["repo"], jenkins_user, jenkins_token, config_manager.get_value("jenkins_url", "JENKINS_URL"), r.get("workflow_id"), r.get("branch")))
 
     results = await asyncio.gather(*tasks)
 
@@ -283,7 +301,7 @@ async def remove_repo(item: RepoItem, user: str = Depends(get_current_user)):
     return {"message": "removed"}
 
 @app.get("/api/wait", summary="Stream Execution Status", description="Provides a real-time event stream that periodically checks a workflow's status and pushes an update to the client once it has completed.")
-async def wait_status(provider: ProviderType, owner: str, repo: str, workflow_id: Optional[str] = None, user: str = Depends(get_current_user)):
+async def wait_status(provider: ProviderType, owner: str, repo: str, workflow_id: Optional[str] = None, branch: Optional[str] = None, user: str = Depends(get_current_user)):
     github_token = config_manager.get_value("github_token", "GITHUB_TOKEN")
     forgejo_token = config_manager.get_value("forgejo_token", "FORGEJO_TOKEN")
     forgejo_url = config_manager.get_value("forgejo_url", "FORGEJO_URL")
@@ -297,11 +315,11 @@ async def wait_status(provider: ProviderType, owner: str, repo: str, workflow_id
 
         while True:
             if provider == "github":
-                result = await fetch_github_status(owner, repo, github_token, workflow_id)
+                result = await fetch_github_status(owner, repo, github_token, workflow_id, branch)
             elif provider == "forgejo":
-                result = await fetch_forgejo_status(owner, repo, forgejo_token, forgejo_url, workflow_id)
+                result = await fetch_forgejo_status(owner, repo, forgejo_token, forgejo_url, workflow_id, branch)
             elif provider == "jenkins":
-                result = await fetch_jenkins_status(owner, repo, jenkins_user, jenkins_token, config_manager.get_value("jenkins_url", "JENKINS_URL"), workflow_id)
+                result = await fetch_jenkins_status(owner, repo, jenkins_user, jenkins_token, config_manager.get_value("jenkins_url", "JENKINS_URL"), workflow_id, branch)
             else:
                 yield "\nError: Unknown provider\n"
                 break
@@ -439,7 +457,8 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                                 "properties": {
                                     "provider": {"type": "string", "description": "Optional provider name."},
                                     "repo": {"type": "string", "description": "The name or owner/name of the repository. Use 'help' to list available repos."},
-                                    "workflow": {"type": "string", "description": "Optional workflow name or ID."}
+                                    "workflow": {"type": "string", "description": "Optional workflow name or ID."},
+                                    "branch": {"type": "string", "description": "Optional branch name."}
                                 },
                                 "required": ["repo"]
                             }
@@ -452,7 +471,20 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                                 "properties": {
                                     "provider": {"type": "string", "description": "Optional provider name."},
                                     "repo": {"type": "string", "description": "The name or owner/name of the repository. Use 'help' to list available repos."},
-                                    "workflow": {"type": "string", "description": "Optional workflow name or ID."}
+                                    "workflow": {"type": "string", "description": "Optional workflow name or ID."},
+                                    "branch": {"type": "string", "description": "Optional branch name."}
+                                },
+                                "required": ["repo"]
+                            }
+                        },
+                        {
+                            "name": "get_branches",
+                            "description": "List all available branches for a repository.",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {
+                                    "provider": {"type": "string", "description": "Optional provider name."},
+                                    "repo": {"type": "string", "description": "The name or owner/name of the repository."}
                                 },
                                 "required": ["repo"]
                             }
@@ -465,7 +497,8 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                                 "properties": {
                                     "provider": {"type": "string", "description": "Optional provider name."},
                                     "repo": {"type": "string", "description": "The name or owner/name of the repository. Use 'help' to list available repos."},
-                                    "workflow": {"type": "string", "description": "Optional workflow name or ID."}
+                                    "workflow": {"type": "string", "description": "Optional workflow name or ID."},
+                                    "branch": {"type": "string", "description": "Optional branch name."}
                                 },
                                 "required": ["repo"]
                             }
@@ -482,12 +515,14 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
             provider_arg = call_args.get("provider") or request.headers.get("x-provider")
             repo = call_args.get("repo") or call_args.get("project") or request.headers.get("x-repo")
             workflow = call_args.get("workflow") or request.headers.get("x-workflow")
+            branch = call_args.get("branch") or request.headers.get("x-branch")
         else:
             provider_arg = params.get("provider") or request.headers.get("x-provider")
             repo = params.get("repo") or params.get("project") or request.headers.get("x-repo")
             workflow = params.get("workflow") or request.headers.get("x-workflow")
+            branch = params.get("branch") or request.headers.get("x-branch")
 
-        if method_name in ["get_status", "get_logs", "wait"]:
+        if method_name in ["get_status", "get_logs", "wait", "get_branches"]:
             repos = storage.get_repos()
 
             if repo == "help":
@@ -582,6 +617,7 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
             owner = matched_repo["owner"]
             repo_name = matched_repo["repo"]
             wf_id = matched_repo.get("workflow_id")
+            target_branch = branch or matched_repo.get("branch")
 
             if method_name == "get_status":
                 github_token = config_manager.get_value("github_token", "GITHUB_TOKEN")
@@ -591,11 +627,11 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                 jenkins_token = config_manager.get_value("jenkins_token", "JENKINS_TOKEN")
 
                 if provider == "github":
-                    result = await fetch_github_status(owner, repo_name, github_token, wf_id)
+                    result = await fetch_github_status(owner, repo_name, github_token, wf_id, target_branch)
                 elif provider == "forgejo":
-                    result = await fetch_forgejo_status(owner, repo_name, forgejo_token, forgejo_url, wf_id)
+                    result = await fetch_forgejo_status(owner, repo_name, forgejo_token, forgejo_url, wf_id, target_branch)
                 elif provider == "jenkins":
-                    result = await fetch_jenkins_status(owner, repo_name, jenkins_user, jenkins_token, config_manager.get_value("jenkins_url", "JENKINS_URL"), wf_id)
+                    result = await fetch_jenkins_status(owner, repo_name, jenkins_user, jenkins_token, config_manager.get_value("jenkins_url", "JENKINS_URL"), wf_id, target_branch)
                 else:
                     raise Exception("Unknown provider")
 
@@ -640,6 +676,8 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                 url = f"{base_url}/api/logs?provider={provider}&owner={owner}&repo={repo_name}"
                 if wf_id:
                     url += f"&workflow_id={wf_id}"
+                if target_branch:
+                    url += f"&branch={target_branch}"
 
                 return {
                     "jsonrpc": "2.0",
@@ -660,11 +698,11 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
 
                     while True:
                         if provider == "github":
-                            result = await fetch_github_status(owner, repo_name, github_token, wf_id)
+                            result = await fetch_github_status(owner, repo_name, github_token, wf_id, target_branch)
                         elif provider == "forgejo":
-                            result = await fetch_forgejo_status(owner, repo_name, forgejo_token, forgejo_url, wf_id)
+                            result = await fetch_forgejo_status(owner, repo_name, forgejo_token, forgejo_url, wf_id, target_branch)
                         elif provider == "jenkins":
-                            result = await fetch_jenkins_status(owner, repo_name, jenkins_user, jenkins_token, config_manager.get_value("jenkins_url", "JENKINS_URL"), wf_id)
+                            result = await fetch_jenkins_status(owner, repo_name, jenkins_user, jenkins_token, config_manager.get_value("jenkins_url", "JENKINS_URL"), wf_id, target_branch)
                         else:
                             yield json.dumps({
                                 "jsonrpc": "2.0",
@@ -706,6 +744,29 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                             })
                             break
                 return StreamingResponse(wait_generator(), media_type="application/json")
+
+            elif method_name == "get_branches":
+                github_token = config_manager.get_value("github_token", "GITHUB_TOKEN")
+                forgejo_token = config_manager.get_value("forgejo_token", "FORGEJO_TOKEN")
+                forgejo_url = config_manager.get_value("forgejo_url", "FORGEJO_URL")
+                jenkins_user = config_manager.get_value("jenkins_user", "JENKINS_USER")
+                jenkins_token = config_manager.get_value("jenkins_token", "JENKINS_TOKEN")
+
+                if provider == "github":
+                    branches = await fetch_github_branches(owner, repo_name, github_token)
+                elif provider == "forgejo" or provider == "gitea":
+                    branches = await fetch_forgejo_branches(owner, repo_name, forgejo_token, forgejo_url)
+                elif provider == "jenkins":
+                    branches = await fetch_jenkins_branches(owner, repo_name, jenkins_user, jenkins_token, config_manager.get_value("jenkins_url", "JENKINS_URL"))
+                else:
+                    branches = []
+
+                res_obj = {"branches": branches}
+                return {
+                    "jsonrpc": "2.0",
+                    "id": req.id,
+                    "result": {"content": [{"type": "text", "text": json.dumps(res_obj)}]} if is_tool_call else res_obj
+                }
 
         else:
             return {

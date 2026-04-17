@@ -22,13 +22,15 @@ def _get_status_weight(r):
         return 2
     return 1
 
-async def fetch_github_status(owner: str, repo: str, token: str, workflow_id: str = None):
+async def fetch_github_status(owner: str, repo: str, token: str, workflow_id: str = None, branch: str = None):
     if workflow_id == "any":
         workflow_id = None
     headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github.v3+json"} if token else {}
     base_url = f"https://api.github.com/repos/{owner}/{repo}"
 
     runs_url = f"{base_url}/actions/workflows/{workflow_id}/runs?per_page=10" if workflow_id else f"{base_url}/actions/runs?per_page=10"
+    if branch:
+        runs_url += f"&branch={branch}" if "?" in runs_url else f"?branch={branch}"
 
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
@@ -97,7 +99,7 @@ async def fetch_github_status(owner: str, repo: str, token: str, workflow_id: st
         err["commit_message"] = f"Exception: {str(e)}"
         return err
 
-async def fetch_forgejo_status(owner: str, repo: str, token: str, forgejo_url: str, workflow_id: str = None):
+async def fetch_forgejo_status(owner: str, repo: str, token: str, forgejo_url: str, workflow_id: str = None, branch: str = None):
     """
     Fetches the CI status for a specific Forgejo repository and workflow.
 
@@ -120,10 +122,14 @@ async def fetch_forgejo_status(owner: str, repo: str, token: str, forgejo_url: s
     headers = {"Authorization": f"token {token}", "Accept": "application/json"} if token else {}
     base_url = f"{forgejo_url.rstrip('/')}/api/v1/repos/{owner}/{repo}"
 
+    runs_url = f"{base_url}/actions/runs?limit=30"
+    if branch:
+        runs_url += f"&branch={branch}"
+
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            runs_resp = await client.get(f"{base_url}/actions/runs?limit=30", headers=headers)
-            commits_resp = await client.get(f"{base_url}/commits?limit=1", headers=headers)
+            runs_resp = await client.get(runs_url, headers=headers)
+            commits_resp = await client.get(f"{base_url}/commits?limit=1" + (f"&sha={branch}" if branch else ""), headers=headers)
 
             if runs_resp.status_code != 200 or commits_resp.status_code != 200:
                 return _error_result("forgejo", owner, repo)
@@ -200,12 +206,14 @@ async def fetch_forgejo_status(owner: str, repo: str, token: str, forgejo_url: s
     except Exception:
         return _error_result("forgejo", owner, repo)
 
-async def fetch_github_logs(owner: str, repo: str, token: str, workflow_id: str = None):
+async def fetch_github_logs(owner: str, repo: str, token: str, workflow_id: str = None, branch: str = None):
     if workflow_id == "any":
         workflow_id = None
     headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github.v3+json"} if token else {}
     base_url = f"https://api.github.com/repos/{owner}/{repo}"
     runs_url = f"{base_url}/actions/workflows/{workflow_id}/runs?per_page=1" if workflow_id else f"{base_url}/actions/runs?per_page=1"
+    if branch:
+        runs_url += f"&branch={branch}" if "?" in runs_url else f"?branch={branch}"
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
             runs_resp = await client.get(runs_url, headers=headers)
@@ -251,12 +259,14 @@ Recommendations:
 - Be sure to test your configuration to verify that logs are successfully uploaded and appear here.
 """
 
-async def fetch_github_artifacts(owner: str, repo: str, token: str, workflow_id: str = None):
+async def fetch_github_artifacts(owner: str, repo: str, token: str, workflow_id: str = None, branch: str = None):
     if workflow_id == "any":
         workflow_id = None
     headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github.v3+json"} if token else {}
     base_url = f"https://api.github.com/repos/{owner}/{repo}"
     runs_url = f"{base_url}/actions/workflows/{workflow_id}/runs?per_page=1" if workflow_id else f"{base_url}/actions/runs?per_page=1"
+    if branch:
+        runs_url += f"&branch={branch}" if "?" in runs_url else f"?branch={branch}"
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
             runs_resp = await client.get(runs_url, headers=headers)
@@ -274,16 +284,21 @@ async def fetch_github_artifacts(owner: str, repo: str, token: str, workflow_id:
     except Exception as e:
         return {"error": f"Error fetching GitHub artifacts: {str(e)}"}
 
-async def fetch_forgejo_artifacts(owner: str, repo: str, token: str, forgejo_url: str, workflow_id: str = None):
+async def fetch_forgejo_artifacts(owner: str, repo: str, token: str, forgejo_url: str, workflow_id: str = None, branch: str = None):
     if workflow_id == "any":
         workflow_id = None
     if not forgejo_url:
         return {"error": "Forgejo URL not configured."}
     base_url = f"{forgejo_url.rstrip('/')}/api/v1/repos/{owner}/{repo}"
     headers = {"Authorization": f"token {token}", "Accept": "application/json"} if token else {}
+    
+    runs_url = f"{base_url}/actions/runs?limit=30"
+    if branch:
+        runs_url += f"&branch={branch}"
+        
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            runs_resp = await client.get(f"{base_url}/actions/runs?limit=30", headers=headers)
+            runs_resp = await client.get(runs_url, headers=headers)
             if runs_resp.status_code != 200:
                 return {"error": f"Failed to fetch runs. HTTP {runs_resp.status_code}"}
 
@@ -487,7 +502,36 @@ async def _resolve_jenkins_logs(client, url, max_depth=3):
 
     return "Unsupported Jenkins object class."
 
-async def fetch_jenkins_artifacts(owner: str, repo: str, user: str, token: str, jenkins_url: str = None, workflow_id: str = None):
+async def fetch_jenkins_artifacts(owner: str, repo: str, user: str, token: str, jenkins_url: str = None, workflow_id: str = None, branch: str = None):
     if workflow_id == "any":
         workflow_id = None
     return {"error": "Jenkins artifacts not implemented yet."}
+
+async def fetch_github_branches(owner: str, repo: str, token: str):
+    headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github.v3+json"} if token else {}
+    base_url = f"https://api.github.com/repos/{owner}/{repo}/branches"
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(base_url, headers=headers)
+            if resp.status_code == 200:
+                return [b["name"] for b in resp.json()]
+            return []
+    except Exception:
+        return []
+
+async def fetch_forgejo_branches(owner: str, repo: str, token: str, forgejo_url: str):
+    if not forgejo_url:
+        return []
+    headers = {"Authorization": f"token {token}", "Accept": "application/json"} if token else {}
+    base_url = f"{forgejo_url.rstrip('/')}/api/v1/repos/{owner}/{repo}/branches"
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(base_url, headers=headers)
+            if resp.status_code == 200:
+                return [b["name"] for b in resp.json()]
+            return []
+    except Exception:
+        return []
+
+async def fetch_jenkins_branches(owner: str, repo: str, user: str, token: str, jenkins_url: str):
+    return []

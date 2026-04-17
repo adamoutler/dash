@@ -65,7 +65,7 @@ def test_mcp_tools_list():
     assert "result" in data
     assert "tools" in data["result"]
     tools = data["result"]["tools"]
-    assert len(tools) == 3
+    assert len(tools) == 4
     tool_names = [t["name"] for t in tools]
     assert "get_status" in tool_names
     assert "get_logs" in tool_names

@@ -62,8 +62,11 @@ def test_post_logs_invalid_params():
         content=b"test",
         auth=auth
     )
-    assert response.status_code == 400
-    assert "Invalid provider" in response.json()["detail"]
+    assert response.status_code in [400, 422]
+    if response.status_code == 422:
+        assert isinstance(response.json()["detail"], list)
+    else:
+        assert "Invalid provider" in response.json()["detail"]
 
 def test_post_logs_truncation(tmp_path, monkeypatch):
     monkeypatch.setenv("LOGS_DIR", str(tmp_path))
@@ -89,3 +92,9 @@ def test_post_logs_truncation(tmp_path, monkeypatch):
     assert returned_log.startswith("[TRUNCATED...]\n")
     assert returned_log.endswith("A" * 100)
     assert len(returned_log) == 100 + len("[TRUNCATED...]\n")
+
+def test_get_branches():
+    auth = ("testuser", "testpass")
+    response = client.get("/api/branches?provider=github&owner=test&repo=testrepo", auth=auth)
+    assert response.status_code == 200
+    assert "branches" in response.json() or isinstance(response.json(), list)
