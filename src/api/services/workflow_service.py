@@ -82,7 +82,7 @@ class WorkflowService:
         raw_status = res_obj.get("status", "unknown").lower()
         status_emoji = {"success": "✅", "failure": "❌", "running": "🏃", "in_progress": "🏃", "unknown": "❓"}.get(raw_status, "❓")
         status_text = {"success": "Pass", "failure": "Fail", "running": "Running", "in_progress": "Running", "unknown": "Unknown"}.get(raw_status, raw_status.capitalize())
-        duration_info = f" ⏳ {int(res_obj['expected_duration_sec'] * 1.05)}s" if res_obj.get("expected_duration_sec") else ""
+        duration_info = f" {int(res_obj['expected_duration_sec'] * 1.05)}s" if res_obj.get("expected_duration_sec") else ""
 
         if res_obj.get("display_name"):
             display_name = res_obj["display_name"]
@@ -91,10 +91,10 @@ class WorkflowService:
 
         return (
             "```yaml\n"
-            f"status: {status_emoji} {status_text}\n"
+            f"status: {status_emoji}  {status_text}\n"
             f"repo: {display_name}\n"
-            f"updated: 🕜 {res_obj.get('started_at') or 'N/A'}{duration_info}\n"
-            f"commit: 📜 {res_obj.get('commit_message') or 'N/A'}\n"
+            f"started: {res_obj.get('started_at') or 'N/A'}{duration_info}\n"
+            f"commit: {res_obj.get('commit_message') or 'N/A'}\n"
             "```"
         )
 

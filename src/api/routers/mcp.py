@@ -167,7 +167,7 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
             if repo == "help":
                 provider_emojis = {"github": "🐙", "forgejo": "🍵", "jenkins": "🤵"}
                 valid_repos = [f"{provider_emojis.get(r.get('provider'), '⚒️')} {r['owner']}" if r.get("provider") == "jenkins" else f"{provider_emojis.get(r.get('provider'), '⚒️')} {r['owner']}/{r['repo']}" for r in repos]
-                legend = "\n\nField Definitions:\n✅ Success | ❌ Failure | 🏃 Running | ❓ Unknown\n🕜 Started | ⏳ Expected Duration | 📜 Commit Message\n\nProviders:\n🐙 GitHub | 🍵 Forgejo/Gitea | 🤵 Jenkins | ⚒️ Other"
+                legend = "\n\nField Definitions:\n✅ Success | ❌ Failure | 🏃 Running | ❓ Unknown\nStarted | Expected Duration | Commit Message\n\nProviders:\n🐙 GitHub | 🍵 Forgejo/Gitea | 🤵 Jenkins | ⚒️ Other"
                 help_text = "\n".join(valid_repos) + legend
                 return {
                     "jsonrpc": "2.0",
@@ -229,7 +229,7 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                         for r in repos
                         if (r["repo"] == repo or f"{r['owner']}/{r['repo']}" == repo or (r.get("provider") == "jenkins" and r["owner"] == repo)) and (not provider_arg or r["provider"] == provider_arg)
                     ]
-                    legend = "\n\nField Definitions:\n✅ Success | ❌ Failure | 🏃 Running | ❓ Unknown\n🕜 Started | ⏳ Expected Duration | 📜 Commit Message\n\nProviders:\n🐙 GitHub | 🍵 Forgejo/Gitea | 🤵 Jenkins | ⚒️ Workflow"
+                    legend = "\n\nField Definitions:\n✅ Success | ❌ Failure | 🏃 Running | ❓ Unknown\nStarted | Expected Duration | Commit Message\n\nProviders:\n🐙 GitHub | 🍵 Forgejo/Gitea | 🤵 Jenkins | ⚒️ Workflow"
                     help_text = f"Workflow '{workflow}' not found for repo '{repo}'. Valid workflows:\n" + "\n".join(valid_workflows) + legend
                     return {
                         "jsonrpc": "2.0",
@@ -241,7 +241,7 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                 else:
                     provider_emojis = {"github": "🐙", "forgejo": "🍵", "jenkins": "🤵"}
                     valid_repos = [f"{provider_emojis.get(r.get('provider'), '⚒️')} {r['owner']}" if r.get("provider") == "jenkins" else f"{provider_emojis.get(r.get('provider'), '⚒️')} {r['owner']}/{r['repo']}" for r in repos]
-                    legend = "\n\nField Definitions:\n✅ Success | ❌ Failure | 🏃 Running | ❓ Unknown\n🕜 Started | ⏳ Expected Duration | 📜 Commit Message\n\nProviders:\n🐙 GitHub | 🍵 Forgejo/Gitea | 🤵 Jenkins | ⚒️ Other"
+                    legend = "\n\nField Definitions:\n✅ Success | ❌ Failure | 🏃 Running | ❓ Unknown\nStarted | Expected Duration | Commit Message\n\nProviders:\n🐙 GitHub | 🍵 Forgejo/Gitea | 🤵 Jenkins | ⚒️ Other"
                     help_text = f"Repo '{repo}' not found. Valid repos:\n" + "\n".join(valid_repos) + legend
                     return {
                         "jsonrpc": "2.0",
