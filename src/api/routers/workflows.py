@@ -121,7 +121,12 @@ async def wait_status(provider: ProviderType, owner: str, repo: str, workflow_id
                     status = "no job in progress"
                     result["status"] = status
 
-                yield f"\nStatus changed to {status}\n{json.dumps(result)}\n"
+                yaml_lines = ["```yaml"]
+                for k, v in result.items():
+                    yaml_lines.append(f"{k}: {v}")
+                yaml_lines.append("```")
+                yaml_str = "\n".join(yaml_lines)
+                yield f"\nStatus changed to {status}\n{yaml_str}\n"
                 break
 
     return StreamingResponse(event_stream(), media_type="text/plain")

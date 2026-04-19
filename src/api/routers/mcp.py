@@ -168,7 +168,7 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                 provider_emojis = {"github": "🐙", "forgejo": "🍵", "jenkins": "🤵"}
                 valid_repos = [f"{provider_emojis.get(r.get('provider'), '⚒️')} {r['owner']}" if r.get("provider") == "jenkins" else f"{provider_emojis.get(r.get('provider'), '⚒️')} {r['owner']}/{r['repo']}" for r in repos]
                 legend = "\n\nField Definitions:\n✅ Success | ❌ Failure | 🏃 Running | ❓ Unknown\nStarted | Expected Duration | Commit Message\n\nProviders:\n🐙 GitHub | 🍵 Forgejo/Gitea | 🤵 Jenkins | ⚒️ Other"
-                help_text = "\n".join(valid_repos) + legend
+                help_text = f"```yaml\nvalid_repos: [{', '.join(valid_repos)}]\n```" + legend
                 return {
                     "jsonrpc": "2.0",
                     "id": req.id,
@@ -193,7 +193,7 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                     if r["repo"] == target_repo or f"{r['owner']}/{r['repo']}" == target_repo
                 ]
                 legend = "\n\nField Definitions:\n✅ Success | ❌ Failure | 🏃 Running | ❓ Unknown"
-                help_text = f"Valid workflows for {target_repo}: {', '.join(valid_workflows)}{legend}"
+                help_text = f"```yaml\nvalid_workflows: [{', '.join(valid_workflows)}]\n```" + legend
                 return {
                     "jsonrpc": "2.0",
                     "id": req.id,
@@ -230,7 +230,7 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                         if (r["repo"] == repo or f"{r['owner']}/{r['repo']}" == repo or (r.get("provider") == "jenkins" and r["owner"] == repo)) and (not provider_arg or r["provider"] == provider_arg)
                     ]
                     legend = "\n\nField Definitions:\n✅ Success | ❌ Failure | 🏃 Running | ❓ Unknown\nStarted | Expected Duration | Commit Message\n\nProviders:\n🐙 GitHub | 🍵 Forgejo/Gitea | 🤵 Jenkins | ⚒️ Workflow"
-                    help_text = f"Workflow '{workflow}' not found for repo '{repo}'. Valid workflows:\n" + "\n".join(valid_workflows) + legend
+                    help_text = f"Workflow '{workflow}' not found for repo '{repo}'.\n```yaml\nvalid_workflows: [{', '.join(valid_workflows)}]\n```\n" + legend
                     return {
                         "jsonrpc": "2.0",
                         "id": req.id,
@@ -242,7 +242,7 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                     provider_emojis = {"github": "🐙", "forgejo": "🍵", "jenkins": "🤵"}
                     valid_repos = [f"{provider_emojis.get(r.get('provider'), '⚒️')} {r['owner']}" if r.get("provider") == "jenkins" else f"{provider_emojis.get(r.get('provider'), '⚒️')} {r['owner']}/{r['repo']}" for r in repos]
                     legend = "\n\nField Definitions:\n✅ Success | ❌ Failure | 🏃 Running | ❓ Unknown\nStarted | Expected Duration | Commit Message\n\nProviders:\n🐙 GitHub | 🍵 Forgejo/Gitea | 🤵 Jenkins | ⚒️ Other"
-                    help_text = f"Repo '{repo}' not found. Valid repos:\n" + "\n".join(valid_repos) + legend
+                    help_text = f"Repo '{repo}' not found.\n```yaml\nvalid_repos: [{', '.join(valid_repos)}]\n```\n" + legend
                     return {
                         "jsonrpc": "2.0",
                         "id": req.id,
@@ -296,7 +296,7 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                 return {
                     "jsonrpc": "2.0",
                     "id": req.id,
-                    "result": {"content": [{"type": "text", "text": json.dumps({"url": url})}]} if is_tool_call else url
+                    "result": {"content": [{"type": "text", "text": f"```yaml\nurl: {url}\n```"}]} if is_tool_call else url
                 }
 
             elif method_name == "wait":
@@ -333,10 +333,15 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                                 "average_recent_duration": result.get("average_recent_duration"),
                                 "status": status
                             }
+                            yaml_lines = ["```yaml"]
+                            for k, v in res_obj.items():
+                                yaml_lines.append(f"{k}: {v}")
+                            yaml_lines.append("```")
+                            yaml_str = "\n".join(yaml_lines)
                             yield json.dumps({
                                 "jsonrpc": "2.0",
                                 "id": req.id,
-                                "result": {"content": [{"type": "text", "text": json.dumps(res_obj)}]} if is_tool_call else res_obj
+                                "result": {"content": [{"type": "text", "text": yaml_str}]} if is_tool_call else res_obj
                             })
                             break
                 return StreamingResponse(wait_generator(), media_type="application/json")
@@ -345,10 +350,11 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                 branches = await workflow_service.get_branches(provider, owner, repo_name)
                 
                 res_obj = {"branches": branches}
+                yaml_str = f"```yaml\nbranches: [{', '.join(branches)}]\n```"
                 return {
                     "jsonrpc": "2.0",
                     "id": req.id,
-                    "result": {"content": [{"type": "text", "text": json.dumps(res_obj)}]} if is_tool_call else res_obj
+                    "result": {"content": [{"type": "text", "text": yaml_str}]} if is_tool_call else res_obj
                 }
 
         else:
