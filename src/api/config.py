@@ -2,17 +2,12 @@ import os
 import json
 import logging
 from filelock import FileLock
-from enum import Enum
 
 logger = logging.getLogger(__name__)
 
 DATA_DIR = os.getenv("DATA_DIR", "data")
-
-class ProviderType(str, Enum):
-    github = "github"
-    forgejo = "forgejo"
-    gitea = "gitea"
-    jenkins = "jenkins"
+LOGS_DIR = os.getenv("LOGS_DIR", "logs")
+os.makedirs(LOGS_DIR, exist_ok=True)
 
 class ConfigManager:
     def __init__(self, filepath=os.path.join(DATA_DIR, "settings.json")):

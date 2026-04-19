@@ -1,6 +1,6 @@
 import json
 import os
-from filelock import FileLock, Timeout
+from filelock import FileLock
 
 DATA_DIR = os.getenv("DATA_DIR", "data")
 

@@ -138,3 +138,18 @@ h1 { margin: 0; }
 .theme-toggle-btn:hover { transform: scale(1.1); opacity: 1; }
 
 .header-right { display: flex; align-items: center; gap: 15px; }
+
+/* Floating Version Indicator */
+.version-display {
+    position: fixed;
+    bottom: 12px;
+    right: 12px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    background: transparent;
+    opacity: 0.6;
+    pointer-events: none; /* Prevents blocking clicks on mobile/desktop */
+    z-index: 9999;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    transition: opacity 0.3s ease;
+}

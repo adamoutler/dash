@@ -10,7 +10,7 @@ def setup_env(monkeypatch):
     monkeypatch.setenv("DASHBOARD_USER", "testuser")
     monkeypatch.setenv("DASHBOARD_PASSWORD", "testpass")
 
-@patch('api.explore.httpx.AsyncClient.get')
+@patch('api.providers.jenkins.httpx.AsyncClient.get')
 def test_jenkins_explore_missing_url(mock_get, monkeypatch):
     auth = ("testuser", "testpass")
     import api.explore as explore_module
@@ -28,7 +28,7 @@ def test_jenkins_explore_missing_url(mock_get, monkeypatch):
     assert response.status_code == 400
     assert "Jenkins URL is not configured" in response.json()["detail"]
 
-@patch('api.explore.httpx.AsyncClient.get')
+@patch('api.providers.jenkins.httpx.AsyncClient.get')
 def test_jenkins_explore_auth_failed(mock_get, monkeypatch):
     auth = ("testuser", "testpass")
     import api.explore as explore_module
@@ -48,7 +48,7 @@ def test_jenkins_explore_auth_failed(mock_get, monkeypatch):
     assert response.status_code == 401
     assert "Jenkins authentication failed" in response.json()["detail"]
 
-@patch('api.explore.httpx.AsyncClient.get')
+@patch('api.providers.jenkins.httpx.AsyncClient.get')
 def test_jenkins_explore_success(mock_get, monkeypatch):
     auth = ("testuser", "testpass")
     import api.explore as explore_module

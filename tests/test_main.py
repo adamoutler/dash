@@ -23,7 +23,7 @@ def test_add_and_get_repos():
     assert response.status_code == 200
 
     # Test getting statuses (mocking fetch)
-    with patch("main.fetch_github_status") as mock_fetch:
+    with patch("api.providers.github.GitHubProvider.fetch_status") as mock_fetch:
         mock_fetch.return_value = {"status": "success"}
         response = client.get("/api/status", auth=auth)
         assert response.status_code == 200
@@ -72,8 +72,8 @@ def test_post_logs_truncation(tmp_path, monkeypatch):
     monkeypatch.setenv("LOGS_DIR", str(tmp_path))
     auth = ("testuser", "testpass")
 
-    import main
-    monkeypatch.setattr(main, "MAX_LOG_SIZE", 100)
+    import api.routers.workflows
+    monkeypatch.setattr(api.routers.workflows, "MAX_LOG_SIZE", 100)
 
     large_log = b"A" * 150
     response = client.post(
@@ -100,7 +100,7 @@ def test_get_branches():
     assert "branches" in response.json() or isinstance(response.json(), list)
 
 def test_log_filename_isolation():
-    from main import get_log_filename
+    from api.services.workflow_service import get_log_filename
     name_no_branch = get_log_filename("github", "owner", "repo")
     name_with_branch = get_log_filename("github", "owner", "repo", branch="main")
     name_with_other_branch = get_log_filename("github", "owner", "repo", branch="feature")

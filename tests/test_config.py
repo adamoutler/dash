@@ -37,8 +37,8 @@ def client_with_mocked_config(tmp_path, monkeypatch):
     filepath = tmp_path / "settings.json"
     mock_cm = ConfigManager(filepath=str(filepath))
 
-    import main
-    monkeypatch.setattr(main, "config_manager", mock_cm)
+    import api.routers.settings
+    monkeypatch.setattr(api.routers.settings, "config_manager", mock_cm)
 
     return TestClient(app), mock_cm
 

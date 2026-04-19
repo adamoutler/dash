@@ -1,21 +1,12 @@
 import pytest
 import httpx
 from unittest.mock import patch, MagicMock
-from api.git_providers import (
-    fetch_forgejo_status,
-    fetch_github_logs,
-    fetch_forgejo_logs,
-    fetch_github_artifacts,
-    fetch_forgejo_artifacts,
-    fetch_jenkins_status,
-    fetch_jenkins_logs,
-    fetch_jenkins_artifacts,
-    _resolve_jenkins_status,
-    _resolve_jenkins_logs
-)
+from api.providers.github import GitHubProvider
+from api.providers.forgejo import ForgejoProvider
+from api.providers.jenkins import JenkinsProvider
 
 @pytest.mark.asyncio
-@patch('api.git_providers.httpx.AsyncClient.get')
+@patch('api.providers.forgejo.httpx.AsyncClient.get')
 async def test_fetch_forgejo_status(mock_get):
     mock_runs = MagicMock()
     mock_runs.status_code = 200
@@ -27,11 +18,12 @@ async def test_fetch_forgejo_status(mock_get):
 
     mock_get.side_effect = [mock_runs, mock_commits]
 
-    res = await fetch_forgejo_status("owner", "repo", "token", "http://forgejo")
+    provider = ForgejoProvider("token", "http://forgejo")
+    res = await provider.fetch_status("owner", "repo")
     assert res["status"] == "success"
 
 @pytest.mark.asyncio
-@patch('api.git_providers.httpx.AsyncClient.get')
+@patch('api.providers.github.httpx.AsyncClient.get')
 async def test_fetch_github_logs(mock_get):
     mock_runs = MagicMock()
     mock_runs.status_code = 200
@@ -47,16 +39,18 @@ async def test_fetch_github_logs(mock_get):
 
     mock_get.side_effect = [mock_runs, mock_jobs, mock_logs]
 
-    res = await fetch_github_logs("owner", "repo", "token")
+    provider = GitHubProvider("token")
+    res = await provider.fetch_logs("owner", "repo")
     assert res == "logs here"
 
 @pytest.mark.asyncio
 async def test_fetch_forgejo_logs():
-    res = await fetch_forgejo_logs("owner", "repo", "token", "url")
+    provider = ForgejoProvider("token", "url")
+    res = await provider.fetch_logs("owner", "repo")
     assert "Forgejo/Gitea logs are not natively available" in res
 
 @pytest.mark.asyncio
-@patch('api.git_providers.httpx.AsyncClient.get')
+@patch('api.providers.github.httpx.AsyncClient.get')
 async def test_fetch_github_artifacts(mock_get):
     mock_runs = MagicMock()
     mock_runs.status_code = 200
@@ -68,11 +62,12 @@ async def test_fetch_github_artifacts(mock_get):
 
     mock_get.side_effect = [mock_runs, mock_artifacts]
 
-    res = await fetch_github_artifacts("owner", "repo", "token")
+    provider = GitHubProvider("token")
+    res = await provider.fetch_artifacts("owner", "repo")
     assert "artifacts" in res
 
 @pytest.mark.asyncio
-@patch('api.git_providers.httpx.AsyncClient.get')
+@patch('api.providers.forgejo.httpx.AsyncClient.get')
 async def test_fetch_forgejo_artifacts(mock_get):
     mock_runs = MagicMock()
     mock_runs.status_code = 200
@@ -84,18 +79,20 @@ async def test_fetch_forgejo_artifacts(mock_get):
 
     mock_get.side_effect = [mock_runs, mock_artifacts]
 
-    res = await fetch_forgejo_artifacts("owner", "repo", "token", "http://forgejo")
+    provider = ForgejoProvider("token", "http://forgejo")
+    res = await provider.fetch_artifacts("owner", "repo")
     assert "artifacts" in res
 
 @pytest.mark.asyncio
-@patch('api.git_providers._resolve_jenkins_status')
+@patch('api.providers.jenkins.JenkinsProvider._resolve_jenkins_status')
 async def test_fetch_jenkins_status(mock_resolve):
     mock_resolve.return_value = {"status": "success"}
-    res = await fetch_jenkins_status("owner", "repo", "user", "token", "http://jenkins")
+    provider = JenkinsProvider("user", "token", "http://jenkins")
+    res = await provider.fetch_status("owner", "repo")
     assert res["status"] == "success"
 
 @pytest.mark.asyncio
-@patch('api.git_providers.httpx.AsyncClient.get')
+@patch('api.providers.jenkins.httpx.AsyncClient.get')
 async def test_resolve_jenkins_status_leaf(mock_get):
     mock_resp = MagicMock()
     mock_resp.status_code = 200
@@ -105,12 +102,13 @@ async def test_resolve_jenkins_status_leaf(mock_get):
     }
     mock_get.return_value = mock_resp
     client = httpx.AsyncClient()
-    res = await _resolve_jenkins_status(client, "url", "owner", "repo")
+    provider = JenkinsProvider("user", "token", "http://jenkins")
+    res = await provider._resolve_jenkins_status(client, "url", "owner", "repo")
     assert res["status"] == "success"
     await client.aclose()
 
 @pytest.mark.asyncio
-@patch('api.git_providers.httpx.AsyncClient.get')
+@patch('api.providers.jenkins.httpx.AsyncClient.get')
 async def test_resolve_jenkins_status_folder(mock_get):
     mock_folder = MagicMock()
     mock_folder.status_code = 200
@@ -128,19 +126,21 @@ async def test_resolve_jenkins_status_folder(mock_get):
 
     mock_get.side_effect = [mock_folder, mock_job]
     client = httpx.AsyncClient()
-    res = await _resolve_jenkins_status(client, "url", "owner", "repo")
+    provider = JenkinsProvider("user", "token", "http://jenkins")
+    res = await provider._resolve_jenkins_status(client, "url", "owner", "repo")
     assert res["status"] == "success"
     await client.aclose()
 
 @pytest.mark.asyncio
-@patch('api.git_providers._resolve_jenkins_logs')
+@patch('api.providers.jenkins.JenkinsProvider._resolve_jenkins_logs')
 async def test_fetch_jenkins_logs(mock_resolve):
     mock_resolve.return_value = "logs here"
-    res = await fetch_jenkins_logs("owner", "repo", "user", "token", "http://jenkins")
+    provider = JenkinsProvider("user", "token", "http://jenkins")
+    res = await provider.fetch_logs("owner", "repo")
     assert res == "logs here"
 
 @pytest.mark.asyncio
-@patch('api.git_providers.httpx.AsyncClient.get')
+@patch('api.providers.jenkins.httpx.AsyncClient.get')
 async def test_resolve_jenkins_logs(mock_get):
     mock_resp = MagicMock()
     mock_resp.status_code = 200
@@ -155,11 +155,13 @@ async def test_resolve_jenkins_logs(mock_get):
 
     mock_get.side_effect = [mock_resp, mock_logs]
     client = httpx.AsyncClient()
-    res = await _resolve_jenkins_logs(client, "url")
+    provider = JenkinsProvider("user", "token", "http://jenkins")
+    res = await provider._resolve_jenkins_logs(client, "url")
     assert res == "log text"
     await client.aclose()
 
 @pytest.mark.asyncio
 async def test_fetch_jenkins_artifacts():
-    res = await fetch_jenkins_artifacts("o", "r", "u", "t", "http://jenkins")
+    provider = JenkinsProvider("o", "r", "http://jenkins")
+    res = await provider.fetch_artifacts("o", "r")
     assert "error" in res

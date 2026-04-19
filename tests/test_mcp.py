@@ -3,14 +3,18 @@ import tempfile
 import pytest
 from unittest.mock import patch
 from fastapi.testclient import TestClient
-from main import app, storage
+from main import app
+from api.storage import RepoStorage
 
+storage = RepoStorage()
 client = TestClient(app)
 
 @pytest.fixture(autouse=True)
 def setup_env(monkeypatch):
     monkeypatch.setenv("DASHBOARD_USER", "testuser")
     monkeypatch.setenv("DASHBOARD_PASSWORD", "testpass")
+    import api.routers.mcp
+    monkeypatch.setattr(api.routers.mcp, "storage", storage)
     with tempfile.TemporaryDirectory() as tmpdir:
         old_filepath = storage.file_path
         storage.file_path = os.path.join(tmpdir, "repos.json")
@@ -71,7 +75,7 @@ def test_mcp_tools_list():
     assert "get_logs" in tool_names
     assert "wait" in tool_names
 
-@patch("main.fetch_github_status")
+@patch("api.providers.github.GitHubProvider.fetch_status")
 def test_mcp_tools_call(mock_fetch):
     mock_fetch.return_value = {
         "url": "http://example.com",
@@ -101,7 +105,7 @@ def test_mcp_tools_call(mock_fetch):
     assert "✅" in content
     assert "repo: testowner/testrepo" in content
 
-@patch("main.fetch_github_status")
+@patch("api.providers.github.GitHubProvider.fetch_status")
 def test_mcp_get_status(mock_fetch):
     mock_fetch.return_value = {
         "url": "http://example.com",
@@ -130,6 +134,7 @@ def test_mcp_get_logs():
     assert response.status_code == 200
     data = response.json()
     assert "error" not in data
+    # The URL might be absolute now because of request.base_url
     assert "api/logs?provider=github&owner=testowner&repo=testrepo&workflow_id=wf_1" in data["result"]
 
 def test_mcp_get_logs_with_branch():
@@ -146,7 +151,7 @@ import asyncio
 original_sleep = asyncio.sleep
 
 @pytest.mark.asyncio
-@patch("main.fetch_github_status")
+@patch("api.providers.github.GitHubProvider.fetch_status")
 @patch("asyncio.sleep")
 async def test_mcp_wait(mock_sleep, mock_fetch):
     async def fake_sleep(seconds):

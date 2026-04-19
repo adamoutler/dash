@@ -10,7 +10,7 @@ def setup_env(monkeypatch):
     monkeypatch.setenv("DASHBOARD_USER", "testuser")
     monkeypatch.setenv("DASHBOARD_PASSWORD", "testpass")
 
-@patch('api.explore.httpx.AsyncClient.get')
+@patch('api.providers.github.httpx.AsyncClient.get')
 def test_github_explore_root(mock_get, monkeypatch):
     auth = ("testuser", "testpass")
     monkeypatch.setenv("GITHUB_TOKEN", "token")
@@ -30,7 +30,7 @@ def test_github_explore_root(mock_get, monkeypatch):
     data = response.json()
     assert len(data["nodes"]) == 2
 
-@patch('api.explore.httpx.AsyncClient.get')
+@patch('api.providers.github.httpx.AsyncClient.get')
 def test_github_explore_owner(mock_get, monkeypatch):
     auth = ("testuser", "testpass")
     monkeypatch.setenv("GITHUB_TOKEN", "token")
@@ -45,7 +45,7 @@ def test_github_explore_owner(mock_get, monkeypatch):
     assert response.status_code == 200
     assert len(response.json()["nodes"]) == 1
 
-@patch('api.explore.httpx.AsyncClient.get')
+@patch('api.providers.github.httpx.AsyncClient.get')
 def test_github_explore_repo(mock_get, monkeypatch):
     auth = ("testuser", "testpass")
     monkeypatch.setenv("GITHUB_TOKEN", "token")
@@ -60,7 +60,7 @@ def test_github_explore_repo(mock_get, monkeypatch):
     assert response.status_code == 200
     assert len(response.json()["nodes"]) == 1
 
-@patch('api.explore.httpx.AsyncClient.get')
+@patch('api.providers.forgejo.httpx.AsyncClient.get')
 def test_forgejo_explore_root(mock_get, monkeypatch):
     auth = ("testuser", "testpass")
     import api.explore as explore_module
@@ -89,7 +89,7 @@ def test_forgejo_explore_root(mock_get, monkeypatch):
     data = response.json()
     assert len(data["nodes"]) == 2
 
-@patch('api.explore.httpx.AsyncClient.get')
+@patch('api.providers.forgejo.httpx.AsyncClient.get')
 def test_forgejo_explore_owner(mock_get, monkeypatch):
     auth = ("testuser", "testpass")
     import api.explore as explore_module
@@ -116,7 +116,7 @@ def test_forgejo_explore_owner(mock_get, monkeypatch):
     assert response.status_code == 200
     assert len(response.json()["nodes"]) == 1
 
-@patch('api.explore.httpx.AsyncClient.get')
+@patch('api.providers.forgejo.httpx.AsyncClient.get')
 def test_forgejo_explore_repo(mock_get, monkeypatch):
     auth = ("testuser", "testpass")
     import api.explore as explore_module
