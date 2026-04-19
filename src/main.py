@@ -825,6 +825,6 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
             "id": req.id,
             "error": {
                 "code": -32000,
-                "message": str(e)
+                "message": "Internal Server Error"
             }
         }

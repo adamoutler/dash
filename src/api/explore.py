@@ -267,9 +267,9 @@ async def get_nodes(
         explore_cache[cache_key] = result
         return result
     except ProviderPathNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=e.args[0] if e.args else "Path not found")
     except ProviderNotImplementedError as e:
-        raise HTTPException(status_code=501, detail=str(e))
+        raise HTTPException(status_code=501, detail=e.args[0] if e.args else "Provider not implemented")
     except HTTPException:
         raise
     except Exception as e:

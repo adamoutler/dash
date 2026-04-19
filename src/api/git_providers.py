@@ -96,7 +96,7 @@ async def fetch_github_status(owner: str, repo: str, token: str, workflow_id: st
             }
     except Exception as e:
         err = _error_result("github", owner, repo)
-        err["commit_message"] = f"Exception: {str(e)}"
+        err["commit_message"] = "Exception occurred while fetching."
         return err
 
 async def fetch_forgejo_status(owner: str, repo: str, token: str, forgejo_url: str, workflow_id: str = None, branch: str = None):
@@ -237,7 +237,7 @@ async def fetch_github_logs(owner: str, repo: str, token: str, workflow_id: str 
                 return logs_resp.text
             return f"Failed to fetch logs. HTTP {logs_resp.status_code}"
     except Exception as e:
-        return f"Error fetching GitHub logs: {str(e)}"
+        return "Error fetching GitHub logs."
 
 async def fetch_forgejo_logs(owner: str, repo: str, token: str, forgejo_url: str, workflow_id: str = None, branch: str = None):
     wf_param = f"&workflow_id={workflow_id}" if workflow_id and workflow_id != "any" else ""
@@ -328,7 +328,7 @@ async def fetch_forgejo_artifacts(owner: str, repo: str, token: str, forgejo_url
                 return {"error": "Artifacts API endpoint not found on this Forgejo version. Ensure actions/upload-artifact is configured and verify server version compatibility."}
             return {"error": f"Failed to fetch artifacts. HTTP {artifacts_resp.status_code}"}
     except Exception as e:
-        return {"error": f"Error fetching Forgejo artifacts: {str(e)}"}
+        return {"error": "Error fetching Forgejo artifacts."}
 
 async def fetch_jenkins_status(owner: str, repo: str, user: str, token: str, jenkins_url: str, workflow_id: str = None, branch: str = None):
     if workflow_id == "any":
@@ -468,7 +468,7 @@ async def fetch_jenkins_logs(owner: str, repo: str, user: str, token: str, jenki
         async with httpx.AsyncClient(timeout=10.0, auth=auth) as client:
             return await _resolve_jenkins_logs(client, base_url, max_depth=3)
     except Exception as e:
-        return f"Error fetching Jenkins logs: {str(e)}"
+        return "Error fetching Jenkins logs."
 
 async def _resolve_jenkins_logs(client, url, max_depth=3):
     if max_depth <= 0:
