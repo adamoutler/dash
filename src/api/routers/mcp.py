@@ -340,10 +340,9 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                                 "average_recent_duration": result.get("average_recent_duration"),
                                 "status": status
                             }
-                            yaml_lines = ["```yaml"]
+                            yaml_lines = []
                             for k, v in res_obj.items():
                                 yaml_lines.append(f"{k}: {v}")
-                            yaml_lines.append("```")
                             yaml_str = "\n".join(yaml_lines)
                             yield json.dumps({
                                 "jsonrpc": "2.0",
