@@ -121,10 +121,9 @@ async def wait_status(provider: ProviderType, owner: str, repo: str, workflow_id
                     status = "no job in progress"
                     result["status"] = status
 
-                yaml_lines = ["```yaml"]
+                yaml_lines = []
                 for k, v in result.items():
                     yaml_lines.append(f"{k}: {v}")
-                yaml_lines.append("```")
                 yaml_str = "\n".join(yaml_lines)
                 yield f"\nStatus changed to {status}\n{yaml_str}\n"
                 break

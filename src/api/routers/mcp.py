@@ -240,9 +240,9 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                     }
                 else:
                     provider_emojis = {"github": "🐙", "forgejo": "🍵", "jenkins": "🤵"}
-                    valid_repos = [f"{provider_emojis.get(r.get('provider'), '⚒️')} {r['owner']}" if r.get("provider") == "jenkins" else f"{provider_emojis.get(r.get('provider'), '⚒️')} {r['owner']}/{r['repo']}" for r in repos]
+                    valid_repos = [f"{provider_emojis.get(r.get('provider'), '⚒️')} {r['repo']}" if r.get("provider") == "jenkins" else f"{provider_emojis.get(r.get('provider'), '⚒️')} {r['owner']}/{r['repo']}" for r in repos]
                     legend = "\n\nField Definitions:\n✅ Success | ❌ Failure | 🏃 Running | ❓ Unknown\nStarted | Expected Duration | Commit Message\n\nProviders:\n🐙 GitHub | 🍵 Forgejo/Gitea | 🤵 Jenkins | ⚒️ Other"
-                    help_text = f"Repo '{repo}' not found.\n```yaml\nvalid_repos: [{', '.join(valid_repos)}]\n```\n" + legend
+                    help_text = f"Repo '{repo}' not found.\nvalid_repos: [{', '.join(valid_repos)}]\n" + legend
                     return {
                         "jsonrpc": "2.0",
                         "id": req.id,
@@ -350,7 +350,7 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                 branches = await workflow_service.get_branches(provider, owner, repo_name)
                 
                 res_obj = {"branches": branches}
-                yaml_str = f"```yaml\nbranches: [{', '.join(branches)}]\n```"
+                yaml_str = f"branches: [{', '.join(branches)}]"
                 return {
                     "jsonrpc": "2.0",
                     "id": req.id,
@@ -375,3 +375,4 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                 "message": "Internal Server Error"
             }
         }
+

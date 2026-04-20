@@ -90,12 +90,10 @@ class WorkflowService:
             display_name = owner if provider == "jenkins" else f"{owner}/{repo_name}"
 
         return (
-            "```yaml\n"
             f"status: {status_emoji}  {status_text}\n"
             f"repo: {display_name}\n"
             f"started: {res_obj.get('started_at') or 'N/A'}{duration_info}\n"
-            f"commit: {res_obj.get('commit_message') or 'N/A'}\n"
-            "```"
+            f"commit: {res_obj.get('commit_message') or 'N/A'}"
         )
 
     async def get_logs(self, provider: str, owner: str, repo: str, workflow_id: Optional[str] = None, branch: Optional[str] = None) -> str:
