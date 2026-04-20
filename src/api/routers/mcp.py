@@ -1,4 +1,5 @@
 import json
+import urllib.parse
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 import asyncio
@@ -10,6 +11,12 @@ from api.services.workflow_service import WorkflowService
 
 router = APIRouter(tags=["mcp"])
 storage = RepoStorage()
+
+def format_jenkins_repo(url: str) -> str:
+    if not url:
+        return ""
+    path = urllib.parse.unquote(urllib.parse.urlparse(url).path)
+    return path.replace('/job/', '/').replace('/view/', '/').strip('/')
 
 class JsonRpcRequest(BaseModel):
     jsonrpc: str
@@ -166,9 +173,9 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
 
             if repo == "help":
                 provider_emojis = {"github": "🐙", "forgejo": "🍵", "jenkins": "🤵"}
-                valid_repos = [f"{provider_emojis.get(r.get('provider'), '⚒️')} {r['owner']}" if r.get("provider") == "jenkins" else f"{provider_emojis.get(r.get('provider'), '⚒️')} {r['owner']}/{r['repo']}" for r in repos]
+                valid_repos = [f"{provider_emojis.get(r.get('provider'), '⚒️')} {r.get('owner') or format_jenkins_repo(r.get('repo', ''))}" if r.get("provider") == "jenkins" else f"{provider_emojis.get(r.get('provider'), '⚒️')} {r['owner']}/{r['repo']}" for r in repos]
                 legend = "\n\nField Definitions:\n✅ Success | ❌ Failure | 🏃 Running | ❓ Unknown\nStarted | Expected Duration | Commit Message\n\nProviders:\n🐙 GitHub | 🍵 Forgejo/Gitea | 🤵 Jenkins | ⚒️ Other"
-                help_text = f"```yaml\nvalid_repos: [{', '.join(valid_repos)}]\n```" + legend
+                help_text = f"valid_repos: [{', '.join(valid_repos)}]" + legend
                 return {
                     "jsonrpc": "2.0",
                     "id": req.id,
@@ -193,7 +200,7 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                     if r["repo"] == target_repo or f"{r['owner']}/{r['repo']}" == target_repo
                 ]
                 legend = "\n\nField Definitions:\n✅ Success | ❌ Failure | 🏃 Running | ❓ Unknown"
-                help_text = f"```yaml\nvalid_workflows: [{', '.join(valid_workflows)}]\n```" + legend
+                help_text = f"valid_workflows: [{', '.join(valid_workflows)}]" + legend
                 return {
                     "jsonrpc": "2.0",
                     "id": req.id,
@@ -240,7 +247,7 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                     }
                 else:
                     provider_emojis = {"github": "🐙", "forgejo": "🍵", "jenkins": "🤵"}
-                    valid_repos = [f"{provider_emojis.get(r.get('provider'), '⚒️')} {r['repo']}" if r.get("provider") == "jenkins" else f"{provider_emojis.get(r.get('provider'), '⚒️')} {r['owner']}/{r['repo']}" for r in repos]
+                    valid_repos = [f"{provider_emojis.get(r.get('provider'), '⚒️')} {r.get('owner') or format_jenkins_repo(r.get('repo', ''))}" if r.get("provider") == "jenkins" else f"{provider_emojis.get(r.get('provider'), '⚒️')} {r['owner']}/{r['repo']}" for r in repos]
                     legend = "\n\nField Definitions:\n✅ Success | ❌ Failure | 🏃 Running | ❓ Unknown\nStarted | Expected Duration | Commit Message\n\nProviders:\n🐙 GitHub | 🍵 Forgejo/Gitea | 🤵 Jenkins | ⚒️ Other"
                     help_text = f"Repo '{repo}' not found.\nvalid_repos: [{', '.join(valid_repos)}]\n" + legend
                     return {
