@@ -15,20 +15,9 @@ From the home page, you can:
 - Manage existing configurations using **✎ Edit** and **✕ Remove** buttons.
 - Toggle Dark Mode using the **🌙** button.
 
-## Adding a Repository
-
-To start tracking a new repository or CI job, click the **+ Add Repository** button on the home page. 
-
-![Add Repository Modal](img/dash-add-repo.png)
-
-1. Select your CI Provider (GitHub, Forgejo / Gitea, or Jenkins).
-2. Select or enter the repository owner/name.
-3. Optionally specify a branch (e.g., `main`).
-4. Click **Add** to begin tracking.
-
 ## Configuration & Authentication
 
-Dash requires tokens or API keys to communicate securely with your providers and fetch private CI statuses.
+Dash requires tokens or API keys to communicate securely with your providers and fetch private CI statuses. You must configure your providers before you can track repositories.
 
 Click the **⚙️ Configure Dashboard** link in the footer to access the configuration page.
 
@@ -42,6 +31,17 @@ Click the **⚙️ Configure Dashboard** link in the footer to access the config
 
 ### Creating Dashboard Tokens (For MCP / API)
 If the dashboard is secured, you can generate a Bearer token under the "Tokens" section. Enter a descriptive "Token Name" and click **Create Token**. You will use this token in the `Authorization: Bearer <TOKEN>` header when connecting via the API or MCP.
+
+## Adding a Repository
+
+Once configured, to start tracking a new repository or CI job, click the **+ Add Repository** button on the home page. 
+
+![Add Repository Modal](img/dash-add-repo.png)
+
+1. Select your CI Provider (GitHub, Forgejo / Gitea, or Jenkins).
+2. Select or enter the repository owner/name.
+3. Optionally specify a branch (e.g., `main`).
+4. Click **Add** to begin tracking.
 
 ## AI & LLM Automation (MCP Integration)
 
