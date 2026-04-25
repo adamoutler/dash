@@ -45,7 +45,9 @@ async def post_logs(provider: ProviderType, owner: str, repo: str, request: Requ
         raise HTTPException(status_code=400, detail="Invalid provider, owner, or repo.")
 
     filename = get_log_filename(provider, owner, repo, workflow_id, branch)
-    filepath = os.path.join(LOGS_DIR, filename)
+    filepath = os.path.normpath(os.path.join(LOGS_DIR, filename))
+    if not filepath.startswith(os.path.normpath(LOGS_DIR)):
+        raise HTTPException(status_code=400, detail="Invalid log file path")
 
     with open(filepath, "w", encoding="utf-8") as f:
         f.write(log_text)
@@ -55,7 +57,9 @@ async def post_logs(provider: ProviderType, owner: str, repo: str, request: Requ
 @router.get("/logs", summary="Retrieve Workflow Logs")
 async def get_logs(provider: ProviderType, owner: str, repo: str, workflow_id: Optional[str] = None, branch: Optional[str] = None, user: str = Depends(get_current_user)):
     filename = get_log_filename(provider, owner, repo, workflow_id, branch)
-    filepath = os.path.join(LOGS_DIR, filename)
+    filepath = os.path.normpath(os.path.join(LOGS_DIR, filename))
+    if not filepath.startswith(os.path.normpath(LOGS_DIR)):
+        raise HTTPException(status_code=400, detail="Invalid log file path")
 
     if os.path.exists(filepath):
         with open(filepath, "r", encoding="utf-8") as f:
@@ -81,8 +85,8 @@ async def get_status(user: str = Depends(get_current_user)):
 
             if current_url and current_url != "#" and current_url != saved_url:
                 storage.update_repo_run_url(res.get("provider"), res.get("owner"), res.get("repo"), current_url, r.get("workflow_id"))
-                filepath = os.path.join(LOGS_DIR, get_log_filename(res.get("provider", ""), res.get("owner", ""), res.get("repo", ""), r.get("workflow_id")))
-                if os.path.exists(filepath):
+                filepath = os.path.normpath(os.path.join(LOGS_DIR, get_log_filename(res.get("provider", ""), res.get("owner", ""), res.get("repo", ""), r.get("workflow_id"))))
+                if filepath.startswith(os.path.normpath(LOGS_DIR)) and os.path.exists(filepath):
                     try:
                         os.remove(filepath)
                     except Exception:
