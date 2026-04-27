@@ -88,12 +88,15 @@ class WorkflowService:
             display_name = res_obj["display_name"]
         else:
             display_name = owner if provider == "jenkins" else f"{owner}/{repo_name}"
+            
+        log_link = res_obj.get('log_url') or res_obj.get('url') or 'N/A'
 
         return (
             f"status: {status_emoji}  {status_text}\n"
             f"repo: {display_name}\n"
             f"started: {res_obj.get('started_at') or 'N/A'}{duration_info}\n"
-            f"commit: {res_obj.get('commit_message') or 'N/A'}"
+            f"commit: {res_obj.get('commit_message') or 'N/A'}\n"
+            f"log: {log_link}"
         )
 
     async def get_logs(self, provider: str, owner: str, repo: str, workflow_id: Optional[str] = None, branch: Optional[str] = None) -> str:

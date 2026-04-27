@@ -267,8 +267,21 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
             if method_name == "get_status":
                 result = await workflow_service.get_single_status(provider, owner, repo_name, wf_id, target_branch)
 
+                base_url = str(request.base_url).rstrip('/')
+                dash_log_url = f"{base_url}/api/logs?provider={provider}&owner={owner}&repo={repo_name}"
+                if wf_id:
+                    dash_log_url += f"&workflow_id={wf_id}"
+
+                import os
+                from api.config import LOGS_DIR
+                from api.services.workflow_service import get_log_filename
+                filepath = os.path.normpath(os.path.join(LOGS_DIR, get_log_filename(provider, owner, repo_name, wf_id)))
+                has_local_log = filepath.startswith(os.path.normpath(LOGS_DIR)) and os.path.exists(filepath)
+                log_url = dash_log_url if has_local_log else (result.get("url") or dash_log_url)
+
                 res_obj = {
                     "url": result.get("url"),
+                    "log_url": log_url,
                     "repo_url": result.get("repo_url"),
                     "commit_message": result.get("commit_message"),
                     "started_at": result.get("started_at"),
@@ -276,7 +289,6 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
                     "expected_duration_sec": result.get("expected_duration_sec"),
                     "status": result.get("status")
                 }
-
                 display_str = workflow_service.format_status_yaml(res_obj, provider, owner, repo_name)
 
                 if is_tool_call:

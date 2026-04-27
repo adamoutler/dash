@@ -73,22 +73,41 @@ async def get_branches(provider: ProviderType, owner: str, repo: str, user: str 
     return await workflow_service.get_branches(provider, owner, repo)
 
 @router.get("/status", summary="Retrieve all build statuses.")
-async def get_status(user: str = Depends(get_current_user)):
+async def get_status(request: Request, user: str = Depends(get_current_user)):
     repos = storage.get_repos()
     results = await workflow_service.get_all_statuses(repos)
+    base_url = str(request.base_url).rstrip('/')
 
     for i, r in enumerate(repos):
         if i < len(results):
             res = results[i]
             current_url = res.get("url")
             saved_url = r.get("last_run_url")
+            
+            provider = res.get("provider", "")
+            owner = res.get("owner", "")
+            repo = res.get("repo", "")
+            wf_id = r.get("workflow_id")
+            
+            filepath = os.path.normpath(os.path.join(LOGS_DIR, get_log_filename(provider, owner, repo, wf_id)))
+            has_local_log = filepath.startswith(os.path.normpath(LOGS_DIR)) and os.path.exists(filepath)
+            
+            dash_log_url = f"{base_url}/api/logs?provider={provider}&owner={owner}&repo={repo}"
+            if wf_id:
+                dash_log_url += f"&workflow_id={wf_id}"
+            
+            if has_local_log:
+                res["log_url"] = dash_log_url
+            else:
+                res["log_url"] = current_url or dash_log_url
 
             if current_url and current_url != "#" and current_url != saved_url:
-                storage.update_repo_run_url(res.get("provider"), res.get("owner"), res.get("repo"), current_url, r.get("workflow_id"))
-                filepath = os.path.normpath(os.path.join(LOGS_DIR, get_log_filename(res.get("provider", ""), res.get("owner", ""), res.get("repo", ""), r.get("workflow_id"))))
-                if filepath.startswith(os.path.normpath(LOGS_DIR)) and os.path.exists(filepath):
+                storage.update_repo_run_url(provider, owner, repo, current_url, wf_id)
+                if has_local_log:
                     try:
                         os.remove(filepath)
+                        # Re-evaluate log_url after deletion
+                        res["log_url"] = current_url or dash_log_url
                     except Exception:
                         pass
 
