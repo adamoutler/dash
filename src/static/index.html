@@ -618,9 +618,9 @@
     fetchProviders();
     fetchVersion();
 
-    // Initial fetch and poll every 30s
+    // Initial fetch and poll every 15s
     fetchStatuses();
-    setInterval(fetchStatuses, 30000);
+    setInterval(fetchStatuses, 15000);
     setInterval(updateProgress, 1000);
 
     async function fetchLogs(provider, owner, repo, workflowId) {

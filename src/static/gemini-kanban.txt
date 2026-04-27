@@ -19,7 +19,7 @@ This script acts as a strict, automated Quality Assurance (QA) gate for Kanban w
 
 2. **API Resolution & Rate Limiting:**
    * Resolves the string-based Ticket ID to internal Kanban Project and Work Item UUIDs via REST calls.
-   * Enforces a 30-second rate limit between script executions using `/tmp/qa_gate_last_run` to prevent API spam.
+   * Enforces a 15-second rate limit between script executions using `/tmp/qa_gate_last_run` to prevent API spam.
 
 3. **Pre-flight QA Checks (Gate Conditions):**
    * *Execution limits:* These checks only trigger if the target state resolves to "Done" or the invoked tool is `complete_work`.
@@ -121,13 +121,13 @@ if [[ -z "$WORK_ITEM_ID" || "$WORK_ITEM_ID" == "null" ]]; then
     exit 0
 fi
 
-# Rate limit check: Ensure at least 30s between calls
+# Rate limit check: Ensure at least 15s between calls
 CURRENT_TIME=$(date +%s)
 if [ -f /tmp/qa_gate_last_run ]; then
     LAST_RUN=$(cat /tmp/qa_gate_last_run)
     DIFF=$((CURRENT_TIME - LAST_RUN))
-    if [ "$DIFF" -lt 30 ]; then
-        jq -c -n --arg reason "Rate limit exceeded. Please wait 30 seconds between calls to mcp update ticket." '{"decision": "deny", "reason": $reason}'
+    if [ "$DIFF" -lt 15 ]; then
+        jq -c -n --arg reason "Rate limit exceeded. Please wait 15 seconds between calls to mcp update ticket." '{"decision": "deny", "reason": $reason}'
         exit 0
     fi
 fi
