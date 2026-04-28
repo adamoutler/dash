@@ -57,4 +57,4 @@ The dashboard provides a native MCP Server accessible at `/mcp`. It exposes the 
 - **Get All Statuses**: `curl -s https://dash.hackedyour.info/api/status`
 - **Wait for Build**: `curl -N -s "https://dash.hackedyour.info/api/wait?provider=github&owner=adamoutler&repo=gemini-webui"`
 
-For more detailed API instructions, AI agents should refer to `https://dash.hackedyour.info/llms.txt`.
+For more detailed API instructions, AI agents should refer to `<dash-url>/llms.txt`.

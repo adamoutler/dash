@@ -55,7 +55,7 @@ Hardcoded at the top of the script for local debugging/overrides:
 * **Output:** `stdout` JSON object containing `{"decision": "allow"}` or `{"decision": "deny", "reason": "..."}`.
 
 ### Note
-This workflow assumes a github provider.  But the same workflow can apply to jenkins or forgejo/gitea assuming forgejo manually uploads logs using the `https://dash.hackedyour.info/llms.txt` comparable Dash functions. This workflow also assumes the agent is using Adam Outler's Agent Kanban MCP (currently awaing PR review at Plane). 
+This workflow assumes a github provider.  But the same workflow can apply to jenkins or forgejo/gitea assuming forgejo manually uploads logs using the `<dash-url>/llms.txt` comparable Dash functions. This workflow also assumes the agent is using Adam Outler's Agent Kanban MCP (currently awaing PR review at Plane). 
 ```bash
 #!/bin/bash
 # =============================================================================

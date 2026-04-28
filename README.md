@@ -2,7 +2,7 @@
 
 > **The essential CI feedback loop and guardrail for autonomous AI development.**
 
-Tired of your AI agent confidently hallucinating: *"I changed it, so now it works. I'll push the changes!"* only to break the main branch? 🤦‍♂️
+Tired of your AI agent confidently hallucinating: *"I changed it, so now it works. I'll push the changes!"* only to break the main branch? 🤦
 
 Welcome to the **Dash**—a beautifully simple, Dockerized hub that gives you an at-a-glance view of your projects, while serving as the ultimate **guardrail for your AI agents** (Claude, Gemini, GPT). Without a feedback loop from your Continuous Integration (CI) pipeline, agents fly blind. This dashboard serves as a foundational building block to provide immediate, factual build feedback to autonomous agents, stopping regressions in their tracks.
 
@@ -26,7 +26,7 @@ Welcome to the **Dash**—a beautifully simple, Dockerized hub that gives you an
 
 ## 🤖 For AI Agents: The Guardrail API
 
-By pointing your agent to the repository URL and our `llms.txt` ([see a raw example of what the LLM sees here](https://raw.githubusercontent.com/adamoutler/agentic-dash/refs/heads/master/static/llms.txt)), you instantly give them superpower hooks to interact with your CI/CD pipeline. No more blind pushes! Your agent can now:
+By pointing your agent to the repository URL and our `llms.txt` ([see a raw example of what the LLM sees here](src/static/llms.txt)), you instantly give them superpower hooks to interact with your CI/CD pipeline. No more blind pushes! Your agent can now:
 
 * 📚 **Comprehensive AI Guide**: See the full [AI/Agent Journey](docs/ai-journey.md) for detailed automated workflows.
 
@@ -59,7 +59,7 @@ Give your agents a custom tool to gather build results across all your projects 
 
 ---
 
-## 🧑‍💻 For Humans: The Visual Hub
+## 💻 For Humans: The Visual Hub
 
 Beyond acting as an API for AI, the Dash provides a clean, unified graphical experience for human developers. It's all about peace of mind:
 
@@ -85,7 +85,7 @@ When clicking **+ Add Repository** in the dashboard, the input format depends on
 ## 🚀 Get Started
 
 **For AI Agents:**
-Just point your agent to `https://your-dashboard-url/llms.txt` and tell it to read the docs. It will know exactly what to do! 🧠
+Just point your agent to `<your-dashboard-url>/llms.txt` and tell it to read the docs. It will know exactly what to do! 🧠
 
 **For Humans (Deployment):**
 1. Clone the repo:
