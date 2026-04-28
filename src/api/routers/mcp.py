@@ -159,14 +159,24 @@ async def mcp_endpoint(req: JsonRpcRequest, request: Request, user: str = Depend
         if is_tool_call:
             call_args = params.get("arguments") or {}
             provider_arg = call_args.get("provider") or request.headers.get("x-provider")
-            repo = call_args.get("repo") or call_args.get("project") or request.headers.get("x-repo")
+            repo = call_args.get("query") or call_args.get("repo") or call_args.get("project") or request.headers.get("x-repo")
             workflow = call_args.get("workflow") or request.headers.get("x-workflow")
             branch = call_args.get("branch") or request.headers.get("x-branch")
         else:
             provider_arg = params.get("provider") or request.headers.get("x-provider")
-            repo = params.get("repo") or params.get("project") or request.headers.get("x-repo")
+            repo = params.get("query") or params.get("repo") or params.get("project") or request.headers.get("x-repo")
             workflow = params.get("workflow") or request.headers.get("x-workflow")
             branch = params.get("branch") or request.headers.get("x-branch")
+
+        if not repo and method_name in ["get_status", "get_logs", "wait", "get_branches"]:
+            return {
+                "jsonrpc": "2.0",
+                "id": req.id,
+                "error": {
+                    "code": -32602,
+                    "message": "Missing required parameter 'repo' or 'query'."
+                }
+            }
 
         if method_name in ["get_status", "get_logs", "wait", "get_branches"]:
             repos = storage.get_repos()

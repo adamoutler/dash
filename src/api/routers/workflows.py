@@ -73,8 +73,17 @@ async def get_branches(provider: ProviderType, owner: str, repo: str, user: str 
     return await workflow_service.get_branches(provider, owner, repo)
 
 @router.get("/status", summary="Retrieve all build statuses.")
-async def get_status(request: Request, user: str = Depends(get_current_user)):
+async def get_status(request: Request, query: Optional[str] = None, user: str = Depends(get_current_user)):
     repos = storage.get_repos()
+    
+    if query:
+        filtered_repos = []
+        for r in repos:
+            repo_str = f"{r.get('owner')}/{r.get('repo')}"
+            if r.get('repo') == query or repo_str == query or (r.get('provider') == 'jenkins' and r.get('owner') == query):
+                filtered_repos.append(r)
+        repos = filtered_repos
+        
     results = await workflow_service.get_all_statuses(repos)
     base_url = str(request.base_url).rstrip('/')
 
