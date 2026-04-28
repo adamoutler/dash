@@ -26,7 +26,7 @@ Instead, you MUST clone the repository to a temporary directory and run the scan
 
 ```bash
 # For a remote GitHub repository
-git clone https://github.com/owner/repo.git /tmp/repo-scan
+git clone https://github.com/OWNER/REPO.git /tmp/repo-scan
 cd /tmp/repo-scan
 npx --yes skillsafe@0.2.9 scan .
 ```
