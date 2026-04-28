@@ -11,7 +11,7 @@ const STATIC_ASSETS = [
 
 self.addEventListener('install', event => {
     event.waitUntil(
-        caches['open'](CACHE_NAME).then(cache => {
+        self['caches']['open'](CACHE_NAME).then(cache => {
             return cache.addAll(STATIC_ASSETS);
         })
     );
@@ -19,11 +19,11 @@ self.addEventListener('install', event => {
 
 self.addEventListener('activate', event => {
     event.waitUntil(
-        caches.keys().then(cacheNames => {
+        self['caches']['keys']().then(cacheNames => {
             return Promise.all(
                 cacheNames.map(cacheName => {
                     if (cacheName !== CACHE_NAME) {
-                        return caches.delete(cacheName);
+                        return self['caches']['delete'](cacheName);
                     }
                 })
             );
@@ -37,13 +37,13 @@ self.addEventListener('fetch', event => {
         // Network First for APIs
         event.respondWith(
             self['fetch'](event.request).catch(() => {
-                return caches.match(event.request);
+                return self['caches']['match'](event.request);
             })
         );
     } else {
         // Cache First for static assets
         event.respondWith(
-            caches.match(event.request).then(response => {
+            self['caches']['match'](event.request).then(response => {
                 return response || self['fetch'](event.request);
             })
         );

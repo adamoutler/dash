@@ -1,11 +1,9 @@
 {
   "name": "@adamoutler/dash",
   "version": "1.0.0",
-  "description": "Agentic Dash",
+  "description": "A secure, authenticated CI/CD monitoring dashboard for autonomous AI agents and humans, supporting GitHub, Forgejo, and Jenkins with native MCP integration.",
   "main": "src/static/sw.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
+  "types": "src/static/sw.d.ts",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/adamoutler/dash.git"
@@ -16,9 +14,26 @@
   "homepage": "https://github.com/adamoutler/dash#readme",
   "keywords": [
     "agentic",
-    "dash"
+    "dash",
+    "ci-cd",
+    "guardrail",
+    "automation"
   ],
-  "author": "Adam Outler",
+  "author": "Adam Outler <adamoutler@gmail.com>",
+  "contributors": [
+    "Adam Outler <adamoutler@gmail.com>"
+  ],
+  "funding": [
+    {
+      "type": "individual",
+      "url": "https://github.com/sponsors/adamoutler"
+    }
+  ],
   "license": "MIT",
-  "dependencies": {}
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
 }
