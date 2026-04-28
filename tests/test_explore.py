@@ -5,18 +5,21 @@ from main import app
 
 client = TestClient(app)
 
+
 @pytest.fixture(autouse=True)
 def setup_env(monkeypatch):
     monkeypatch.setenv("DASHBOARD_USER", "testuser")
     monkeypatch.setenv("DASHBOARD_PASSWORD", "testpass")
 
-@patch('api.providers.jenkins.httpx.AsyncClient.get')
+
+@patch("api.providers.jenkins.httpx.AsyncClient.get")
 def test_jenkins_explore_missing_url(mock_get, monkeypatch):
     auth = ("testuser", "testpass")
     import api.explore as explore_module
 
     # Mock config_manager to return None for JENKINS_URL
     original_get_value = explore_module.config_manager.get_value
+
     def mock_get_value(key, env_var):
         if key == "jenkins_url":
             return None
@@ -28,16 +31,19 @@ def test_jenkins_explore_missing_url(mock_get, monkeypatch):
     assert response.status_code == 400
     assert "Jenkins URL is not configured" in response.json()["detail"]
 
-@patch('api.providers.jenkins.httpx.AsyncClient.get')
+
+@patch("api.providers.jenkins.httpx.AsyncClient.get")
 def test_jenkins_explore_auth_failed(mock_get, monkeypatch):
     auth = ("testuser", "testpass")
     import api.explore as explore_module
 
     original_get_value = explore_module.config_manager.get_value
+
     def mock_get_value(key, env_var):
         if key == "jenkins_url":
             return "https://jenkins.example.com"
         return original_get_value(key, env_var)
+
     monkeypatch.setattr(explore_module.config_manager, "get_value", mock_get_value)
 
     mock_response = MagicMock()
@@ -48,24 +54,35 @@ def test_jenkins_explore_auth_failed(mock_get, monkeypatch):
     assert response.status_code == 401
     assert "Jenkins authentication failed" in response.json()["detail"]
 
-@patch('api.providers.jenkins.httpx.AsyncClient.get')
+
+@patch("api.providers.jenkins.httpx.AsyncClient.get")
 def test_jenkins_explore_success(mock_get, monkeypatch):
     auth = ("testuser", "testpass")
     import api.explore as explore_module
 
     original_get_value = explore_module.config_manager.get_value
+
     def mock_get_value(key, env_var):
         if key == "jenkins_url":
             return "https://jenkins.example.com"
         return original_get_value(key, env_var)
+
     monkeypatch.setattr(explore_module.config_manager, "get_value", mock_get_value)
 
     mock_response = MagicMock()
     mock_response.status_code = 200
     mock_response.json.return_value = {
         "jobs": [
-            {"name": "test-job", "url": "https://jenkins.example.com/job/test-job", "_class": "org.jenkinsci.plugins.workflow.job.WorkflowJob"},
-            {"name": "test-folder", "url": "https://jenkins.example.com/job/test-folder", "_class": "com.cloudbees.hudson.plugins.folder.Folder"}
+            {
+                "name": "test-job",
+                "url": "https://jenkins.example.com/job/test-job",
+                "_class": "org.jenkinsci.plugins.workflow.job.WorkflowJob",
+            },
+            {
+                "name": "test-folder",
+                "url": "https://jenkins.example.com/job/test-folder",
+                "_class": "com.cloudbees.hudson.plugins.folder.Folder",
+            },
         ]
     }
     mock_get.return_value = mock_response

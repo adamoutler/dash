@@ -1,11 +1,14 @@
 from abc import ABC, abstractmethod
 from typing import Dict, Any, List, Optional
 
+
 class ProviderPathNotFoundError(Exception):
     pass
 
+
 class ProviderNotImplementedError(Exception):
     pass
+
 
 class BaseProvider(ABC):
     """
@@ -17,17 +20,35 @@ class BaseProvider(ABC):
         pass
 
     @abstractmethod
-    async def fetch_status(self, owner: str, repo: str, workflow_id: Optional[str] = None, branch: Optional[str] = None) -> Dict[str, Any]:
+    async def fetch_status(
+        self,
+        owner: str,
+        repo: str,
+        workflow_id: Optional[str] = None,
+        branch: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """Fetch the CI status for a repository/workflow."""
         pass
 
     @abstractmethod
-    async def fetch_logs(self, owner: str, repo: str, workflow_id: Optional[str] = None, branch: Optional[str] = None) -> str:
+    async def fetch_logs(
+        self,
+        owner: str,
+        repo: str,
+        workflow_id: Optional[str] = None,
+        branch: Optional[str] = None,
+    ) -> str:
         """Fetch the execution logs for a repository/workflow."""
         pass
 
     @abstractmethod
-    async def fetch_artifacts(self, owner: str, repo: str, workflow_id: Optional[str] = None, branch: Optional[str] = None) -> Dict[str, Any]:
+    async def fetch_artifacts(
+        self,
+        owner: str,
+        repo: str,
+        workflow_id: Optional[str] = None,
+        branch: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """Fetch the artifacts for a repository/workflow."""
         pass
 
@@ -37,7 +58,9 @@ class BaseProvider(ABC):
         pass
 
     @abstractmethod
-    async def get_workflows(self, owner: str, repo: str, branch: Optional[str] = None) -> List[Dict[str, str]]:
+    async def get_workflows(
+        self, owner: str, repo: str, branch: Optional[str] = None
+    ) -> List[Dict[str, str]]:
         """Fetch available workflows for a repository."""
         pass
 
@@ -57,7 +80,7 @@ class BaseProvider(ABC):
             "updated_at": "",
             "commit_message": "Failed to fetch",
             "started_at": None,
-            "expected_duration_sec": None
+            "expected_duration_sec": None,
         }
 
     def _get_status_weight(self, r: Dict[str, Any]) -> int:
@@ -65,6 +88,9 @@ class BaseProvider(ABC):
         conclusion = (r.get("conclusion") or "").lower()
         if st in ["in_progress", "queued", "requested", "waiting", "running"]:
             return 3
-        if conclusion in ["success", "failure", "action_required"] or st in ["success", "failure"]:
+        if conclusion in ["success", "failure", "action_required"] or st in [
+            "success",
+            "failure",
+        ]:
             return 2
         return 1

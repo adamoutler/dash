@@ -12,6 +12,7 @@ security_basic = HTTPBasic(auto_error=False)
 
 DATA_DIR = os.getenv("DATA_DIR", "data")
 
+
 class TokenManager:
     def __init__(self, filepath=os.path.join(DATA_DIR, "tokens.json")):
         self.filepath = filepath
@@ -38,10 +39,7 @@ class TokenManager:
         with FileLock(self.lockpath):
             data = self._load_nolock()
             token = secrets.token_hex(32)
-            data[token] = {
-                "name": name,
-                "expires_at": time.time() + expires_in_sec
-            }
+            data[token] = {"name": name, "expires_at": time.time() + expires_in_sec}
             self._save_nolock(data)
             return token
 
@@ -69,9 +67,15 @@ class TokenManager:
         with FileLock(self.lockpath):
             data = self._load_nolock()
             now = time.time()
-            return [{"token": k, "name": v["name"], "expires_at": v["expires_at"]} for k, v in data.items() if v["expires_at"] > now]
+            return [
+                {"token": k, "name": v["name"], "expires_at": v["expires_at"]}
+                for k, v in data.items()
+                if v["expires_at"] > now
+            ]
+
 
 token_manager = TokenManager()
+
 
 def verify_basic(credentials: HTTPBasicCredentials):
     if not credentials:
@@ -80,7 +84,10 @@ def verify_basic(credentials: HTTPBasicCredentials):
     correct_pass = os.environ.get("DASHBOARD_PASSWORD", "")
     if not correct_user or not correct_pass:
         return False
-    return secrets.compare_digest(credentials.username, correct_user) and secrets.compare_digest(credentials.password, correct_pass)
+    return secrets.compare_digest(
+        credentials.username, correct_user
+    ) and secrets.compare_digest(credentials.password, correct_pass)
+
 
 async def get_current_user(request: Request):
     correct_user = os.environ.get("DASHBOARD_USER", "")
@@ -112,7 +119,10 @@ async def get_current_user(request: Request):
         headers={"WWW-Authenticate": "Basic"},
     )
 
-async def require_basic_auth(credentials: HTTPBasicCredentials = Depends(security_basic)):
+
+async def require_basic_auth(
+    credentials: HTTPBasicCredentials = Depends(security_basic),
+):
     correct_user = os.environ.get("DASHBOARD_USER", "")
     correct_pass = os.environ.get("DASHBOARD_PASSWORD", "")
     if not correct_user or not correct_pass:

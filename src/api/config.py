@@ -9,6 +9,7 @@ DATA_DIR = os.getenv("DATA_DIR", "data")
 LOGS_DIR = os.getenv("LOGS_DIR", "logs")
 os.makedirs(LOGS_DIR, exist_ok=True)
 
+
 class ConfigManager:
     def __init__(self, filepath=os.path.join(DATA_DIR, "settings.json")):
         self.filepath = filepath

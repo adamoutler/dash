@@ -17,7 +17,6 @@ __pycache__/
 .coverage
 .coveragerc
 .superpowers/
-.pre-commit-config.yaml
 logs/
 data/
 *.log

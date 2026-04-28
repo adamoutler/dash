@@ -4,6 +4,7 @@ from filelock import FileLock
 
 DATA_DIR = os.getenv("DATA_DIR", "data")
 
+
 class RepoStorage:
     """
     Manages persistent storage of tracked repositories using a local JSON file.
@@ -21,6 +22,7 @@ class RepoStorage:
     - `Timeout`: Raised if the file lock cannot be acquired within the timeout period.
     - `json.JSONDecodeError`: Can occur if the underlying JSON file becomes corrupted.
     """
+
     def __init__(self, file_path=os.path.join(DATA_DIR, "repos.json")):
         self.file_path = os.path.abspath(file_path)
         self.lock_path = f"{self.file_path}.lock"
@@ -60,7 +62,16 @@ class RepoStorage:
             with open(self.file_path, "w") as f:
                 json.dump(repos, f, indent=2)
 
-    def add_repo(self, provider, owner, repo, custom_links=None, workflow_id=None, workflow_name=None, branch=None):
+    def add_repo(
+        self,
+        provider,
+        owner,
+        repo,
+        custom_links=None,
+        workflow_id=None,
+        workflow_name=None,
+        branch=None,
+    ):
         """
         Adds a new repository or updates an existing one if it matches the unique constraints.
 
@@ -80,7 +91,13 @@ class RepoStorage:
             new_repo["branch"] = branch
 
         for i, r in enumerate(repos):
-            if r["provider"] == provider and r["owner"] == owner and r["repo"] == repo and r.get("workflow_id") == workflow_id and r.get("branch") == branch:
+            if (
+                r["provider"] == provider
+                and r["owner"] == owner
+                and r["repo"] == repo
+                and r.get("workflow_id") == workflow_id
+                and r.get("branch") == branch
+            ):
                 repos[i] = new_repo
                 self._save_repos(repos)
                 return
@@ -96,7 +113,17 @@ class RepoStorage:
         - Silently does nothing if the repository is not found.
         """
         repos = self.get_repos()
-        repos = [r for r in repos if not (r["provider"] == provider and r["owner"] == owner and r["repo"] == repo and r.get("workflow_id") == workflow_id and r.get("branch") == branch)]
+        repos = [
+            r
+            for r in repos
+            if not (
+                r["provider"] == provider
+                and r["owner"] == owner
+                and r["repo"] == repo
+                and r.get("workflow_id") == workflow_id
+                and r.get("branch") == branch
+            )
+        ]
         self._save_repos(repos)
 
     def update_repo_run_url(self, provider, owner, repo, run_url, workflow_id=None):
@@ -108,7 +135,12 @@ class RepoStorage:
         """
         repos = self.get_repos()
         for r in repos:
-            if r["provider"] == provider and r["owner"] == owner and r["repo"] == repo and r.get("workflow_id") == workflow_id:
+            if (
+                r["provider"] == provider
+                and r["owner"] == owner
+                and r["repo"] == repo
+                and r.get("workflow_id") == workflow_id
+            ):
                 r["last_run_url"] = run_url
                 self._save_repos(repos)
                 return

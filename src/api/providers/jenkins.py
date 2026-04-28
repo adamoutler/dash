@@ -4,6 +4,7 @@ from typing import Dict, Any, List, Optional
 from api.providers.base import BaseProvider, ProviderPathNotFoundError
 from api.models.domain import Node, NodeType
 
+
 class JenkinsProvider(BaseProvider):
     def __init__(self, user: str, token: str, url: str):
         super().__init__()
@@ -11,17 +12,23 @@ class JenkinsProvider(BaseProvider):
         self.token = token
         self.url = url
 
-    async def fetch_status(self, owner: str, repo: str, workflow_id: Optional[str] = None, branch: Optional[str] = None) -> Dict[str, Any]:
+    async def fetch_status(
+        self,
+        owner: str,
+        repo: str,
+        workflow_id: Optional[str] = None,
+        branch: Optional[str] = None,
+    ) -> Dict[str, Any]:
         if workflow_id == "any":
             workflow_id = None
-            
+
         if self.url and repo and not repo.startswith("http"):
-            job_path_parts = repo.strip('/').split('/')
+            job_path_parts = repo.strip("/").split("/")
             job_path = "/".join(f"job/{p}" for p in job_path_parts if p)
             base_url = f"{self.url.rstrip('/')}/{job_path}"
         else:
-            base_url = repo.rstrip('/')
-            
+            base_url = repo.rstrip("/")
+
         auth = (self.user, self.token) if self.user and self.token else None
 
         try:
@@ -30,7 +37,9 @@ class JenkinsProvider(BaseProvider):
         except Exception:
             return self._error_result("jenkins", owner, repo)
 
-    async def _resolve_jenkins_status(self, client, url, owner, repo_field, max_depth=3):
+    async def _resolve_jenkins_status(
+        self, client, url, owner, repo_field, max_depth=3
+    ):
         if max_depth <= 0:
             return self._error_result("jenkins", owner, repo_field)
 
@@ -63,7 +72,7 @@ class JenkinsProvider(BaseProvider):
                         "updated_at": "",
                         "commit_message": "No builds found",
                         "started_at": "",
-                        "expected_duration_sec": None
+                        "expected_duration_sec": None,
                     }
                 else:
                     return {
@@ -76,7 +85,7 @@ class JenkinsProvider(BaseProvider):
                         "updated_at": "",
                         "commit_message": "Job is in queue or starting",
                         "started_at": "",
-                        "expected_duration_sec": None
+                        "expected_duration_sec": None,
                     }
 
             result = last_build.get("result")
@@ -89,7 +98,13 @@ class JenkinsProvider(BaseProvider):
                     status = "failure"
 
             timestamp_ms = last_build.get("timestamp")
-            started_at = datetime.datetime.fromtimestamp(timestamp_ms / 1000.0, tz=datetime.timezone.utc).isoformat() if timestamp_ms else ""
+            started_at = (
+                datetime.datetime.fromtimestamp(
+                    timestamp_ms / 1000.0, tz=datetime.timezone.utc
+                ).isoformat()
+                if timestamp_ms
+                else ""
+            )
 
             est_duration = last_build.get("estimatedDuration", -1)
             if est_duration <= 0:
@@ -111,33 +126,45 @@ class JenkinsProvider(BaseProvider):
                 "status": status,
                 "url": last_build.get("url", url),
                 "repo_url": url,
-                "display_name": data.get("fullDisplayName") or data.get("displayName") or owner,
+                "display_name": data.get("fullDisplayName")
+                or data.get("displayName")
+                or owner,
                 "updated_at": started_at,
                 "commit_message": commit_msg,
                 "started_at": started_at,
-                "expected_duration_sec": expected_duration_sec
+                "expected_duration_sec": expected_duration_sec,
             }
         elif "MultiBranchProject" in cls or "OrganizationFolder" in cls:
             jobs = data.get("jobs", [])
             if not jobs:
                 return self._error_result("jenkins", owner, repo_field)
 
-            target_job = next((j for j in jobs if j.get("name") in ["master", "main"]), jobs[0])
-            return await self._resolve_jenkins_status(client, target_job.get("url"), owner, repo_field, max_depth - 1)
+            target_job = next(
+                (j for j in jobs if j.get("name") in ["master", "main"]), jobs[0]
+            )
+            return await self._resolve_jenkins_status(
+                client, target_job.get("url"), owner, repo_field, max_depth - 1
+            )
 
         return self._error_result("jenkins", owner, repo_field)
 
-    async def fetch_logs(self, owner: str, repo: str, workflow_id: Optional[str] = None, branch: Optional[str] = None) -> str:
+    async def fetch_logs(
+        self,
+        owner: str,
+        repo: str,
+        workflow_id: Optional[str] = None,
+        branch: Optional[str] = None,
+    ) -> str:
         if workflow_id == "any":
             workflow_id = None
-            
+
         if self.url and repo and not repo.startswith("http"):
-            job_path_parts = repo.strip('/').split('/')
+            job_path_parts = repo.strip("/").split("/")
             job_path = "/".join(f"job/{p}" for p in job_path_parts if p)
             base_url = f"{self.url.rstrip('/')}/{job_path}"
         else:
-            base_url = repo.rstrip('/')
-            
+            base_url = repo.rstrip("/")
+
         auth = (self.user, self.token) if self.user and self.token else None
 
         try:
@@ -174,29 +201,49 @@ class JenkinsProvider(BaseProvider):
             if not jobs:
                 return "No jobs found in folder."
 
-            target_job = next((j for j in jobs if j.get("name") in ["master", "main"]), jobs[0])
-            return await self._resolve_jenkins_logs(client, target_job.get("url"), max_depth - 1)
+            target_job = next(
+                (j for j in jobs if j.get("name") in ["master", "main"]), jobs[0]
+            )
+            return await self._resolve_jenkins_logs(
+                client, target_job.get("url"), max_depth - 1
+            )
 
         return "Unsupported Jenkins object class."
 
-    async def fetch_artifacts(self, owner: str, repo: str, workflow_id: Optional[str] = None, branch: Optional[str] = None) -> Dict[str, Any]:
+    async def fetch_artifacts(
+        self,
+        owner: str,
+        repo: str,
+        workflow_id: Optional[str] = None,
+        branch: Optional[str] = None,
+    ) -> Dict[str, Any]:
         return {"error": "Jenkins artifacts not implemented yet."}
 
     async def fetch_branches(self, owner: str, repo: str) -> List[str]:
         return []
 
-    async def get_workflows(self, owner: str, repo: str, branch: Optional[str] = None) -> List[Dict[str, str]]:
+    async def get_workflows(
+        self, owner: str, repo: str, branch: Optional[str] = None
+    ) -> List[Dict[str, str]]:
         return []
 
     async def explore(self, path: str) -> List[Node]:
         if not self.url:
-             from fastapi import HTTPException
-             raise HTTPException(status_code=400, detail="Jenkins URL is not configured. Please update your settings.")
+            from fastapi import HTTPException
 
-        base_url = self.url.rstrip('/')
+            raise HTTPException(
+                status_code=400,
+                detail="Jenkins URL is not configured. Please update your settings.",
+            )
+
+        base_url = self.url.rstrip("/")
         auth = (self.user, self.token) if self.user and self.token else None
 
-        query_url = f"{base_url}/{path}/api/json?tree=jobs[name,url,_class]" if path else f"{base_url}/api/json?tree=jobs[name,url,_class]"
+        query_url = (
+            f"{base_url}/{path}/api/json?tree=jobs[name,url,_class]"
+            if path
+            else f"{base_url}/api/json?tree=jobs[name,url,_class]"
+        )
 
         async with httpx.AsyncClient(timeout=10.0, auth=auth) as client:
             resp = await client.get(query_url)
@@ -210,12 +257,29 @@ class JenkinsProvider(BaseProvider):
                     j_url = j.get("url", "")
                     next_path = f"{path}/job/{j_name}" if path else f"job/{j_name}"
 
-                    is_folder = "Folder" in j_class or "MultiBranchProject" in j_class or "OrganizationFolder" in j_class
+                    is_folder = (
+                        "Folder" in j_class
+                        or "MultiBranchProject" in j_class
+                        or "OrganizationFolder" in j_class
+                    )
                     node_type = NodeType.FOLDER if is_folder else NodeType.JOB
 
-                    nodes.append(Node(id=j_name, name=j_name, type=node_type, path=next_path, has_children=is_folder, url=j_url))
+                    nodes.append(
+                        Node(
+                            id=j_name,
+                            name=j_name,
+                            type=node_type,
+                            path=next_path,
+                            has_children=is_folder,
+                            url=j_url,
+                        )
+                    )
                 return nodes
             elif resp.status_code in (401, 403):
-                 from fastapi import HTTPException
-                 raise HTTPException(status_code=401, detail="Jenkins authentication failed. Please verify your User and Token in the configuration.")
+                from fastapi import HTTPException
+
+                raise HTTPException(
+                    status_code=401,
+                    detail="Jenkins authentication failed. Please verify your User and Token in the configuration.",
+                )
             raise ProviderPathNotFoundError(f"Jenkins path {path} not found")

@@ -4,19 +4,23 @@ from main import app
 
 client = TestClient(app)
 
+
 @pytest.fixture(autouse=True)
 def setup_env(monkeypatch):
     monkeypatch.setenv("DASHBOARD_USER", "testuser")
     monkeypatch.setenv("DASHBOARD_PASSWORD", "testpass")
 
+
 def test_get_configure_page_unauth():
     response = client.get("/configure")
     assert response.status_code == 401
+
 
 def test_get_configure_page_auth():
     response = client.get("/configure", auth=("testuser", "testpass"))
     assert response.status_code == 200
     assert "Dash Configuration" in response.text
+
 
 def test_token_endpoints():
     auth = ("testuser", "testpass")

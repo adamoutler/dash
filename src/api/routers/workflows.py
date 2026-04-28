@@ -1,9 +1,8 @@
 import os
-import json
 import asyncio
 from fastapi import APIRouter, Depends, Request, HTTPException
 from fastapi.responses import StreamingResponse
-from typing import Optional, Any
+from typing import Optional
 from api.auth import get_current_user
 from api.config import ConfigManager, LOGS_DIR
 from api.models.domain import ProviderType
@@ -17,23 +16,49 @@ workflow_service = WorkflowService(config_manager)
 
 MAX_LOG_SIZE = 2 * 1024 * 1024  # 2MB
 
+
 @router.get("/workflows", summary="List Available Workflows")
-async def get_workflows(provider: ProviderType, owner: str, repo: str, branch: Optional[str] = None, user: str = Depends(get_current_user)):
+async def get_workflows(
+    provider: ProviderType,
+    owner: str,
+    repo: str,
+    branch: Optional[str] = None,
+    user: str = Depends(get_current_user),
+):
     return await workflow_service.get_workflows(provider, owner, repo, branch)
 
+
 @router.get("/artifacts", summary="Fetch Workflow Artifacts")
-async def get_artifacts(provider: ProviderType, owner: str, repo: str, workflow_id: Optional[str] = None, branch: Optional[str] = None, user: str = Depends(get_current_user)):
-    return await workflow_service.get_artifacts(provider, owner, repo, workflow_id, branch)
+async def get_artifacts(
+    provider: ProviderType,
+    owner: str,
+    repo: str,
+    workflow_id: Optional[str] = None,
+    branch: Optional[str] = None,
+    user: str = Depends(get_current_user),
+):
+    return await workflow_service.get_artifacts(
+        provider, owner, repo, workflow_id, branch
+    )
+
 
 @router.post("/logs", summary="Upload External Logs")
-async def post_logs(provider: ProviderType, owner: str, repo: str, request: Request, workflow_id: Optional[str] = None, branch: Optional[str] = None, user: str = Depends(get_current_user)):
+async def post_logs(
+    provider: ProviderType,
+    owner: str,
+    repo: str,
+    request: Request,
+    workflow_id: Optional[str] = None,
+    branch: Optional[str] = None,
+    user: str = Depends(get_current_user),
+):
     buffer = bytearray()
     async for chunk in request.stream():
         buffer.extend(chunk)
         if len(buffer) > MAX_LOG_SIZE * 2:
             buffer = buffer[-MAX_LOG_SIZE:]
 
-    log_text = buffer.decode('utf-8', errors='replace')
+    log_text = buffer.decode("utf-8", errors="replace")
     if len(log_text) > MAX_LOG_SIZE:
         log_text = "[TRUNCATED...]\n" + log_text[-MAX_LOG_SIZE:]
 
@@ -54,8 +79,16 @@ async def post_logs(provider: ProviderType, owner: str, repo: str, request: Requ
 
     return {"message": "Log saved successfully", "file": filename}
 
+
 @router.get("/logs", summary="Retrieve Workflow Logs")
-async def get_logs(provider: ProviderType, owner: str, repo: str, workflow_id: Optional[str] = None, branch: Optional[str] = None, user: str = Depends(get_current_user)):
+async def get_logs(
+    provider: ProviderType,
+    owner: str,
+    repo: str,
+    workflow_id: Optional[str] = None,
+    branch: Optional[str] = None,
+    user: str = Depends(get_current_user),
+):
     filename = get_log_filename(provider, owner, repo, workflow_id, branch)
     filepath = os.path.normpath(os.path.join(LOGS_DIR, filename))
     if not filepath.startswith(os.path.normpath(LOGS_DIR)):
@@ -68,46 +101,64 @@ async def get_logs(provider: ProviderType, owner: str, repo: str, workflow_id: O
     log = await workflow_service.get_logs(provider, owner, repo, workflow_id, branch)
     return {"log": log}
 
+
 @router.get("/branches", summary="List Available Branches")
-async def get_branches(provider: ProviderType, owner: str, repo: str, user: str = Depends(get_current_user)):
+async def get_branches(
+    provider: ProviderType, owner: str, repo: str, user: str = Depends(get_current_user)
+):
     return await workflow_service.get_branches(provider, owner, repo)
 
+
 @router.get("/status", summary="Retrieve all build statuses.")
-async def get_status(request: Request, query: Optional[str] = None, user: str = Depends(get_current_user)):
+async def get_status(
+    request: Request, query: Optional[str] = None, user: str = Depends(get_current_user)
+):
     repos = storage.get_repos()
-    
+
     if query:
         filtered_repos = []
         for r in repos:
             repo_str = f"{r.get('owner')}/{r.get('repo')}"
-            if r.get('repo') == query or repo_str == query or (r.get('provider') == 'jenkins' and r.get('owner') == query):
+            if (
+                r.get("repo") == query
+                or repo_str == query
+                or (r.get("provider") == "jenkins" and r.get("owner") == query)
+            ):
                 filtered_repos.append(r)
         repos = filtered_repos
-        
+
     results = await workflow_service.get_all_statuses(repos)
-    base_url = str(request.base_url).rstrip('/')
+    base_url = str(request.base_url).rstrip("/")
 
     for i, r in enumerate(repos):
         if i < len(results):
             res = results[i]
             current_url = res.get("url")
             saved_url = r.get("last_run_url")
-            
+
             provider = res.get("provider", "")
             owner = res.get("owner", "")
             repo = res.get("repo", "")
             wf_id = r.get("workflow_id")
             branch = r.get("branch")
-            
-            filepath = os.path.normpath(os.path.join(LOGS_DIR, get_log_filename(provider, owner, repo, wf_id, branch)))
-            has_local_log = filepath.startswith(os.path.normpath(LOGS_DIR)) and os.path.exists(filepath)
-            
-            dash_log_url = f"{base_url}/api/logs?provider={provider}&owner={owner}&repo={repo}"
+
+            filepath = os.path.normpath(
+                os.path.join(
+                    LOGS_DIR, get_log_filename(provider, owner, repo, wf_id, branch)
+                )
+            )
+            has_local_log = filepath.startswith(
+                os.path.normpath(LOGS_DIR)
+            ) and os.path.exists(filepath)
+
+            dash_log_url = (
+                f"{base_url}/api/logs?provider={provider}&owner={owner}&repo={repo}"
+            )
             if branch:
                 dash_log_url += f"&branch={branch}"
             if wf_id:
                 dash_log_url += f"&workflow_id={wf_id}"
-            
+
             if has_local_log:
                 res["log_url"] = dash_log_url
             else:
@@ -125,21 +176,41 @@ async def get_status(request: Request, query: Optional[str] = None, user: str = 
 
     return results
 
+
 @router.get("/wait", summary="Stream Execution Status")
-async def wait_status(provider: ProviderType, owner: str, repo: str, workflow_id: Optional[str] = None, branch: Optional[str] = None, user: str = Depends(get_current_user)):
+async def wait_status(
+    provider: ProviderType,
+    owner: str,
+    repo: str,
+    workflow_id: Optional[str] = None,
+    branch: Optional[str] = None,
+    user: str = Depends(get_current_user),
+):
     async def event_stream():
         yield "waiting for complete."
         attempts_when_not_running = 0
         was_running = False
 
         while True:
-            result = await workflow_service.get_single_status(provider, owner, repo, workflow_id, branch)
-            if result.get("status") == "error" and result.get("commit_message") == "Unknown provider":
+            result = await workflow_service.get_single_status(
+                provider, owner, repo, workflow_id, branch
+            )
+            if (
+                result.get("status") == "error"
+                and result.get("commit_message") == "Unknown provider"
+            ):
                 yield "\nError: Unknown provider\n"
                 break
 
             status = result.get("status")
-            is_running = status in ["running", "in_progress", "queued", "waiting", "requested", "pending"]
+            is_running = status in [
+                "running",
+                "in_progress",
+                "queued",
+                "waiting",
+                "requested",
+                "pending",
+            ]
 
             if is_running:
                 was_running = True

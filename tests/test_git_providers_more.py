@@ -5,12 +5,22 @@ from api.providers.github import GitHubProvider
 from api.providers.forgejo import ForgejoProvider
 from api.providers.jenkins import JenkinsProvider
 
+
 @pytest.mark.asyncio
-@patch('api.providers.forgejo.httpx.AsyncClient.get')
+@patch("api.providers.forgejo.httpx.AsyncClient.get")
 async def test_fetch_forgejo_status(mock_get):
     mock_runs = MagicMock()
     mock_runs.status_code = 200
-    mock_runs.json.return_value = {"workflow_runs": [{"status": "success", "conclusion": "success", "html_url": "url", "created_at": "2023-01-01T00:00:00Z"}]}
+    mock_runs.json.return_value = {
+        "workflow_runs": [
+            {
+                "status": "success",
+                "conclusion": "success",
+                "html_url": "url",
+                "created_at": "2023-01-01T00:00:00Z",
+            }
+        ]
+    }
 
     mock_commits = MagicMock()
     mock_commits.status_code = 200
@@ -22,8 +32,9 @@ async def test_fetch_forgejo_status(mock_get):
     res = await provider.fetch_status("owner", "repo")
     assert res["status"] == "success"
 
+
 @pytest.mark.asyncio
-@patch('api.providers.github.httpx.AsyncClient.get')
+@patch("api.providers.github.httpx.AsyncClient.get")
 async def test_fetch_github_logs(mock_get):
     mock_runs = MagicMock()
     mock_runs.status_code = 200
@@ -43,14 +54,16 @@ async def test_fetch_github_logs(mock_get):
     res = await provider.fetch_logs("owner", "repo")
     assert res == "logs here"
 
+
 @pytest.mark.asyncio
 async def test_fetch_forgejo_logs():
     provider = ForgejoProvider("token", "url")
     res = await provider.fetch_logs("owner", "repo")
     assert "Forgejo/Gitea logs are not natively available" in res
 
+
 @pytest.mark.asyncio
-@patch('api.providers.github.httpx.AsyncClient.get')
+@patch("api.providers.github.httpx.AsyncClient.get")
 async def test_fetch_github_artifacts(mock_get):
     mock_runs = MagicMock()
     mock_runs.status_code = 200
@@ -66,8 +79,9 @@ async def test_fetch_github_artifacts(mock_get):
     res = await provider.fetch_artifacts("owner", "repo")
     assert "artifacts" in res
 
+
 @pytest.mark.asyncio
-@patch('api.providers.forgejo.httpx.AsyncClient.get')
+@patch("api.providers.forgejo.httpx.AsyncClient.get")
 async def test_fetch_forgejo_artifacts(mock_get):
     mock_runs = MagicMock()
     mock_runs.status_code = 200
@@ -83,22 +97,24 @@ async def test_fetch_forgejo_artifacts(mock_get):
     res = await provider.fetch_artifacts("owner", "repo")
     assert "artifacts" in res
 
+
 @pytest.mark.asyncio
-@patch('api.providers.jenkins.JenkinsProvider._resolve_jenkins_status')
+@patch("api.providers.jenkins.JenkinsProvider._resolve_jenkins_status")
 async def test_fetch_jenkins_status(mock_resolve):
     mock_resolve.return_value = {"status": "success"}
     provider = JenkinsProvider("user", "token", "http://jenkins")
     res = await provider.fetch_status("owner", "repo")
     assert res["status"] == "success"
 
+
 @pytest.mark.asyncio
-@patch('api.providers.jenkins.httpx.AsyncClient.get')
+@patch("api.providers.jenkins.httpx.AsyncClient.get")
 async def test_resolve_jenkins_status_leaf(mock_get):
     mock_resp = MagicMock()
     mock_resp.status_code = 200
     mock_resp.json.return_value = {
         "_class": "WorkflowJob",
-        "lastBuild": {"result": "SUCCESS"}
+        "lastBuild": {"result": "SUCCESS"},
     }
     mock_get.return_value = mock_resp
     client = httpx.AsyncClient()
@@ -107,21 +123,22 @@ async def test_resolve_jenkins_status_leaf(mock_get):
     assert res["status"] == "success"
     await client.aclose()
 
+
 @pytest.mark.asyncio
-@patch('api.providers.jenkins.httpx.AsyncClient.get')
+@patch("api.providers.jenkins.httpx.AsyncClient.get")
 async def test_resolve_jenkins_status_folder(mock_get):
     mock_folder = MagicMock()
     mock_folder.status_code = 200
     mock_folder.json.return_value = {
         "_class": "OrganizationFolder",
-        "jobs": [{"name": "master", "url": "master_url"}]
+        "jobs": [{"name": "master", "url": "master_url"}],
     }
 
     mock_job = MagicMock()
     mock_job.status_code = 200
     mock_job.json.return_value = {
         "_class": "WorkflowJob",
-        "lastBuild": {"result": "SUCCESS"}
+        "lastBuild": {"result": "SUCCESS"},
     }
 
     mock_get.side_effect = [mock_folder, mock_job]
@@ -131,22 +148,24 @@ async def test_resolve_jenkins_status_folder(mock_get):
     assert res["status"] == "success"
     await client.aclose()
 
+
 @pytest.mark.asyncio
-@patch('api.providers.jenkins.JenkinsProvider._resolve_jenkins_logs')
+@patch("api.providers.jenkins.JenkinsProvider._resolve_jenkins_logs")
 async def test_fetch_jenkins_logs(mock_resolve):
     mock_resolve.return_value = "logs here"
     provider = JenkinsProvider("user", "token", "http://jenkins")
     res = await provider.fetch_logs("owner", "repo")
     assert res == "logs here"
 
+
 @pytest.mark.asyncio
-@patch('api.providers.jenkins.httpx.AsyncClient.get')
+@patch("api.providers.jenkins.httpx.AsyncClient.get")
 async def test_resolve_jenkins_logs(mock_get):
     mock_resp = MagicMock()
     mock_resp.status_code = 200
     mock_resp.json.return_value = {
         "_class": "WorkflowJob",
-        "lastBuild": {"url": "build_url"}
+        "lastBuild": {"url": "build_url"},
     }
 
     mock_logs = MagicMock()
@@ -159,6 +178,7 @@ async def test_resolve_jenkins_logs(mock_get):
     res = await provider._resolve_jenkins_logs(client, "url")
     assert res == "log text"
     await client.aclose()
+
 
 @pytest.mark.asyncio
 async def test_fetch_jenkins_artifacts():

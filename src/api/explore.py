@@ -1,5 +1,5 @@
 import logging
-from typing import List, Optional, Dict, Any
+from typing import List
 from fastapi import APIRouter, HTTPException, Query, Path, Depends
 from api.auth import get_current_user
 from api.config import ConfigManager
@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 config_manager = ConfigManager()
 
 router = APIRouter(prefix="/api/explore", tags=["explore"])
+
 
 # Simple TTL Cache
 class SimpleTTLCache:
@@ -37,41 +38,50 @@ class SimpleTTLCache:
         self.cache[key] = value
         self.timestamps[key] = time.time()
 
+
 # Caching responses for 5 minutes
 explore_cache = SimpleTTLCache(ttl=300)
+
 
 def _get_provider_instance(provider: ProviderType):
     if provider == ProviderType.github:
         return ProviderFactory.get_provider(
             ProviderType.github,
-            token=config_manager.get_value("github_token", "GITHUB_TOKEN")
+            token=config_manager.get_value("github_token", "GITHUB_TOKEN"),
         )
     elif provider in (ProviderType.forgejo, ProviderType.gitea):
         return ProviderFactory.get_provider(
             ProviderType.forgejo,
             token=config_manager.get_value("forgejo_token", "FORGEJO_TOKEN"),
-            url=config_manager.get_value("forgejo_url", "FORGEJO_URL")
+            url=config_manager.get_value("forgejo_url", "FORGEJO_URL"),
         )
     elif provider == ProviderType.jenkins:
         return ProviderFactory.get_provider(
             ProviderType.jenkins,
             user=config_manager.get_value("jenkins_user", "JENKINS_USER"),
             token=config_manager.get_value("jenkins_token", "JENKINS_TOKEN"),
-            url=config_manager.get_value("jenkins_url", "JENKINS_URL")
+            url=config_manager.get_value("jenkins_url", "JENKINS_URL"),
         )
     return None
+
 
 async def fetch_provider_nodes(provider: ProviderType, path: str) -> List[Node]:
     instance = _get_provider_instance(provider)
     if not instance:
-        raise ProviderNotImplementedError(f"Provider {provider} not implemented or configured")
+        raise ProviderNotImplementedError(
+            f"Provider {provider} not implemented or configured"
+        )
     return await instance.explore(path)
+
 
 @router.get("/{provider}/nodes", response_model=NodeList)
 async def get_nodes(
     provider: ProviderType = Path(..., description="The provider name"),
-    path: str = Query("", description="The hierarchical path to explore. Leave empty for the root level."),
-    user: str = Depends(get_current_user)
+    path: str = Query(
+        "",
+        description="The hierarchical path to explore. Leave empty for the root level.",
+    ),
+    user: str = Depends(get_current_user),
 ):
     provider_lower = provider.value.lower()
     cache_key = f"{provider_lower}:{path}"
@@ -91,4 +101,6 @@ async def get_nodes(
         raise
     except Exception as e:
         logger.error(f"Error exploring {provider_lower} path '{path}': {e}")
-        raise HTTPException(status_code=500, detail="Internal server error while fetching nodes.")
+        raise HTTPException(
+            status_code=500, detail="Internal server error while fetching nodes."
+        )
