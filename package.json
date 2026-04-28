@@ -1,0 +1,24 @@
+{
+  "name": "@adamoutler/agentic-dash",
+  "version": "1.0.0",
+  "description": "Agentic Dash",
+  "main": "src/static/sw.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/adamoutler/dash.git"
+  },
+  "bugs": {
+    "url": "https://github.com/adamoutler/dash/issues"
+  },
+  "homepage": "https://github.com/adamoutler/dash#readme",
+  "keywords": [
+    "agentic",
+    "dash"
+  ],
+  "author": "Adam Outler",
+  "license": "MIT",
+  "dependencies": {}
+}

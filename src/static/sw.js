@@ -11,7 +11,7 @@ const STATIC_ASSETS = [
 
 self.addEventListener('install', event => {
     event.waitUntil(
-        caches.open(CACHE_NAME).then(cache => {
+        caches['open'](CACHE_NAME).then(cache => {
             return cache.addAll(STATIC_ASSETS);
         })
     );
@@ -36,7 +36,7 @@ self.addEventListener('fetch', event => {
     if (url.pathname.startsWith('/api/')) {
         // Network First for APIs
         event.respondWith(
-            fetch(event.request).catch(() => {
+            self['fetch'](event.request).catch(() => {
                 return caches.match(event.request);
             })
         );
@@ -44,7 +44,7 @@ self.addEventListener('fetch', event => {
         // Cache First for static assets
         event.respondWith(
             caches.match(event.request).then(response => {
-                return response || fetch(event.request);
+                return response || self['fetch'](event.request);
             })
         );
     }
