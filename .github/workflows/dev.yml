@@ -34,12 +34,12 @@ jobs:
 
     - name: Run SafeSkill Check
       run: |
-        npx --yes skillsafe@0.2.9 scan . --json || echo "SafeSkill found issues but continuing"
+        npx --yes skillsafe@0.2.9 scan . --json
 
     - name: Run Lint
       run: |
         pip install ruff
-        ruff check . || echo "Ruff failed, but continuing for now"
+        ruff check .
 
     - name: Run Tests
       run: |
