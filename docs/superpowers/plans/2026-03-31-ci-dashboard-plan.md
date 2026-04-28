@@ -466,7 +466,6 @@ Replace contents of `static/index.html` with:
     </div>
 
     <div class="repo-list" id="repoList">
-        <!-- JS will populate -->
         <div style="padding: 20px; text-align: center; color: #586069;">Loading statuses...</div>
     </div>
 </div>
