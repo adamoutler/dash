@@ -511,7 +511,7 @@
                 iconPath = '/assets/img/favicon.svg';
             }
 
-            const faviconHtml = `<img src="${baseUrl}${iconPath}" style="width: 18px; height: 18px; margin-right: 8px; vertical-align: middle;" onerror="this.style.display='none'">`;
+            const faviconHtml = `<img src="${baseUrl}${iconPath}" class="provider-icon provider-${item.provider}" style="width: 18px; height: 18px; margin-right: 8px; vertical-align: middle;" onerror="this.style.display='none'">`;
 
             return `
             <div class="repo-item">
