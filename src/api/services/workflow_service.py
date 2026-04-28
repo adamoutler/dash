@@ -63,6 +63,7 @@ class WorkflowService:
                 res = results[i]
                 res["custom_links"] = r.get("custom_links", [])
                 res["workflow_id"] = r.get("workflow_id")
+                res["branch"] = r.get("branch")
 
                 configured_wf_name = r.get("workflow_name")
                 if not configured_wf_name or configured_wf_name == "Any Workflow":
