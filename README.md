@@ -1,5 +1,7 @@
 # <img src="docs/icon.jpg" width="40" height="40" alt="Dash Logo" style="vertical-align: middle"> 🛑 Stop AI Hallucinations! Your Ultimate Dash & Agent Guardrail 🚀
 
+[![SafeSkill](https://safeskill.dev/api/badge/adamoutler-dash)](https://safeskill.dev/scan/adamoutler-dash)
+
 > **The essential CI feedback loop and guardrail for autonomous AI development.**
 
 Tired of your AI agent confidently hallucinating: *"I changed it, so now it works. I'll push the changes!"* only to break the main branch? 🤦

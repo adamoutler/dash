@@ -1,5 +1,5 @@
 {
-  "name": "@adamoutler/agentic-dash",
+  "name": "@adamoutler/dash",
   "version": "1.0.0",
   "description": "Agentic Dash",
   "main": "src/static/sw.js",
