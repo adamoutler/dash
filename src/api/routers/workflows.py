@@ -97,11 +97,14 @@ async def get_status(request: Request, query: Optional[str] = None, user: str = 
             owner = res.get("owner", "")
             repo = res.get("repo", "")
             wf_id = r.get("workflow_id")
+            branch = r.get("branch")
             
-            filepath = os.path.normpath(os.path.join(LOGS_DIR, get_log_filename(provider, owner, repo, wf_id)))
+            filepath = os.path.normpath(os.path.join(LOGS_DIR, get_log_filename(provider, owner, repo, wf_id, branch)))
             has_local_log = filepath.startswith(os.path.normpath(LOGS_DIR)) and os.path.exists(filepath)
             
             dash_log_url = f"{base_url}/api/logs?provider={provider}&owner={owner}&repo={repo}"
+            if branch:
+                dash_log_url += f"&branch={branch}"
             if wf_id:
                 dash_log_url += f"&workflow_id={wf_id}"
             

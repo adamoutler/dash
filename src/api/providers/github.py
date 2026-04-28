@@ -9,9 +9,24 @@ class GitHubProvider(BaseProvider):
         super().__init__()
         self.token = token
 
+    async def _resolve_workflow_id(self, owner: str, repo: str, workflow_id: Optional[str]) -> Optional[str]:
+        if not workflow_id or workflow_id == "any":
+            return None
+        
+        # If it's numeric or ends in .yml/.yaml, it's likely already an ID/filename
+        if workflow_id.isdigit() or workflow_id.endswith(".yml") or workflow_id.endswith(".yaml"):
+            return workflow_id
+
+        # Otherwise, try to find a workflow with this name
+        workflows = await self.get_workflows(owner, repo)
+        for w in workflows:
+            if w["name"] == workflow_id:
+                return w["id"]
+        
+        return workflow_id # Fallback to original if not found
+
     async def fetch_status(self, owner: str, repo: str, workflow_id: Optional[str] = None, branch: Optional[str] = None) -> Dict[str, Any]:
-        if workflow_id == "any":
-            workflow_id = None
+        workflow_id = await self._resolve_workflow_id(owner, repo, workflow_id)
         headers = {"Authorization": f"Bearer {self.token}", "Accept": "application/vnd.github.v3+json"} if self.token else {}
         base_url = f"https://api.github.com/repos/{owner}/{repo}"
 
@@ -88,8 +103,7 @@ class GitHubProvider(BaseProvider):
             return err
 
     async def fetch_logs(self, owner: str, repo: str, workflow_id: Optional[str] = None, branch: Optional[str] = None) -> str:
-        if workflow_id == "any":
-            workflow_id = None
+        workflow_id = await self._resolve_workflow_id(owner, repo, workflow_id)
         headers = {"Authorization": f"Bearer {self.token}", "Accept": "application/vnd.github.v3+json"} if self.token else {}
         base_url = f"https://api.github.com/repos/{owner}/{repo}"
         runs_url = f"{base_url}/actions/workflows/{workflow_id}/runs?per_page=1" if workflow_id else f"{base_url}/actions/runs?per_page=1"
@@ -121,8 +135,7 @@ class GitHubProvider(BaseProvider):
             return "Error fetching GitHub logs."
 
     async def fetch_artifacts(self, owner: str, repo: str, workflow_id: Optional[str] = None, branch: Optional[str] = None) -> Dict[str, Any]:
-        if workflow_id == "any":
-            workflow_id = None
+        workflow_id = await self._resolve_workflow_id(owner, repo, workflow_id)
         headers = {"Authorization": f"Bearer {self.token}", "Accept": "application/vnd.github.v3+json"} if self.token else {}
         base_url = f"https://api.github.com/repos/{owner}/{repo}"
         runs_url = f"{base_url}/actions/workflows/{workflow_id}/runs?per_page=1" if workflow_id else f"{base_url}/actions/runs?per_page=1"
@@ -144,6 +157,7 @@ class GitHubProvider(BaseProvider):
                 return {"error": f"Failed to fetch artifacts. HTTP {artifacts_resp.status_code}"}
         except Exception:
             return {"error": "Error fetching GitHub artifacts."}
+
 
     async def fetch_branches(self, owner: str, repo: str) -> List[str]:
         headers = {"Authorization": f"Bearer {self.token}", "Accept": "application/vnd.github.v3+json"} if self.token else {}
