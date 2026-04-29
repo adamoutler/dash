@@ -5,6 +5,8 @@ description: Scan AI tool skills, local directories, or remote GitHub repositori
 
 # Skillsafe Scanner
 
+[![SafeSkill](https://safeskill.dev/api/badge/adamoutler-dash)](https://safeskill.dev/scan/adamoutler-dash)
+
 This skill provides a procedure for scanning an AI tool skill, local directory, or remote repository for security risks and prompt injection using `skillsafe`, and subsequently handling or improving the items mentioned in the scan report.
 
 ## When to use
