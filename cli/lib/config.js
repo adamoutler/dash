@@ -30,6 +30,7 @@ async function promptConfig() {
     fs.mkdirSync(CONFIG_DIR, { recursive: true });
   }
   fs.writeFileSync(CONFIG_FILE, JSON.stringify({ url, token }, null, 2), { mode: 0o600 });
+  fs.chmodSync(CONFIG_FILE, 0o600);
   console.log('Configuration saved securely.');
   return { url, token };
 }

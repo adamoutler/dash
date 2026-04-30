@@ -7,8 +7,19 @@ module.exports = async function(repo) {
     if (repo) url += `?repo=${encodeURIComponent(repo)}`;
     
     const data = await fetchDash(url);
+    
+    if (!data || (Array.isArray(data) && data.length === 0)) {
+      console.log(formatInfo('No status available'));
+      return;
+    }
+    
     if (Array.isArray(data)) {
-      data.forEach(renderStatus);
+      const items = data.filter(Boolean);
+      if (items.length === 0) {
+        console.log(formatInfo('No status available'));
+        return;
+      }
+      items.forEach(renderStatus);
     } else {
       renderStatus(data);
     }

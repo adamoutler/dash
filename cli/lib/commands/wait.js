@@ -10,9 +10,24 @@ module.exports = async function(repo) {
     
     console.log(formatPending(`Waiting for pipeline on ${repo} to complete...`));
     
+    let transientFailures = 0;
+    const MAX_TRANSIENT_FAILURES = 5;
+    
     // Poll every 5 seconds
     while (true) {
-      const data = await fetchDash(`/api/status?repo=${encodeURIComponent(repo)}`);
+      let data;
+      try {
+        data = await fetchDash(`/api/status?repo=${encodeURIComponent(repo)}`);
+        transientFailures = 0;
+      } catch (err) {
+        transientFailures++;
+        console.error(formatError(`Transient error (${transientFailures}/${MAX_TRANSIENT_FAILURES}): ${err.message}`));
+        if (transientFailures >= MAX_TRANSIENT_FAILURES) {
+          process.exit(1);
+        }
+        await new Promise(r => setTimeout(r, 5000));
+        continue;
+      }
       
       const item = Array.isArray(data) ? data[0] : data;
       if (!item) {
