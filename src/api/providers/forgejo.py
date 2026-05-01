@@ -293,11 +293,9 @@ Recommendations:
     async def explore(self, path: str) -> List[Node]:
         if not self.url:
             raise ProviderPathNotFoundError("Forgejo token or URL not configured")
-        headers = (
-            {"Authorization": f"token {self.token}", "Accept": "application/json"}
-            if self.token
-            else {}
-        )
+        headers = {"Accept": "application/json"}
+        if self.token:
+            headers["Authorization"] = f"token {self.token}"
         parts = [p for p in path.strip("/").split("/") if p]
         url = self.url.rstrip("/")
 

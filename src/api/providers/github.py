@@ -331,10 +331,9 @@ class GitHubProvider(BaseProvider):
         return results
 
     async def explore(self, path: str) -> List[Node]:
-        headers = {
-            "Authorization": f"Bearer {self.token}",
-            "Accept": "application/vnd.github.v3+json",
-        }
+        headers = {"Accept": "application/vnd.github.v3+json"}
+        if self.token:
+            headers["Authorization"] = f"Bearer {self.token}"
         parts = [p for p in path.strip("/").split("/") if p]
 
         async with httpx.AsyncClient(timeout=10.0) as client:
