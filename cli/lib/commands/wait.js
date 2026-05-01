@@ -1,6 +1,10 @@
 const { fetchDash } = require('../api');
 const { formatError, formatSuccess, formatPending, formatInfo } = require('../ui');
 
+/**
+ * Polls the dashboard API until the specified repository's pipeline finishes.
+ * @param {string} repo - Repository name or owner/name to wait for.
+ */
 module.exports = async function(repo) {
   try {
     if (!repo) {

@@ -1,5 +1,8 @@
 const pc = require('picocolors');
 
+/**
+ * UI Utilities for formatting colored CLI output.
+ */
 module.exports = {
   colors: pc,
   icons: {

@@ -1,5 +1,12 @@
 const { getConfig } = require('./config');
 
+/**
+ * Fetches data from the dashboard API using configured credentials.
+ * @param {string} endpoint - The API endpoint to call (e.g., '/api/status').
+ * @param {Object} [options={}] - Additional fetch options (headers, method, etc.).
+ * @returns {Promise<Object|Array>} Parsed JSON response.
+ * @throws {Error} If config is missing, auth fails, or request times out/fails.
+ */
 async function fetchDash(endpoint, options = {}) {
   const config = getConfig();
   if (!config) throw new Error('Missing config');

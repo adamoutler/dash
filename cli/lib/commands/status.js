@@ -29,6 +29,10 @@ module.exports = async function(repo) {
   }
 };
 
+/**
+ * Helper to render the status of a single pipeline item.
+ * @param {Object} item - Pipeline status data.
+ */
 function renderStatus(item) {
   let statusStr = '';
   if (item.status === 'success' || item.status === 'passed') statusStr = formatSuccess(item.status);

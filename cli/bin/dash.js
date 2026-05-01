@@ -1,4 +1,8 @@
 #!/usr/bin/env node
+
+/**
+ * Main entrypoint for the dash CLI.
+ */
 const { program } = require('commander');
 const { version } = require('../../package.json');
 const statusCmd = require('../lib/commands/status');

@@ -35,6 +35,10 @@ async function promptConfig() {
   return { url, token };
 }
 
+/**
+ * Ensures a valid configuration exists, prompting the user if it is missing.
+ * @returns {Promise<Object>} Configuration object with {url, token}.
+ */
 async function ensureConfig() {
   let conf = getConfig();
   if (!conf || !conf.url || !conf.token) {
