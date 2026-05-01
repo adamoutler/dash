@@ -29,7 +29,11 @@ For future AI incarnations working on this project:
 * **Refactoring:** When refactoring, always aim for legibility and code readability. Extract nested functions (e.g., helpers in `api/git_providers.py`) to module-level private functions if they don't depend on closure state to reduce indentation and improve readability.
 * **Testing:** Never commit without running the `pytest` suite. All changes must be verified against the test suite prior to committing.
 
-### 3. Before finishing up
+### 3. CI/CD Monitoring (The Dash)
+* **Watch the Dash:** You MUST actively monitor the CI/CD pipeline (the "dash") using `mcp_dash_wait` or `mcp_dash_get_status` immediately after EVERY `git push`.
+* **Never Push and Run:** Do not assume a push was successful just because the git command completed. You are responsible for waiting for the CI pipeline to finish and confirming its success or addressing its failure before concluding your task or starting another.
+
+### 4. Before finishing up
 Ask questions that a senior or principal engineer might ask:
 - Is this code comprehensive?
 - Why did you call the dependency here?
