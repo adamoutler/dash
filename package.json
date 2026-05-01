@@ -1,6 +1,6 @@
 {
   "name": "@adamoutler/dash",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A secure, authenticated CI/CD monitoring dashboard for autonomous AI agents and humans, supporting GitHub, Forgejo, and Jenkins with native MCP integration.",
   "main": "src/static/sw.js",
   "types": "src/static/sw.d.ts",
