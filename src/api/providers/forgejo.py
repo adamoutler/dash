@@ -291,80 +291,94 @@ Recommendations:
             return []
 
     async def explore(self, path: str) -> List[Node]:
-        if not self.url:
-            raise ProviderPathNotFoundError("Forgejo token or URL not configured")
+        if not self.url or not (
+            self.url.startswith("http://") or self.url.startswith("https://")
+        ):
+            raise ProviderPathNotFoundError("Forgejo URL is missing or invalid")
         headers = {"Accept": "application/json"}
         if self.token:
             headers["Authorization"] = f"token {self.token}"
         parts = [p for p in path.strip("/").split("/") if p]
         url = self.url.rstrip("/")
 
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            if len(parts) == 0:
-                nodes = []
-                user_resp = await client.get(f"{url}/api/v1/user", headers=headers)
-                if user_resp.status_code == 200:
-                    user_data = user_resp.json()
-                    login = user_data.get("login", user_data.get("username"))
-                    if login:
-                        nodes.append(
-                            Node(
-                                id=login,
-                                name=login,
-                                type=NodeType.USER,
-                                path=login,
-                                has_children=True,
-                                url=f"{url}/{login}",
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                if len(parts) == 0:
+                    nodes = []
+                    user_resp = await client.get(f"{url}/api/v1/user", headers=headers)
+                    if user_resp.status_code == 200:
+                        user_data = user_resp.json()
+                        login = user_data.get("login", user_data.get("username"))
+                        if login:
+                            nodes.append(
+                                Node(
+                                    id=login,
+                                    name=login,
+                                    type=NodeType.USER,
+                                    path=login,
+                                    has_children=True,
+                                    url=f"{url}/{login}",
+                                )
                             )
-                        )
 
-                orgs_resp = await client.get(f"{url}/api/v1/user/orgs", headers=headers)
-                if orgs_resp.status_code == 200:
-                    for org in orgs_resp.json():
-                        login = org.get("username")
-                        nodes.append(
-                            Node(
-                                id=login,
-                                name=login,
-                                type=NodeType.ORGANIZATION,
-                                path=login,
-                                has_children=True,
-                                url=f"{url}/{login}",
-                            )
-                        )
-                return nodes
-            elif len(parts) == 1:
-                owner = parts[0]
-                repos_resp = await client.get(
-                    f"{url}/api/v1/orgs/{owner}/repos?limit=100", headers=headers
-                )
-                if repos_resp.status_code != 200:
-                    repos_resp = await client.get(
-                        f"{url}/api/v1/users/{owner}/repos?limit=100", headers=headers
+                    orgs_resp = await client.get(
+                        f"{url}/api/v1/user/orgs", headers=headers
                     )
-                if repos_resp.status_code == 200:
+                    if orgs_resp.status_code == 200:
+                        for org in orgs_resp.json():
+                            login = org.get("username")
+                            nodes.append(
+                                Node(
+                                    id=login,
+                                    name=login,
+                                    type=NodeType.ORGANIZATION,
+                                    path=login,
+                                    has_children=True,
+                                    url=f"{url}/{login}",
+                                )
+                            )
+                    return nodes
+                elif len(parts) == 1:
+                    owner = parts[0]
+                    repos_resp = await client.get(
+                        f"{url}/api/v1/orgs/{owner}/repos?limit=100", headers=headers
+                    )
+                    if repos_resp.status_code != 200:
+                        repos_resp = await client.get(
+                            f"{url}/api/v1/users/{owner}/repos?limit=100",
+                            headers=headers,
+                        )
+                    if repos_resp.status_code == 200:
+                        return [
+                            Node(
+                                id=r.get("name"),
+                                name=r.get("name"),
+                                type=NodeType.REPOSITORY,
+                                path=f"{owner}/{r.get('name')}",
+                                has_children=True,
+                                url=r.get("html_url"),
+                            )
+                            for r in repos_resp.json()
+                        ]
+                    raise ProviderPathNotFoundError(
+                        f"Owner {owner} not found or no access"
+                    )
+                elif len(parts) == 2:
+                    owner, repo = parts[0], parts[1]
                     return [
                         Node(
-                            id=r.get("name"),
-                            name=r.get("name"),
-                            type=NodeType.REPOSITORY,
-                            path=f"{owner}/{r.get('name')}",
-                            has_children=True,
-                            url=r.get("html_url"),
+                            id="any",
+                            name="Any Workflow",
+                            type=NodeType.WORKFLOW,
+                            path=f"{owner}/{repo}/any",
+                            has_children=False,
                         )
-                        for r in repos_resp.json()
                     ]
-                raise ProviderPathNotFoundError(f"Owner {owner} not found or no access")
-            elif len(parts) == 2:
-                owner, repo = parts[0], parts[1]
-                return [
-                    Node(
-                        id="any",
-                        name="Any Workflow",
-                        type=NodeType.WORKFLOW,
-                        path=f"{owner}/{repo}/any",
-                        has_children=False,
-                    )
-                ]
+        except httpx.RequestError as e:
+            raise ProviderPathNotFoundError(f"Failed to connect to Forgejo server: {e}")
+        except ProviderPathNotFoundError:
+            raise
+        except Exception as e:
+            raise ProviderPathNotFoundError(f"Error exploring Forgejo path: {e}")
 
         return []

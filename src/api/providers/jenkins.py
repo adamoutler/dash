@@ -245,41 +245,48 @@ class JenkinsProvider(BaseProvider):
             else f"{base_url}/api/json?tree=jobs[name,url,_class]"
         )
 
-        async with httpx.AsyncClient(timeout=10.0, auth=auth) as client:
-            resp = await client.get(query_url)
-            if resp.status_code == 200:
-                data = resp.json()
-                jobs = data.get("jobs", [])
-                nodes = []
-                for j in jobs:
-                    j_class = j.get("_class", "")
-                    j_name = j.get("name", "unknown")
-                    j_url = j.get("url", "")
-                    next_path = f"{path}/job/{j_name}" if path else f"job/{j_name}"
+        try:
+            async with httpx.AsyncClient(timeout=10.0, auth=auth) as client:
+                resp = await client.get(query_url)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    jobs = data.get("jobs", [])
+                    nodes = []
+                    for j in jobs:
+                        j_class = j.get("_class", "")
+                        j_name = j.get("name", "unknown")
+                        j_url = j.get("url", "")
+                        next_path = f"{path}/job/{j_name}" if path else f"job/{j_name}"
 
-                    is_folder = (
-                        "Folder" in j_class
-                        or "MultiBranchProject" in j_class
-                        or "OrganizationFolder" in j_class
-                    )
-                    node_type = NodeType.FOLDER if is_folder else NodeType.JOB
-
-                    nodes.append(
-                        Node(
-                            id=j_name,
-                            name=j_name,
-                            type=node_type,
-                            path=next_path,
-                            has_children=is_folder,
-                            url=j_url,
+                        is_folder = (
+                            "Folder" in j_class
+                            or "MultiBranchProject" in j_class
+                            or "OrganizationFolder" in j_class
                         )
-                    )
-                return nodes
-            elif resp.status_code in (401, 403):
-                from fastapi import HTTPException
+                        node_type = NodeType.FOLDER if is_folder else NodeType.JOB
 
-                raise HTTPException(
-                    status_code=401,
-                    detail="Jenkins authentication failed. Please verify your User and Token in the configuration.",
-                )
-            raise ProviderPathNotFoundError(f"Jenkins path {path} not found")
+                        nodes.append(
+                            Node(
+                                id=j_name,
+                                name=j_name,
+                                type=node_type,
+                                path=next_path,
+                                has_children=is_folder,
+                                url=j_url,
+                            )
+                        )
+                    return nodes
+                elif resp.status_code in (401, 403):
+                    from fastapi import HTTPException
+
+                    raise HTTPException(
+                        status_code=401,
+                        detail="Jenkins authentication failed. Please verify your User and Token in the configuration.",
+                    )
+                raise ProviderPathNotFoundError(f"Jenkins path {path} not found")
+        except httpx.RequestError as e:
+            raise ProviderPathNotFoundError(f"Failed to connect to Jenkins server: {e}")
+        except ProviderPathNotFoundError:
+            raise
+        except Exception as e:
+            raise ProviderPathNotFoundError(f"Error exploring Jenkins path: {e}")

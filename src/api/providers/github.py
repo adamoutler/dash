@@ -336,93 +336,100 @@ class GitHubProvider(BaseProvider):
             headers["Authorization"] = f"Bearer {self.token}"
         parts = [p for p in path.strip("/").split("/") if p]
 
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            if len(parts) == 0:
-                # Root: Return authenticated user and orgs
-                nodes = []
-                user_resp = await client.get(
-                    "https://api.github.com/user", headers=headers
-                )
-                if user_resp.status_code == 403:
-                    raise ProviderPathNotFoundError(
-                        "GitHub API Rate Limit Exceeded (403)"
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                if len(parts) == 0:
+                    # Root: Return authenticated user and orgs
+                    nodes = []
+                    user_resp = await client.get(
+                        "https://api.github.com/user", headers=headers
                     )
-                if user_resp.status_code == 200:
-                    user_data = user_resp.json()
-                    login = user_data.get("login")
-                    nodes.append(
-                        Node(
-                            id=login,
-                            name=login,
-                            type=NodeType.USER,
-                            path=login,
-                            has_children=True,
-                            url=user_data.get("html_url"),
+                    if user_resp.status_code == 403:
+                        raise ProviderPathNotFoundError(
+                            "GitHub API Rate Limit Exceeded (403)"
                         )
-                    )
+                    if user_resp.status_code == 200:
+                        user_data = user_resp.json()
+                        login = user_data.get("login")
+                        nodes.append(
+                            Node(
+                                id=login,
+                                name=login,
+                                type=NodeType.USER,
+                                path=login,
+                                has_children=True,
+                                url=user_data.get("html_url"),
+                            )
+                        )
 
-                orgs = await self._fetch_all_github_pages(
-                    client, "https://api.github.com/user/orgs?per_page=100", headers
-                )
-                for org in orgs:
-                    login = org.get("login")
-                    nodes.append(
-                        Node(
-                            id=login,
-                            name=login,
-                            type=NodeType.ORGANIZATION,
-                            path=login,
-                            has_children=True,
-                            url=org.get("url"),
-                        )
+                    orgs = await self._fetch_all_github_pages(
+                        client, "https://api.github.com/user/orgs?per_page=100", headers
                     )
-                return nodes
-            elif len(parts) == 1:
-                # Owner: List repositories
-                owner = parts[0]
-                repos = await self._fetch_all_github_pages(
-                    client,
-                    f"https://api.github.com/users/{owner}/repos?per_page=100",
-                    headers,
-                )
-                if repos:
-                    return [
-                        Node(
-                            id=r.get("name"),
-                            name=r.get("name"),
-                            type=NodeType.REPOSITORY,
-                            path=f"{owner}/{r.get('name')}",
-                            has_children=True,
-                            url=r.get("html_url"),
+                    for org in orgs:
+                        login = org.get("login")
+                        nodes.append(
+                            Node(
+                                id=login,
+                                name=login,
+                                type=NodeType.ORGANIZATION,
+                                path=login,
+                                has_children=True,
+                                url=org.get("url"),
+                            )
                         )
-                        for r in repos
-                    ]
-                raise ProviderPathNotFoundError(
-                    f"Owner {owner} not found, has no repos, or rate limited"
-                )
-            elif len(parts) == 2:
-                # Repo: List workflows
-                owner, repo = parts[0], parts[1]
-                wfs = await self._fetch_all_github_pages(
-                    client,
-                    f"https://api.github.com/repos/{owner}/{repo}/actions/workflows?per_page=100",
-                    headers,
-                    is_workflow=True,
-                )
-                if wfs:
-                    return [
-                        Node(
-                            id=str(w.get("id")),
-                            name=w.get("name"),
-                            type=NodeType.WORKFLOW,
-                            path=f"{owner}/{repo}/{w.get('id')}",
-                            has_children=False,
-                            url=w.get("html_url"),
-                        )
-                        for w in wfs
-                    ]
-                raise ProviderPathNotFoundError(
-                    f"Workflows for {owner}/{repo} not found or rate limited"
-                )
+                    return nodes
+                elif len(parts) == 1:
+                    # Owner: List repositories
+                    owner = parts[0]
+                    repos = await self._fetch_all_github_pages(
+                        client,
+                        f"https://api.github.com/users/{owner}/repos?per_page=100",
+                        headers,
+                    )
+                    if repos:
+                        return [
+                            Node(
+                                id=r.get("name"),
+                                name=r.get("name"),
+                                type=NodeType.REPOSITORY,
+                                path=f"{owner}/{r.get('name')}",
+                                has_children=True,
+                                url=r.get("html_url"),
+                            )
+                            for r in repos
+                        ]
+                    raise ProviderPathNotFoundError(
+                        f"Owner {owner} not found, has no repos, or rate limited"
+                    )
+                elif len(parts) == 2:
+                    # Repo: List workflows
+                    owner, repo = parts[0], parts[1]
+                    wfs = await self._fetch_all_github_pages(
+                        client,
+                        f"https://api.github.com/repos/{owner}/{repo}/actions/workflows?per_page=100",
+                        headers,
+                        is_workflow=True,
+                    )
+                    if wfs:
+                        return [
+                            Node(
+                                id=str(w.get("id")),
+                                name=w.get("name"),
+                                type=NodeType.WORKFLOW,
+                                path=f"{owner}/{repo}/{w.get('id')}",
+                                has_children=False,
+                                url=w.get("html_url"),
+                            )
+                            for w in wfs
+                        ]
+                    raise ProviderPathNotFoundError(
+                        f"Workflows for {owner}/{repo} not found or rate limited"
+                    )
+        except httpx.RequestError as e:
+            raise ProviderPathNotFoundError(f"Failed to connect to GitHub server: {e}")
+        except ProviderPathNotFoundError:
+            raise
+        except Exception as e:
+            raise ProviderPathNotFoundError(f"Error exploring GitHub path: {e}")
 
         return []
