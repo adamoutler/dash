@@ -1,6 +1,10 @@
 # <img src="docs/icon.jpg" width="40" height="40" alt="Dash Logo" style="vertical-align: middle"> 🛑 Stop AI Hallucinations! Your Ultimate Dash & Agent Guardrail 🚀
 
 [![SafeSkill](https://safeskill.dev/api/badge/adamoutler-dash)](https://safeskill.dev/scan/adamoutler-dash)
+[![Build Status](https://github.com/adamoutler/dash/actions/workflows/dev.yml/badge.svg)](https://github.com/adamoutler/dash/actions/workflows/dev.yml)
+[![npm version](https://img.shields.io/npm/v/@adamoutler/dash.svg)](https://www.npmjs.com/package/@adamoutler/dash)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 > **The essential CI feedback loop and guardrail for autonomous AI development.**
 
