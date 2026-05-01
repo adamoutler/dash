@@ -23,7 +23,7 @@ function getConfig() {
 
 async function promptConfig() {
   console.log('Dashboard configuration missing or invalid. Let\'s set it up.');
-  const url = await input({ message: 'Dashboard URL (e.g., https://dash.example.com):', required: true });
+  const url = await input({ message: 'Dashboard URL (e.g., dash.example.com):', required: true });
   const token = await password({ message: 'Auth Token:', mask: '*', required: true });
   
   if (!fs.existsSync(CONFIG_DIR)) {

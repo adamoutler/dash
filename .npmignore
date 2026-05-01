@@ -6,3 +6,7 @@ tests/
 logs/
 data/
 *.pyc
+node_modules/
+.worktrees/
+docs/
+plans/

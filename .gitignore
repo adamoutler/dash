@@ -1,5 +1,39 @@
+# Ignore everything in the root
+/*
+
+# Whitelist allowed root directories and files
+!/.gemini/
+!/.github/
+!/cli/
+!/docs/
+!/src/
+!/tests/
+!/.dockerignore
+!/.gitignore
+!/.npmignore
+!/.pre-commit-config.yaml
+!/.spectral.yaml
+!/docker-compose.yml
+!/Dockerfile
+!/GEMINI.md
+!/Jenkinsfile
+!/LICENSE
+!/package-lock.json
+!/package.json
+!/promptfooconfig.yaml
+!/pytest.ini
+!/README.md
+!/requirements.txt
+!/safeskill-registration.md
+!/safeskill.manifest.json
+!/SECURITY.md
+!/test_version.py
+!/VERSION
+
+# The original rules for subdirectories
 .worktrees/
 ~/
+node_modules/
 
 # Environments
 .venv/

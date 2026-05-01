@@ -27,7 +27,7 @@ repos:
     hooks:
       - id: generate-openapi
         name: Generate OpenAPI Spec
-        entry: sh -c 'PYTHONPATH=src python3 -c "import sys, json; from main import app; json.dump(app.openapi(), sys.stdout, indent=2)" > openapi.json'
+        entry: sh -c 'PYTHONPATH=src python3 -c "import sys, json; from main import app; json.dump(app.openapi(), sys.stdout, indent=2)" > docs/openapi.json'
         language: system
         pass_filenames: false
         always_run: true
@@ -42,7 +42,7 @@ repos:
     hooks:
       - id: spectral
         name: Spectral Lint
-        entry: npx --yes @stoplight/spectral-cli lint openapi.json
+        entry: npx --yes @stoplight/spectral-cli lint docs/openapi.json
         language: system
         pass_filenames: false
 

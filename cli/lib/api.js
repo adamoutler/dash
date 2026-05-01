@@ -24,7 +24,7 @@ async function fetchDash(endpoint, options = {}) {
     const controller = new AbortController();
     const id = setTimeout(() => controller.abort(), 5000);
     
-    const response = await fetch(`${url}${endpoint}`, {
+    const response = await globalThis.fetch(`${url}${endpoint}`, {
       ...options,
       headers,
       signal: controller.signal
