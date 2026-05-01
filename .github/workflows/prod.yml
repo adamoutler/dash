@@ -92,6 +92,25 @@ jobs:
           type=raw,value=latest
           type=raw,value=${{ env.VERSION }}
 
+    - name: Build Docker image for scanning
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: false
+        load: true
+        tags: ghcr.io/${{ env.OWNER }}/dash:latest
+        labels: ${{ steps.meta.outputs.labels }}
+
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: ghcr.io/${{ env.OWNER }}/dash:latest
+        format: 'table'
+        exit-code: '1'
+        ignore-unfixed: true
+        vuln-type: 'os,library'
+        severity: 'CRITICAL,HIGH'
+
     - name: Build and push Docker image
       uses: docker/build-push-action@v5
       with:

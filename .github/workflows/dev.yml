@@ -32,6 +32,11 @@ jobs:
         pip install -r requirements.txt
         pip install pytest pytest-cov httpx
 
+    - name: Run Gitleaks
+      uses: gitleaks/gitleaks-action@v2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
     - name: Run SafeSkill Check
       run: |
         npx --yes skillsafe@0.2.9 scan . --json
@@ -94,7 +99,26 @@ jobs:
       with:
         images: ghcr.io/${{ env.OWNER }}/dash-dev
 
-    - name: Build and push Docker image
+    - name: Build Docker image for scanning
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: false
+        load: true
+        tags: ghcr.io/${{ env.OWNER }}/dash-dev:latest
+        labels: ${{ steps.meta.outputs.labels }}
+
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: ghcr.io/${{ env.OWNER }}/dash-dev:latest
+        format: 'table'
+        exit-code: '1'
+        ignore-unfixed: true
+        vuln-type: 'os,library'
+        severity: 'CRITICAL,HIGH'
+
+    - name: Push Docker image
       uses: docker/build-push-action@v5
       with:
         context: .
