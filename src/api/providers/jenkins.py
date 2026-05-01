@@ -286,7 +286,7 @@ class JenkinsProvider(BaseProvider):
                 raise ProviderPathNotFoundError(f"Jenkins path {path} not found")
         except httpx.RequestError as e:
             raise ProviderPathNotFoundError(f"Failed to connect to Jenkins server: {e}")
-        except ProviderPathNotFoundError:
-            raise
         except Exception as e:
+            if type(e).__name__ in ("HTTPException", "ProviderPathNotFoundError"):
+                raise
             raise ProviderPathNotFoundError(f"Error exploring Jenkins path: {e}")
