@@ -457,7 +457,30 @@ async def mcp_endpoint(
                             yield " "
                             await asyncio.sleep(10)
                         else:
-                            if not was_running and attempts_when_not_running < 2:
+                            is_recent_commit = False
+                            if not was_running:
+                                import subprocess
+                                import time
+
+                                try:
+                                    res = subprocess.run(
+                                        ["git", "log", "-1", "--format=%ct"],
+                                        capture_output=True,
+                                        text=True,
+                                        timeout=2,
+                                    )
+                                    if res.returncode == 0:
+                                        commit_time = int(res.stdout.strip())
+                                        if (time.time() - commit_time) <= 20:
+                                            is_recent_commit = True
+                                except Exception:
+                                    pass
+
+                            if (
+                                not was_running
+                                and is_recent_commit
+                                and attempts_when_not_running < 6
+                            ):
                                 attempts_when_not_running += 1
                                 yield " "
                                 await asyncio.sleep(10)
