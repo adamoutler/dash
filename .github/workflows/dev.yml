@@ -20,6 +20,8 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
 
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -49,6 +51,17 @@ jobs:
     - name: Run Tests
       run: |
         python -m pytest -v 2>&1 | tee job-logs.txt
+
+    - name: Run Promptfoo Eval
+      run: |
+        npx --yes promptfoo@latest eval
+
+    - name: Run Schemathesis
+      run: |
+        python -m pip install schemathesis uvicorn
+        uvicorn src.main:app --host 127.0.0.1 --port 8000 &
+        sleep 5
+        schemathesis run http://127.0.0.1:8000/openapi.json --checks all
 
     - name: Upload logs to Dashboard
       if: always()
