@@ -154,6 +154,7 @@ jobs:
 
     - name: Update Docker Hub Description
       uses: peter-evans/dockerhub-description@v4
+      continue-on-error: true # Fails with 403 if the token lacks admin privileges or the repo doesn't exist yet
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
