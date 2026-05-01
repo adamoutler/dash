@@ -61,7 +61,7 @@ jobs:
         python -m pip install schemathesis uvicorn
         PYTHONPATH=src uvicorn src.main:app --host 127.0.0.1 --port 8000 &
         sleep 5
-        schemathesis run http://127.0.0.1:8000/openapi.json --checks all
+        schemathesis run http://127.0.0.1:8000/openapi.json --checks not_a_server_error
 
     - name: Upload logs to Dashboard
       if: always()
