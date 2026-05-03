@@ -8,7 +8,7 @@ const { getConfig } = require('./config');
  * @throws {Error} If config is missing, auth fails, or request times out/fails.
  */
 async function fetchDash(endpoint, options = {}) {
-  const config = getConfig();
+  const config = await getConfig();
   if (!config) throw new Error('Missing config');
   
   let urlStr = config.url.replace(/\/+$/, '');

@@ -1,5 +1,6 @@
 import os
 import asyncio
+import anyio
 from fastapi import APIRouter, Depends, Request, HTTPException
 from fastapi.responses import StreamingResponse
 from typing import Optional
@@ -74,8 +75,8 @@ async def post_logs(
     if not filepath.startswith(os.path.normpath(LOGS_DIR)):
         raise HTTPException(status_code=400, detail="Invalid log file path")
 
-    with open(filepath, "w", encoding="utf-8") as f:
-        f.write(log_text)
+    async with await anyio.open_file(filepath, "w", encoding="utf-8") as f:
+        await f.write(log_text)
 
     return {"message": "Log saved successfully", "file": filename}
 
