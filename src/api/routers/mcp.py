@@ -180,7 +180,6 @@ def _check_recent_commit() -> bool:
         import traceback
 
         traceback.print_exc()
-        pass
     return False
 
 

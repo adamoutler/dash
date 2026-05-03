@@ -105,10 +105,9 @@ async def get_current_user(request: Request):
 
     scheme, param = get_authorization_scheme_param(authorization)
 
-    if scheme.lower() == "basic":
-        credentials = await security_basic(request)
-        if credentials and verify_basic(credentials):
-            return "basic_user"
+    credentials = await security_basic(request) if scheme.lower() == "basic" else None
+    if scheme.lower() == "basic" and credentials and verify_basic(credentials):
+        return "basic_user"
     elif scheme.lower() == "bearer" and token_manager.validate_token(param):
         return "bearer_user"
 

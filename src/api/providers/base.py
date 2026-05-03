@@ -17,7 +17,7 @@ class BaseProvider(ABC):
     """
 
     def __init__(self, **kwargs):
-        # Base provider doesn't require initialization arguments by default
+        """Base provider doesn't require initialization arguments by default."""
         pass
 
     @abstractmethod

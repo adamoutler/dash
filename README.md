@@ -12,7 +12,7 @@
 [![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=adamoutler_dash&metric=sqale_rating)](https://sonarcloud.io/summary/new_code?id=adamoutler_dash)
 [![Vulnerabilities](https://sonarcloud.io/api/project_badges/measure?project=adamoutler_dash&metric=vulnerabilities)](https://sonarcloud.io/summary/new_code?id=adamoutler_dash)
 [![npm version](https://img.shields.io/npm/v/@adamoutler/dash.svg)](https://www.npmjs.com/package/@adamoutler/dash)
-[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+[![Ruff](https://img.shields.io/badge/Linter-Ruff-blue.svg)](https://github.com/astral-sh/ruff)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 > **The essential CI feedback loop and guardrail for autonomous AI development.**

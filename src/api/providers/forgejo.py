@@ -50,8 +50,10 @@ class ForgejoProvider(BaseProvider):
                         )
                         total_duration += (end_dt - start_dt).total_seconds()
                         valid_runs += 1
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        import logging
+
+                        logging.warning(f"Error parsing date in Forgejo response: {e}")
         return total_duration / valid_runs if valid_runs > 0 else None
 
     async def fetch_status(
