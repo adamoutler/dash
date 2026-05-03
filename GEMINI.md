@@ -42,3 +42,7 @@ Ask questions that a senior or principal engineer might ask:
 - Is there a way to remove redundancy while maintaining the context?
 - What is the best way to handle the caching of this?
 - Are we handling separation of concerns, or are we making it monolithic?
+
+### 5. SonarCloud Configuration
+* **Project Key:** `adamoutler_dash`
+* **Organization Key:** `adamoutler`
