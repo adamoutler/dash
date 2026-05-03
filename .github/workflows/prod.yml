@@ -3,14 +3,12 @@ name: production build test release
 on:
   workflow_dispatch:
 
-permissions:
-  contents: write
-  packages: write
-
 jobs:
   build_test:
     name: Build and Test
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
@@ -61,6 +59,9 @@ jobs:
   release:
     name: Release to GHCR (Prod)
     needs: build_test
+    permissions:
+      contents: write
+      packages: write
     if: github.server_url == 'https://github.com'
     runs-on: ubuntu-latest
     steps:

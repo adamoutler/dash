@@ -9,14 +9,12 @@ on:
     branches:
       - '**'
 
-permissions:
-  contents: write
-  packages: write
-
 jobs:
   build_test:
     name: Build and Test
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
@@ -78,6 +76,9 @@ jobs:
   release:
     name: Release to GHCR (Dev)
     needs: build_test
+    permissions:
+      contents: write
+      packages: write
     # Only run release on push to master/main, skip for pull requests
     if: github.event_name == 'push' && github.server_url == 'https://github.com'
     runs-on: ubuntu-latest

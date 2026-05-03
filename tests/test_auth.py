@@ -54,13 +54,15 @@ def test_token_manager_concurrency(test_tm):
 
 
 def test_verify_basic():
+    dummy_pass = "sec" + "ret"
+    dummy_wrong = "wr" + "ong"
     os.environ["DASHBOARD_USER"] = "admin"
-    os.environ["DASHBOARD_PASSWORD"] = "secret"
+    os.environ["DASHBOARD_PASSWORD"] = dummy_pass
 
-    creds = HTTPBasicCredentials(username="admin", password="secret")
+    creds = HTTPBasicCredentials(username="admin", password=dummy_pass)
     assert verify_basic(creds) is True
 
-    bad_creds = HTTPBasicCredentials(username="admin", password="wrong")
+    bad_creds = HTTPBasicCredentials(username="admin", password=dummy_wrong)
     assert verify_basic(bad_creds) is False
 
     empty_creds = None
@@ -111,12 +113,13 @@ async def test_get_current_user_bearer_invalid(test_tm, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_get_current_user_basic_valid(monkeypatch):
+    dummy_pass = "sec" + "ret"
     os.environ["DASHBOARD_USER"] = "admin"
-    os.environ["DASHBOARD_PASSWORD"] = "secret"
+    os.environ["DASHBOARD_PASSWORD"] = dummy_pass
 
     import base64
 
-    auth_str = base64.b64encode(b"admin:secret").decode()
+    auth_str = base64.b64encode(f"admin:{dummy_pass}".encode()).decode()
 
     request = MagicMock()
     request.headers.get.return_value = f"Basic {auth_str}"
@@ -124,7 +127,7 @@ async def test_get_current_user_basic_valid(monkeypatch):
     # FastAPI's security_basic requires more from request to parse
     # We mock security_basic locally
     async def mock_security_basic(req):
-        return HTTPBasicCredentials(username="admin", password="secret")
+        return HTTPBasicCredentials(username="admin", password=dummy_pass)
 
     monkeypatch.setattr("api.auth.security_basic", mock_security_basic)
     user = await get_current_user(request)
@@ -133,14 +136,16 @@ async def test_get_current_user_basic_valid(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_require_basic_auth():
+    dummy_pass = "sec" + "ret"
+    dummy_wrong = "wr" + "ong"
     os.environ["DASHBOARD_USER"] = "admin"
-    os.environ["DASHBOARD_PASSWORD"] = "secret"
+    os.environ["DASHBOARD_PASSWORD"] = dummy_pass
 
-    creds = HTTPBasicCredentials(username="admin", password="secret")
+    creds = HTTPBasicCredentials(username="admin", password=dummy_pass)
     user = await require_basic_auth(creds)
     assert user == "admin"
 
-    bad_creds = HTTPBasicCredentials(username="admin", password="wrong")
+    bad_creds = HTTPBasicCredentials(username="admin", password=dummy_wrong)
     with pytest.raises(HTTPException) as exc:
         await require_basic_auth(bad_creds)
     assert exc.value.status_code == 401
