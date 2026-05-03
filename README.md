@@ -5,7 +5,6 @@
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=adamoutler_dash&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=adamoutler_dash)
 [![Bugs](https://sonarcloud.io/api/project_badges/measure?project=adamoutler_dash&metric=bugs)](https://sonarcloud.io/summary/new_code?id=adamoutler_dash)
 [![Code Smells](https://sonarcloud.io/api/project_badges/measure?project=adamoutler_dash&metric=code_smells)](https://sonarcloud.io/summary/new_code?id=adamoutler_dash)
-[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=adamoutler_dash&metric=coverage)](https://sonarcloud.io/summary/new_code?id=adamoutler_dash)
 [![Duplicated Lines (%)](https://sonarcloud.io/api/project_badges/measure?project=adamoutler_dash&metric=duplicated_lines_density)](https://sonarcloud.io/summary/new_code?id=adamoutler_dash)
 [![Lines of Code](https://sonarcloud.io/api/project_badges/measure?project=adamoutler_dash&metric=ncloc)](https://sonarcloud.io/summary/new_code?id=adamoutler_dash)
 [![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=adamoutler_dash&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=adamoutler_dash)
