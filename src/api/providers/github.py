@@ -4,11 +4,51 @@ from typing import Dict, Any, List, Optional
 from api.providers.base import BaseProvider, ProviderPathNotFoundError
 from api.models.domain import Node, NodeType
 
+ACCEPT_GITHUB_JSON = "application/vnd.github.v3+json"
+
+
+NO_COMMIT_MSG = "No commit message"
+
 
 class GitHubProvider(BaseProvider):
     def __init__(self, token: str):
         super().__init__()
         self.token = token
+
+    @staticmethod
+    def _extract_commit_msg(run: dict) -> str:
+        if run and "head_commit" in run and run["head_commit"]:
+            return run["head_commit"].get("message", NO_COMMIT_MSG).split("\n")[0]
+        return NO_COMMIT_MSG
+
+    @staticmethod
+    def _calculate_expected_duration(runs: list) -> Optional[float]:
+        successful_runs = [
+            r
+            for r in runs
+            if r.get("status") == "completed" and r.get("conclusion") == "success"
+        ]
+        if not successful_runs:
+            return None
+
+        total_duration = 0
+        valid_runs = 0
+        for r in successful_runs[:5]:
+            r_start = r.get("run_started_at") or r.get("created_at")
+            r_end = r.get("updated_at")
+            if r_start and r_end:
+                try:
+                    start_dt = datetime.datetime.fromisoformat(
+                        r_start.replace("Z", "+00:00")
+                    )
+                    end_dt = datetime.datetime.fromisoformat(
+                        r_end.replace("Z", "+00:00")
+                    )
+                    total_duration += (end_dt - start_dt).total_seconds()
+                    valid_runs += 1
+                except Exception:
+                    pass
+        return total_duration / valid_runs if valid_runs > 0 else None
 
     async def _resolve_workflow_id(
         self, owner: str, repo: str, workflow_id: Optional[str]
@@ -43,7 +83,7 @@ class GitHubProvider(BaseProvider):
         headers = (
             {
                 "Authorization": f"Bearer {self.token}",
-                "Accept": "application/vnd.github.v3+json",
+                "Accept": ACCEPT_GITHUB_JSON,
             }
             if self.token
             else {}
@@ -166,7 +206,7 @@ class GitHubProvider(BaseProvider):
         headers = (
             {
                 "Authorization": f"Bearer {self.token}",
-                "Accept": "application/vnd.github.v3+json",
+                "Accept": ACCEPT_GITHUB_JSON,
             }
             if self.token
             else {}
@@ -221,7 +261,7 @@ class GitHubProvider(BaseProvider):
         headers = (
             {
                 "Authorization": f"Bearer {self.token}",
-                "Accept": "application/vnd.github.v3+json",
+                "Accept": ACCEPT_GITHUB_JSON,
             }
             if self.token
             else {}
@@ -261,7 +301,7 @@ class GitHubProvider(BaseProvider):
         headers = (
             {
                 "Authorization": f"Bearer {self.token}",
-                "Accept": "application/vnd.github.v3+json",
+                "Accept": ACCEPT_GITHUB_JSON,
             }
             if self.token
             else {}
@@ -282,7 +322,7 @@ class GitHubProvider(BaseProvider):
         headers = (
             {
                 "Authorization": f"Bearer {self.token}",
-                "Accept": "application/vnd.github.v3+json",
+                "Accept": ACCEPT_GITHUB_JSON,
             }
             if self.token
             else {}
@@ -303,6 +343,15 @@ class GitHubProvider(BaseProvider):
         except Exception:
             return []
 
+    def _parse_github_link_header(self, link_header: str) -> Optional[str]:
+        if not link_header:
+            return None
+        for link in link_header.split(","):
+            parts = link.split(";")
+            if len(parts) == 2 and 'rel="next"' in parts[1]:
+                return parts[0].strip()[1:-1]
+        return None
+
     async def _fetch_all_github_pages(self, client, url, headers, is_workflow=False):
         results = []
         while url:
@@ -319,19 +368,100 @@ class GitHubProvider(BaseProvider):
             elif isinstance(data, list):
                 results.extend(data)
 
-            link_header = resp.headers.get("Link", "")
-            next_url = None
-            if link_header:
-                links = link_header.split(",")
-                for link in links:
-                    parts = link.split(";")
-                    if len(parts) == 2 and 'rel="next"' in parts[1]:
-                        next_url = parts[0].strip()[1:-1]
-            url = next_url
+            url = self._parse_github_link_header(resp.headers.get("Link", ""))
         return results
 
+    async def _explore_root(
+        self, client: httpx.AsyncClient, headers: dict
+    ) -> List[Node]:
+        nodes = []
+        user_resp = await client.get("https://api.github.com/user", headers=headers)
+        if user_resp.status_code == 403:
+            raise ProviderPathNotFoundError("GitHub API Rate Limit Exceeded (403)")
+        if user_resp.status_code == 200:
+            user_data = user_resp.json()
+            login = user_data.get("login")
+            if login:
+                nodes.append(
+                    Node(
+                        id=login,
+                        name=login,
+                        type=NodeType.USER,
+                        path=login,
+                        has_children=True,
+                        url=user_data.get("html_url"),
+                    )
+                )
+
+        orgs = await self._fetch_all_github_pages(
+            client, "https://api.github.com/user/orgs?per_page=100", headers
+        )
+        for org in orgs:
+            login = org.get("login")
+            if login:
+                nodes.append(
+                    Node(
+                        id=login,
+                        name=login,
+                        type=NodeType.ORGANIZATION,
+                        path=login,
+                        has_children=True,
+                        url=org.get("url"),
+                    )
+                )
+        return nodes
+
+    async def _explore_owner(
+        self, client: httpx.AsyncClient, owner: str, headers: dict
+    ) -> List[Node]:
+        repos = await self._fetch_all_github_pages(
+            client,
+            f"https://api.github.com/users/{owner}/repos?per_page=100",
+            headers,
+        )
+        if repos:
+            return [
+                Node(
+                    id=r.get("name"),
+                    name=r.get("name"),
+                    type=NodeType.REPOSITORY,
+                    path=f"{owner}/{r.get('name')}",
+                    has_children=True,
+                    url=r.get("html_url"),
+                )
+                for r in repos
+            ]
+        raise ProviderPathNotFoundError(
+            f"Owner {owner} not found, has no repos, or rate limited"
+        )
+
+    async def _explore_repo(
+        self, client: httpx.AsyncClient, owner: str, repo: str, headers: dict
+    ) -> List[Node]:
+        wfs = await self._fetch_all_github_pages(
+            client,
+            f"https://api.github.com/repos/{owner}/{repo}/actions/workflows?per_page=100",
+            headers,
+            is_workflow=True,
+        )
+        if wfs:
+            return [
+                Node(
+                    id=str(w.get("id")),
+                    name=w.get("name"),
+                    type=NodeType.WORKFLOW,
+                    path=f"{owner}/{repo}/{w.get('id')}",
+                    has_children=False,
+                    url=w.get("html_url"),
+                )
+                for w in wfs
+            ]
+        raise ProviderPathNotFoundError(
+            f"Workflows for {owner}/{repo} not found or rate limited"
+        )
+
     async def explore(self, path: str) -> List[Node]:
-        headers = {"Accept": "application/vnd.github.v3+json"}
+        headers = {"Accept": ACCEPT_GITHUB_JSON}
         if self.token:
             headers["Authorization"] = f"Bearer {self.token}"
         parts = [p for p in path.strip("/").split("/") if p]
@@ -339,92 +469,11 @@ class GitHubProvider(BaseProvider):
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 if len(parts) == 0:
-                    # Root: Return authenticated user and orgs
-                    nodes = []
-                    user_resp = await client.get(
-                        "https://api.github.com/user", headers=headers
-                    )
-                    if user_resp.status_code == 403:
-                        raise ProviderPathNotFoundError(
-                            "GitHub API Rate Limit Exceeded (403)"
-                        )
-                    if user_resp.status_code == 200:
-                        user_data = user_resp.json()
-                        login = user_data.get("login")
-                        nodes.append(
-                            Node(
-                                id=login,
-                                name=login,
-                                type=NodeType.USER,
-                                path=login,
-                                has_children=True,
-                                url=user_data.get("html_url"),
-                            )
-                        )
-
-                    orgs = await self._fetch_all_github_pages(
-                        client, "https://api.github.com/user/orgs?per_page=100", headers
-                    )
-                    for org in orgs:
-                        login = org.get("login")
-                        nodes.append(
-                            Node(
-                                id=login,
-                                name=login,
-                                type=NodeType.ORGANIZATION,
-                                path=login,
-                                has_children=True,
-                                url=org.get("url"),
-                            )
-                        )
-                    return nodes
+                    return await self._explore_root(client, headers)
                 elif len(parts) == 1:
-                    # Owner: List repositories
-                    owner = parts[0]
-                    repos = await self._fetch_all_github_pages(
-                        client,
-                        f"https://api.github.com/users/{owner}/repos?per_page=100",
-                        headers,
-                    )
-                    if repos:
-                        return [
-                            Node(
-                                id=r.get("name"),
-                                name=r.get("name"),
-                                type=NodeType.REPOSITORY,
-                                path=f"{owner}/{r.get('name')}",
-                                has_children=True,
-                                url=r.get("html_url"),
-                            )
-                            for r in repos
-                        ]
-                    raise ProviderPathNotFoundError(
-                        f"Owner {owner} not found, has no repos, or rate limited"
-                    )
+                    return await self._explore_owner(client, parts[0], headers)
                 elif len(parts) == 2:
-                    # Repo: List workflows
-                    owner, repo = parts[0], parts[1]
-                    wfs = await self._fetch_all_github_pages(
-                        client,
-                        f"https://api.github.com/repos/{owner}/{repo}/actions/workflows?per_page=100",
-                        headers,
-                        is_workflow=True,
-                    )
-                    if wfs:
-                        return [
-                            Node(
-                                id=str(w.get("id")),
-                                name=w.get("name"),
-                                type=NodeType.WORKFLOW,
-                                path=f"{owner}/{repo}/{w.get('id')}",
-                                has_children=False,
-                                url=w.get("html_url"),
-                            )
-                            for w in wfs
-                        ]
-                    raise ProviderPathNotFoundError(
-                        f"Workflows for {owner}/{repo} not found or rate limited"
-                    )
+                    return await self._explore_repo(client, parts[0], parts[1], headers)
         except httpx.RequestError as e:
             raise ProviderPathNotFoundError(f"Failed to connect to GitHub server: {e}")
         except ProviderPathNotFoundError:

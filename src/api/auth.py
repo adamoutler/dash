@@ -109,9 +109,8 @@ async def get_current_user(request: Request):
         credentials = await security_basic(request)
         if credentials and verify_basic(credentials):
             return "basic_user"
-    elif scheme.lower() == "bearer":
-        if token_manager.validate_token(param):
-            return "bearer_user"
+    elif scheme.lower() == "bearer" and token_manager.validate_token(param):
+        return "bearer_user"
 
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,

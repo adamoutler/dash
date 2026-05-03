@@ -6,6 +6,7 @@ from api.config import ConfigManager
 import logging
 
 logger = logging.getLogger(__name__)
+UNKNOWN_PROVIDER = "Unknown provider"
 
 
 def get_log_filename(
@@ -119,7 +120,7 @@ class WorkflowService:
             "owner": owner,
             "repo": repo,
             "status": "error",
-            "commit_message": "Unknown provider",
+            "commit_message": UNKNOWN_PROVIDER,
         }
 
     def format_status_yaml(
@@ -172,7 +173,7 @@ class WorkflowService:
         provider_instance = self._get_provider_instance(provider)
         if provider_instance:
             return await provider_instance.fetch_logs(owner, repo, workflow_id, branch)
-        return "Unknown provider"
+        return UNKNOWN_PROVIDER
 
     async def get_artifacts(
         self,
@@ -187,7 +188,7 @@ class WorkflowService:
             return await provider_instance.fetch_artifacts(
                 owner, repo, workflow_id, branch
             )
-        return {"error": "Unknown provider"}
+        return {"error": UNKNOWN_PROVIDER}
 
     async def get_branches(self, provider: str, owner: str, repo: str) -> List[str]:
         provider_instance = self._get_provider_instance(provider)

@@ -37,6 +37,92 @@ class JenkinsProvider(BaseProvider):
         except Exception:
             return self._error_result("jenkins", owner, repo)
 
+    def _parse_jenkins_job_status(
+        self, data: dict, url: str, owner: str, repo_field: str
+    ) -> dict:
+        last_build = data.get("lastBuild")
+        in_queue = data.get("inQueue")
+        color = data.get("color", "")
+
+        status = "unknown"
+        if in_queue or "anime" in color:
+            status = "running"
+
+        if not last_build:
+            if status != "running":
+                return {
+                    "provider": "jenkins",
+                    "owner": owner,
+                    "repo": repo_field,
+                    "status": "unknown",
+                    "url": url,
+                    "repo_url": url,
+                    "updated_at": "",
+                    "commit_message": "No builds found",
+                    "started_at": "",
+                    "expected_duration_sec": None,
+                }
+            else:
+                return {
+                    "provider": "jenkins",
+                    "owner": owner,
+                    "repo": repo_field,
+                    "status": status,
+                    "url": url,
+                    "repo_url": url,
+                    "updated_at": "",
+                    "commit_message": "Job is in queue or starting",
+                    "started_at": "",
+                    "expected_duration_sec": None,
+                }
+
+        result = last_build.get("result")
+        if status == "unknown":
+            if result is None:
+                status = "running"
+            elif result == "SUCCESS":
+                status = "success"
+            elif result in ["FAILURE", "UNSTABLE", "ABORTED"]:
+                status = "failure"
+
+        timestamp_ms = last_build.get("timestamp")
+        started_at = (
+            datetime.datetime.fromtimestamp(
+                timestamp_ms / 1000.0, tz=datetime.timezone.utc
+            ).isoformat()
+            if timestamp_ms
+            else ""
+        )
+
+        est_duration = last_build.get("estimatedDuration", -1)
+        if est_duration <= 0:
+            expected_duration_sec = 43.6  # Average of recent runs
+        else:
+            expected_duration_sec = est_duration / 1000.0
+
+        commit_msg = ""
+        change_sets = last_build.get("changeSets", [])
+        if change_sets and isinstance(change_sets, list):
+            items = change_sets[0].get("items", [])
+            if items:
+                commit_msg = items[0].get("msg", "")
+
+        return {
+            "provider": "jenkins",
+            "owner": owner,
+            "repo": repo_field,
+            "status": status,
+            "url": last_build.get("url", url),
+            "repo_url": url,
+            "display_name": data.get("fullDisplayName")
+            or data.get("displayName")
+            or owner,
+            "updated_at": started_at,
+            "commit_message": commit_msg,
+            "started_at": started_at,
+            "expected_duration_sec": expected_duration_sec,
+        }
+
     async def _resolve_jenkins_status(
         self, client, url, owner, repo_field, max_depth=3
     ):
@@ -52,88 +138,7 @@ class JenkinsProvider(BaseProvider):
         cls = data.get("_class", "")
 
         if "WorkflowJob" in cls or "FreeStyleProject" in cls:
-            last_build = data.get("lastBuild")
-            in_queue = data.get("inQueue")
-            color = data.get("color", "")
-
-            status = "unknown"
-            if in_queue or "anime" in color:
-                status = "running"
-
-            if not last_build:
-                if status != "running":
-                    return {
-                        "provider": "jenkins",
-                        "owner": owner,
-                        "repo": repo_field,
-                        "status": "unknown",
-                        "url": url,
-                        "repo_url": url,
-                        "updated_at": "",
-                        "commit_message": "No builds found",
-                        "started_at": "",
-                        "expected_duration_sec": None,
-                    }
-                else:
-                    return {
-                        "provider": "jenkins",
-                        "owner": owner,
-                        "repo": repo_field,
-                        "status": status,
-                        "url": url,
-                        "repo_url": url,
-                        "updated_at": "",
-                        "commit_message": "Job is in queue or starting",
-                        "started_at": "",
-                        "expected_duration_sec": None,
-                    }
-
-            result = last_build.get("result")
-            if status == "unknown":
-                if result is None:
-                    status = "running"
-                elif result == "SUCCESS":
-                    status = "success"
-                elif result in ["FAILURE", "UNSTABLE", "ABORTED"]:
-                    status = "failure"
-
-            timestamp_ms = last_build.get("timestamp")
-            started_at = (
-                datetime.datetime.fromtimestamp(
-                    timestamp_ms / 1000.0, tz=datetime.timezone.utc
-                ).isoformat()
-                if timestamp_ms
-                else ""
-            )
-
-            est_duration = last_build.get("estimatedDuration", -1)
-            if est_duration <= 0:
-                expected_duration_sec = 43.6  # Average of recent runs
-            else:
-                expected_duration_sec = est_duration / 1000.0
-
-            commit_msg = ""
-            change_sets = last_build.get("changeSets", [])
-            if change_sets and isinstance(change_sets, list):
-                items = change_sets[0].get("items", [])
-                if items:
-                    commit_msg = items[0].get("msg", "")
-
-            return {
-                "provider": "jenkins",
-                "owner": owner,
-                "repo": repo_field,
-                "status": status,
-                "url": last_build.get("url", url),
-                "repo_url": url,
-                "display_name": data.get("fullDisplayName")
-                or data.get("displayName")
-                or owner,
-                "updated_at": started_at,
-                "commit_message": commit_msg,
-                "started_at": started_at,
-                "expected_duration_sec": expected_duration_sec,
-            }
+            return self._parse_jenkins_job_status(data, url, owner, repo_field)
         elif "MultiBranchProject" in cls or "OrganizationFolder" in cls:
             jobs = data.get("jobs", [])
             if not jobs:
