@@ -23,6 +23,26 @@ class ForgejoProvider(BaseProvider):
             )
         return ""
 
+    def _get_run_duration(self, r: dict) -> Optional[float]:
+        duration = r.get("duration")
+        if duration:
+            return duration / 1000000000
+
+        r_start = r.get("started") or r.get("created")
+        r_end = r.get("stopped") or r.get("updated")
+        if r_start and r_end:
+            try:
+                start_dt = datetime.datetime.fromisoformat(
+                    r_start.replace("Z", "+00:00")
+                )
+                end_dt = datetime.datetime.fromisoformat(r_end.replace("Z", "+00:00"))
+                return (end_dt - start_dt).total_seconds()
+            except Exception as e:
+                import logging
+
+                logging.warning(f"Error parsing date in Forgejo response: {e}")
+        return None
+
     def _calculate_expected_duration(self, runs: list) -> Optional[float]:
         successful_runs = [
             r for r in runs if (r.get("status") or "").lower() == "success"
@@ -33,28 +53,37 @@ class ForgejoProvider(BaseProvider):
         total_duration = 0
         valid_runs = 0
         for r in successful_runs[:5]:
-            duration = r.get("duration")
-            if duration:
-                total_duration += duration / 1000000000
+            duration = self._get_run_duration(r)
+            if duration is not None:
+                total_duration += duration
                 valid_runs += 1
-            else:
-                r_start = r.get("started") or r.get("created")
-                r_end = r.get("stopped") or r.get("updated")
-                if r_start and r_end:
-                    try:
-                        start_dt = datetime.datetime.fromisoformat(
-                            r_start.replace("Z", "+00:00")
-                        )
-                        end_dt = datetime.datetime.fromisoformat(
-                            r_end.replace("Z", "+00:00")
-                        )
-                        total_duration += (end_dt - start_dt).total_seconds()
-                        valid_runs += 1
-                    except Exception as e:
-                        import logging
-
-                        logging.warning(f"Error parsing date in Forgejo response: {e}")
         return total_duration / valid_runs if valid_runs > 0 else None
+
+    def _get_latest_forgejo_run(
+        self, all_runs: list, workflow_id: Optional[str]
+    ) -> dict:
+        runs = []
+        for r in all_runs:
+            if (
+                not workflow_id
+                or r.get("name") == workflow_id
+                or str(r.get("workflow_id")) == workflow_id
+            ):
+                runs.append(r)
+
+        return (
+            sorted(
+                runs,
+                key=lambda x: (
+                    (x.get("created_at") or x.get("created", ""))[:16],
+                    self._get_status_weight(x),
+                    x.get("updated_at") or x.get("updated", ""),
+                ),
+                reverse=True,
+            )[0]
+            if runs
+            else {}
+        )
 
     async def fetch_status(
         self,
@@ -95,28 +124,7 @@ class ForgejoProvider(BaseProvider):
                 commits_data = commits_resp.json()
 
                 all_runs = runs_data.get("workflow_runs", [])
-                runs = []
-                for r in all_runs:
-                    if (
-                        not workflow_id
-                        or r.get("name") == workflow_id
-                        or str(r.get("workflow_id")) == workflow_id
-                    ):
-                        runs.append(r)
-
-                run = (
-                    sorted(
-                        runs,
-                        key=lambda x: (
-                            (x.get("created_at") or x.get("created", ""))[:16],
-                            self._get_status_weight(x),
-                            x.get("updated_at") or x.get("updated", ""),
-                        ),
-                        reverse=True,
-                    )[0]
-                    if runs
-                    else {}
-                )
+                run = self._get_latest_forgejo_run(all_runs, workflow_id)
                 commit_msg = self._extract_forgejo_commit_msg(commits_data)
 
                 status = run.get("status") or "unknown"
@@ -124,7 +132,7 @@ class ForgejoProvider(BaseProvider):
                 if common_status == "waiting":
                     common_status = "running"
 
-                expected_duration_sec = self._calculate_expected_duration(runs)
+                expected_duration_sec = self._calculate_expected_duration(all_runs)
                 started_at = run.get("started") or run.get("created", "")
 
                 return {

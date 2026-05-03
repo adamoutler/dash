@@ -30,7 +30,7 @@ For future AI incarnations working on this project:
 * **Testing:** Never commit without running the `pytest` suite. All changes must be verified against the test suite prior to committing.
 
 ### 3. CI/CD Monitoring (The Dash)
-* **Watch the Dash:** You MUST actively monitor the CI/CD pipeline (the "dash") using `mcp_dash_wait` or `mcp_dash_get_status` immediately after EVERY `git push`.
+* **Watch the Dash:** As the developer of Dash, you ABSOLUTELY MUST watch the dash. The user expects you to always do this. You MUST actively monitor the CI/CD pipeline using `gh run watch` or the dash tools immediately after EVERY `git push`.
 * **Never Push and Run:** Do not assume a push was successful just because the git command completed. You are responsible for waiting for the CI pipeline to finish and confirming its success or addressing its failure before concluding your task or starting another.
 
 ### 4. Before finishing up
