@@ -1,5 +1,34 @@
 {
   "name": "dash",
   "version": "1.0.0",
-  "permissions": {}
+  "permissions": {
+    "filesystem": {
+      "read": ["unknown path"],
+      "write": ["unknown path"],
+      "delete": []
+    },
+    "environment": {
+      "variables": [
+        "DASH_URL",
+        "DASH_TOKEN"
+      ],
+      "bulkAccess": false
+    },
+    "process": {
+      "spawn": true,
+      "commands": [
+        "git log -1 --format=%ct"
+      ]
+    },
+    "network": {
+      "outbound": [],
+      "inbound": false,
+      "domains": []
+    },
+    "system": {
+      "crypto": false,
+      "nativeModules": false,
+      "installScripts": []
+    }
+  }
 }
