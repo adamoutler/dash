@@ -53,6 +53,11 @@ jobs:
         pip install ruff
         ruff check .
 
+    - name: SonarQube Scan
+      uses: SonarSource/sonarqube-scan-action@v4
+      env:
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
     - name: Run Tests
       run: |
         python -m pytest -v 2>&1 | tee job-logs.txt
