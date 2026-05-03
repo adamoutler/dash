@@ -13,6 +13,47 @@ class ForgejoProvider(BaseProvider):
         self.token = token
         self.url = url
 
+    def _extract_forgejo_commit_msg(self, commits_data: list) -> str:
+        if commits_data:
+            return (
+                commits_data[0]
+                .get("commit", {})
+                .get("message", "No commit message")
+                .split("\n")[0]
+            )
+        return ""
+
+    def _calculate_expected_duration(self, runs: list) -> Optional[float]:
+        successful_runs = [
+            r for r in runs if (r.get("status") or "").lower() == "success"
+        ]
+        if not successful_runs:
+            return None
+
+        total_duration = 0
+        valid_runs = 0
+        for r in successful_runs[:5]:
+            duration = r.get("duration")
+            if duration:
+                total_duration += duration / 1000000000
+                valid_runs += 1
+            else:
+                r_start = r.get("started") or r.get("created")
+                r_end = r.get("stopped") or r.get("updated")
+                if r_start and r_end:
+                    try:
+                        start_dt = datetime.datetime.fromisoformat(
+                            r_start.replace("Z", "+00:00")
+                        )
+                        end_dt = datetime.datetime.fromisoformat(
+                            r_end.replace("Z", "+00:00")
+                        )
+                        total_duration += (end_dt - start_dt).total_seconds()
+                        valid_runs += 1
+                    except Exception:
+                        pass
+        return total_duration / valid_runs if valid_runs > 0 else None
+
     async def fetch_status(
         self,
         owner: str,
@@ -74,53 +115,15 @@ class ForgejoProvider(BaseProvider):
                     if runs
                     else {}
                 )
-                commit_msg = (
-                    commits_data[0]
-                    .get("commit", {})
-                    .get("message", "No commit message")
-                    .split("\n")[0]
-                    if commits_data
-                    else ""
-                )
+                commit_msg = self._extract_forgejo_commit_msg(commits_data)
 
                 status = run.get("status") or "unknown"
                 common_status = status.lower()
                 if common_status == "waiting":
                     common_status = "running"
 
-                expected_duration_sec = None
+                expected_duration_sec = self._calculate_expected_duration(runs)
                 started_at = run.get("started") or run.get("created", "")
-
-                successful_runs = [
-                    r for r in runs if (r.get("status") or "").lower() == "success"
-                ]
-                if successful_runs:
-                    total_duration = 0
-                    valid_runs = 0
-                    for r in successful_runs[:5]:
-                        duration = r.get("duration")
-                        if duration:
-                            total_duration += duration / 1000000000
-                            valid_runs += 1
-                        else:
-                            r_start = r.get("started") or r.get("created")
-                            r_end = r.get("stopped") or r.get("updated")
-                            if r_start and r_end:
-                                try:
-                                    start_dt = datetime.datetime.fromisoformat(
-                                        r_start.replace("Z", "+00:00")
-                                    )
-                                    end_dt = datetime.datetime.fromisoformat(
-                                        r_end.replace("Z", "+00:00")
-                                    )
-                                    total_duration += (
-                                        end_dt - start_dt
-                                    ).total_seconds()
-                                    valid_runs += 1
-                                except Exception:
-                                    pass
-                    if valid_runs > 0:
-                        expected_duration_sec = total_duration / valid_runs
 
                 return {
                     "provider": "forgejo",

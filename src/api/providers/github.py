@@ -8,6 +8,7 @@ ACCEPT_GITHUB_JSON = "application/vnd.github.v3+json"
 
 
 NO_COMMIT_MSG = "No commit message"
+UTC_TZ_OFFSET = "+00:00"
 
 
 class GitHubProvider(BaseProvider):
@@ -39,10 +40,10 @@ class GitHubProvider(BaseProvider):
             if r_start and r_end:
                 try:
                     start_dt = datetime.datetime.fromisoformat(
-                        r_start.replace("Z", "+00:00")
+                        r_start.replace("Z", UTC_TZ_OFFSET)
                     )
                     end_dt = datetime.datetime.fromisoformat(
-                        r_end.replace("Z", "+00:00")
+                        r_end.replace("Z", UTC_TZ_OFFSET)
                     )
                     total_duration += (end_dt - start_dt).total_seconds()
                     valid_runs += 1
@@ -129,13 +130,7 @@ class GitHubProvider(BaseProvider):
                     else {}
                 )
 
-                commit_msg = "No commit message"
-                if run and "head_commit" in run and run["head_commit"]:
-                    commit_msg = (
-                        run["head_commit"]
-                        .get("message", "No commit message")
-                        .split("\n")[0]
-                    )
+                commit_msg = self._extract_commit_msg(run)
 
                 status = run.get("status")
                 conclusion = run.get("conclusion")
@@ -145,35 +140,8 @@ class GitHubProvider(BaseProvider):
                     else (conclusion or "unknown")
                 )
 
-                expected_duration_sec = None
+                expected_duration_sec = self._calculate_expected_duration(runs)
                 started_at = run.get("run_started_at") or run.get("created_at", "")
-
-                successful_runs = [
-                    r
-                    for r in runs
-                    if r.get("status") == "completed"
-                    and r.get("conclusion") == "success"
-                ]
-                if successful_runs:
-                    total_duration = 0
-                    valid_runs = 0
-                    for r in successful_runs[:5]:
-                        r_start = r.get("run_started_at") or r.get("created_at")
-                        r_end = r.get("updated_at")
-                        if r_start and r_end:
-                            try:
-                                start_dt = datetime.datetime.fromisoformat(
-                                    r_start.replace("Z", "+00:00")
-                                )
-                                end_dt = datetime.datetime.fromisoformat(
-                                    r_end.replace("Z", "+00:00")
-                                )
-                                total_duration += (end_dt - start_dt).total_seconds()
-                                valid_runs += 1
-                            except Exception:
-                                pass
-                    if valid_runs > 0:
-                        expected_duration_sec = total_duration / valid_runs
 
                 return {
                     "provider": "github",

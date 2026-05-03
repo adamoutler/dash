@@ -177,8 +177,34 @@ def _check_recent_commit() -> bool:
             if (time.time() - commit_time) <= 20:
                 return True
     except Exception:
+        import traceback
+
+        traceback.print_exc()
         pass
     return False
+
+
+def _format_mcp_wait_payload(
+    result: dict, req_id: Any, is_tool_call: bool, status: str
+) -> dict:
+    res_obj = {
+        "url": result.get("url"),
+        "repo_url": result.get("repo_url"),
+        "commit_message": result.get("commit_message"),
+        "started_at": result.get("started_at"),
+        "average_recent_duration": result.get("average_recent_duration"),
+        "status": status,
+    }
+    yaml_lines = [f"{k}: {v}" for k, v in res_obj.items()]
+    yaml_str = "\n".join(yaml_lines)
+
+    return {
+        "jsonrpc": "2.0",
+        "id": req_id,
+        "result": {"content": [{"type": "text", "text": yaml_str}]}
+        if is_tool_call
+        else res_obj,
+    }
 
 
 async def _wait_generator(
@@ -226,25 +252,9 @@ async def _wait_generator(
                 status = "no job in progress"
                 result["status"] = status
 
-            res_obj = {
-                "url": result.get("url"),
-                "repo_url": result.get("repo_url"),
-                "commit_message": result.get("commit_message"),
-                "started_at": result.get("started_at"),
-                "average_recent_duration": result.get("average_recent_duration"),
-                "status": status,
-            }
-            yaml_lines = [f"{k}: {v}" for k, v in res_obj.items()]
-            yaml_str = "\n".join(yaml_lines)
-
-            payload = {
-                "jsonrpc": "2.0",
-                "id": req_id,
-                "result": {"content": [{"type": "text", "text": yaml_str}]}
-                if is_tool_call
-                else res_obj,
-            }
-            yield json.dumps(payload)
+            yield json.dumps(
+                _format_mcp_wait_payload(result, req_id, is_tool_call, status)
+            )
             break
 
 
@@ -385,29 +395,42 @@ def _handle_help_request(
     return None
 
 
+def _is_repo_match(r: dict, repo: str, provider_arg: str) -> bool:
+    repo_match = (
+        r["repo"] == repo
+        or f"{r['owner']}/{r['repo']}" == repo
+        or (r.get("provider") == "jenkins" and r["owner"] == repo)
+    )
+    provider_match = not provider_arg or r["provider"] == provider_arg
+    return repo_match and provider_match
+
+
+def _is_workflow_match(r: dict, workflow: str) -> bool:
+    return (
+        not workflow
+        or r.get("workflow_name") == workflow
+        or r.get("workflow_id") == workflow
+    )
+
+
 def _find_matched_repo(
     repo: str, provider_arg: str, workflow: str, repos: list
 ) -> tuple[Optional[dict], bool]:
     matched_repo = None
     target_repo_matched = False
-    if repo:
-        for r in repos:
-            if (
-                r["repo"] == repo
-                or f"{r['owner']}/{r['repo']}" == repo
-                or (r.get("provider") == "jenkins" and r["owner"] == repo)
-            ) and (not provider_arg or r["provider"] == provider_arg):
-                target_repo_matched = True
-                if (
-                    not workflow
-                    or r.get("workflow_name") == workflow
-                    or r.get("workflow_id") == workflow
-                ):
-                    matched_repo = r
-                    break
-    elif len(repos) == 1:
-        matched_repo = repos[0]
-        target_repo_matched = True
+
+    if not repo:
+        if len(repos) == 1:
+            return repos[0], True
+        return None, False
+
+    for r in repos:
+        if _is_repo_match(r, repo, provider_arg):
+            target_repo_matched = True
+            if _is_workflow_match(r, workflow):
+                matched_repo = r
+                break
+
     return matched_repo, target_repo_matched
 
 
@@ -423,12 +446,7 @@ def _handle_repo_not_found(
         valid_workflows = [
             f"⚒️ {r.get('workflow_name') or r.get('workflow_id') or 'any'}"
             for r in repos
-            if (
-                r["repo"] == repo
-                or f"{r['owner']}/{r['repo']}" == repo
-                or (r.get("provider") == "jenkins" and r["owner"] == repo)
-            )
-            and (not provider_arg or r["provider"] == provider_arg)
+            if _is_repo_match(r, repo, provider_arg)
         ]
         legend = "\n\nField Definitions:\n✅ Success | ❌ Failure | 🏃 Running | ❓ Unknown\nStarted | Expected Duration | Commit Message\n\nProviders:\n🐙 GitHub | 🍵 Forgejo/Gitea | 🤵 Jenkins | ⚒️ Workflow"
         help_text = (
@@ -440,24 +458,23 @@ def _handle_repo_not_found(
             "id": req_id,
             "result": {"content": [{"type": "text", "text": help_text}]},
         }
-    else:
-        provider_emojis = {"github": "🐙", "forgejo": "🍵", "jenkins": "🤵"}
-        valid_repos = [
-            f"{provider_emojis.get(r.get('provider'), '⚒️')} {r.get('owner') or format_jenkins_repo(r.get('repo', ''))}"
-            if r.get("provider") == "jenkins"
-            else f"{provider_emojis.get(r.get('provider'), '⚒️')} {r['owner']}/{r['repo']}"
-            for r in repos
-        ]
-        legend = "\n\nField Definitions:\n✅ Success | ❌ Failure | 🏃 Running | ❓ Unknown\nStarted | Expected Duration | Commit Message\n\nProviders:\n🐙 GitHub | 🍵 Forgejo/Gitea | 🤵 Jenkins | ⚒️ Other"
-        help_text = (
-            f"Repo '{repo}' not found.\nvalid_repos: [{', '.join(valid_repos)}]\n"
-            + legend
-        )
-        return {
-            "jsonrpc": "2.0",
-            "id": req_id,
-            "result": {"content": [{"type": "text", "text": help_text}]},
-        }
+
+    provider_emojis = {"github": "🐙", "forgejo": "🍵", "jenkins": "🤵"}
+    valid_repos = [
+        f"{provider_emojis.get(r.get('provider'), '⚒️')} {r.get('owner') or format_jenkins_repo(r.get('repo', ''))}"
+        if r.get("provider") == "jenkins"
+        else f"{provider_emojis.get(r.get('provider'), '⚒️')} {r['owner']}/{r['repo']}"
+        for r in repos
+    ]
+    legend = "\n\nField Definitions:\n✅ Success | ❌ Failure | 🏃 Running | ❓ Unknown\nStarted | Expected Duration | Commit Message\n\nProviders:\n🐙 GitHub | 🍵 Forgejo/Gitea | 🤵 Jenkins | ⚒️ Other"
+    help_text = (
+        f"Repo '{repo}' not found.\nvalid_repos: [{', '.join(valid_repos)}]\n" + legend
+    )
+    return {
+        "jsonrpc": "2.0",
+        "id": req_id,
+        "result": {"content": [{"type": "text", "text": help_text}]},
+    }
 
 
 def _parse_mcp_request_args(
@@ -492,6 +509,132 @@ def _parse_mcp_request_args(
     return is_tool_call, method_name, provider_arg, repo, workflow, branch
 
 
+async def _dispatch_mcp_method(
+    method_name: str,
+    workflow_service,
+    request: Request,
+    matched_repo: dict,
+    branch: Optional[str],
+    req_id: Any,
+    is_tool_call: bool,
+):
+    provider = matched_repo["provider"]
+    owner = matched_repo["owner"]
+    repo_name = matched_repo["repo"]
+    wf_id = matched_repo.get("workflow_id")
+    target_branch = branch or matched_repo.get("branch")
+
+    if method_name == "get_status":
+        return await _handle_get_status(
+            workflow_service,
+            request,
+            provider,
+            owner,
+            repo_name,
+            wf_id,
+            target_branch,
+            req_id,
+            is_tool_call,
+        )
+    elif method_name == "get_logs":
+        return _handle_get_logs(
+            request,
+            provider,
+            owner,
+            repo_name,
+            wf_id,
+            target_branch,
+            req_id,
+            is_tool_call,
+        )
+    elif method_name == "wait":
+        from fastapi.responses import StreamingResponse
+
+        return StreamingResponse(
+            _wait_generator(
+                workflow_service,
+                provider,
+                owner,
+                repo_name,
+                wf_id,
+                target_branch,
+                req_id,
+                is_tool_call,
+            ),
+            media_type="application/json",
+        )
+    elif method_name == "get_branches":
+        return await _handle_get_branches(
+            workflow_service, provider, owner, repo_name, req_id, is_tool_call
+        )
+
+
+def _validate_repo_required(
+    repo: Optional[str], method_name: str, req_id: Any
+) -> Optional[dict]:
+    if not repo and method_name in [
+        "get_status",
+        "get_logs",
+        "wait",
+        "get_branches",
+    ]:
+        return {
+            "jsonrpc": "2.0",
+            "id": req_id,
+            "error": {
+                "code": -32602,
+                "message": "Missing required parameter 'repo' or 'query'.",
+            },
+        }
+    return None
+
+
+async def _process_mcp_method(
+    req: JsonRpcRequest,
+    request: Request,
+    workflow_service,
+    is_tool_call: bool,
+    method_name: str,
+    provider_arg: Optional[str],
+    repo: str,
+    workflow: Optional[str],
+    branch: Optional[str],
+) -> dict:
+    repos = storage.get_repos()
+
+    help_res = _handle_help_request(repo, workflow, repos, req.id)
+    if help_res:
+        return help_res
+
+    if not provider_arg:
+        resolved_provider, error_response = resolve_provider_conflict(
+            repo, repos, req.id
+        )
+        if error_response:
+            return error_response
+        if resolved_provider:
+            provider_arg = resolved_provider
+
+    matched_repo, target_repo_matched = _find_matched_repo(
+        repo, provider_arg, workflow, repos
+    )
+
+    if not matched_repo:
+        return _handle_repo_not_found(
+            target_repo_matched, workflow, repo, provider_arg, repos, req.id
+        )
+
+    return await _dispatch_mcp_method(
+        method_name,
+        workflow_service,
+        request,
+        matched_repo,
+        branch,
+        req.id,
+        is_tool_call,
+    )
+
+
 async def _handle_mcp_routing(
     req: JsonRpcRequest,
     request: Request,
@@ -503,98 +646,22 @@ async def _handle_mcp_routing(
     workflow: Optional[str],
     branch: Optional[str],
 ) -> dict:
-    if not repo and method_name in [
-        "get_status",
-        "get_logs",
-        "wait",
-        "get_branches",
-    ]:
-        return {
-            "jsonrpc": "2.0",
-            "id": req.id,
-            "error": {
-                "code": -32602,
-                "message": "Missing required parameter 'repo' or 'query'.",
-            },
-        }
+    validation_err = _validate_repo_required(repo, method_name, req.id)
+    if validation_err:
+        return validation_err
 
     if method_name in ["get_status", "get_logs", "wait", "get_branches"]:
-        repos = storage.get_repos()
-
-        help_res = _handle_help_request(repo, workflow, repos, req.id)
-        if help_res:
-            return help_res
-
-        if not provider_arg and repo:
-            resolved_provider, error_response = resolve_provider_conflict(
-                repo, repos, req.id
-            )
-            if error_response:
-                return error_response
-            if resolved_provider:
-                provider_arg = resolved_provider
-
-        matched_repo, target_repo_matched = _find_matched_repo(
-            repo, provider_arg, workflow, repos
+        return await _process_mcp_method(
+            req,
+            request,
+            workflow_service,
+            is_tool_call,
+            method_name,
+            provider_arg,
+            repo,
+            workflow,
+            branch,
         )
-
-        if not matched_repo:
-            return _handle_repo_not_found(
-                target_repo_matched, workflow, repo, provider_arg, repos, req.id
-            )
-
-        provider = matched_repo["provider"]
-        owner = matched_repo["owner"]
-        repo_name = matched_repo["repo"]
-        wf_id = matched_repo.get("workflow_id")
-        target_branch = branch or matched_repo.get("branch")
-
-        if method_name == "get_status":
-            return await _handle_get_status(
-                workflow_service,
-                request,
-                provider,
-                owner,
-                repo_name,
-                wf_id,
-                target_branch,
-                req.id,
-                is_tool_call,
-            )
-
-        elif method_name == "get_logs":
-            return _handle_get_logs(
-                request,
-                provider,
-                owner,
-                repo_name,
-                wf_id,
-                target_branch,
-                req.id,
-                is_tool_call,
-            )
-
-        elif method_name == "wait":
-            from fastapi.responses import StreamingResponse
-
-            return StreamingResponse(
-                _wait_generator(
-                    workflow_service,
-                    provider,
-                    owner,
-                    repo_name,
-                    wf_id,
-                    target_branch,
-                    req.id,
-                    is_tool_call,
-                ),
-                media_type="application/json",
-            )
-
-        elif method_name == "get_branches":
-            return await _handle_get_branches(
-                workflow_service, provider, owner, repo_name, req.id, is_tool_call
-            )
 
     return {
         "jsonrpc": "2.0",
@@ -657,6 +724,9 @@ async def mcp_endpoint(
         )
 
     except Exception:
+        import traceback
+
+        traceback.print_exc()
         return {
             "jsonrpc": "2.0",
             "id": req.id,

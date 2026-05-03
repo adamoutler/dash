@@ -37,6 +37,27 @@ class JenkinsProvider(BaseProvider):
         except Exception:
             return self._error_result("jenkins", owner, repo)
 
+    def _extract_jenkins_status(self, status: str, last_build: Optional[dict]) -> str:
+        if not last_build:
+            return status
+        result = last_build.get("result")
+        if status == "unknown":
+            if result is None:
+                return "running"
+            elif result == "SUCCESS":
+                return "success"
+            elif result in ["FAILURE", "UNSTABLE", "ABORTED"]:
+                return "failure"
+        return status
+
+    def _extract_jenkins_commit_msg(self, last_build: dict) -> str:
+        change_sets = last_build.get("changeSets", [])
+        if change_sets and isinstance(change_sets, list):
+            items = change_sets[0].get("items", [])
+            if items:
+                return items[0].get("msg", "")
+        return ""
+
     def _parse_jenkins_job_status(
         self, data: dict, url: str, owner: str, repo_field: str
     ) -> dict:
@@ -49,41 +70,22 @@ class JenkinsProvider(BaseProvider):
             status = "running"
 
         if not last_build:
-            if status != "running":
-                return {
-                    "provider": "jenkins",
-                    "owner": owner,
-                    "repo": repo_field,
-                    "status": "unknown",
-                    "url": url,
-                    "repo_url": url,
-                    "updated_at": "",
-                    "commit_message": "No builds found",
-                    "started_at": "",
-                    "expected_duration_sec": None,
-                }
-            else:
-                return {
-                    "provider": "jenkins",
-                    "owner": owner,
-                    "repo": repo_field,
-                    "status": status,
-                    "url": url,
-                    "repo_url": url,
-                    "updated_at": "",
-                    "commit_message": "Job is in queue or starting",
-                    "started_at": "",
-                    "expected_duration_sec": None,
-                }
+            return {
+                "provider": "jenkins",
+                "owner": owner,
+                "repo": repo_field,
+                "status": status,
+                "url": url,
+                "repo_url": url,
+                "updated_at": "",
+                "commit_message": "No builds found"
+                if status != "running"
+                else "Job is in queue or starting",
+                "started_at": "",
+                "expected_duration_sec": None,
+            }
 
-        result = last_build.get("result")
-        if status == "unknown":
-            if result is None:
-                status = "running"
-            elif result == "SUCCESS":
-                status = "success"
-            elif result in ["FAILURE", "UNSTABLE", "ABORTED"]:
-                status = "failure"
+        status = self._extract_jenkins_status(status, last_build)
 
         timestamp_ms = last_build.get("timestamp")
         started_at = (
@@ -95,17 +97,9 @@ class JenkinsProvider(BaseProvider):
         )
 
         est_duration = last_build.get("estimatedDuration", -1)
-        if est_duration <= 0:
-            expected_duration_sec = 43.6  # Average of recent runs
-        else:
-            expected_duration_sec = est_duration / 1000.0
+        expected_duration_sec = est_duration / 1000.0 if est_duration > 0 else 43.6
 
-        commit_msg = ""
-        change_sets = last_build.get("changeSets", [])
-        if change_sets and isinstance(change_sets, list):
-            items = change_sets[0].get("items", [])
-            if items:
-                commit_msg = items[0].get("msg", "")
+        commit_msg = self._extract_jenkins_commit_msg(last_build)
 
         return {
             "provider": "jenkins",
@@ -232,6 +226,33 @@ class JenkinsProvider(BaseProvider):
     ) -> List[Dict[str, str]]:
         return []
 
+    def _parse_jenkins_explore_nodes(self, jobs: list, path: str) -> List[Node]:
+        nodes = []
+        for j in jobs:
+            j_class = j.get("_class", "")
+            j_name = j.get("name", "unknown")
+            j_url = j.get("url", "")
+            next_path = f"{path}/job/{j_name}" if path else f"job/{j_name}"
+
+            is_folder = (
+                "Folder" in j_class
+                or "MultiBranchProject" in j_class
+                or "OrganizationFolder" in j_class
+            )
+            node_type = NodeType.FOLDER if is_folder else NodeType.JOB
+
+            nodes.append(
+                Node(
+                    id=j_name,
+                    name=j_name,
+                    type=node_type,
+                    path=next_path,
+                    has_children=is_folder,
+                    url=j_url,
+                )
+            )
+        return nodes
+
     async def explore(self, path: str) -> List[Node]:
         if not self.url:
             from fastapi import HTTPException
@@ -255,32 +276,7 @@ class JenkinsProvider(BaseProvider):
                 resp = await client.get(query_url)
                 if resp.status_code == 200:
                     data = resp.json()
-                    jobs = data.get("jobs", [])
-                    nodes = []
-                    for j in jobs:
-                        j_class = j.get("_class", "")
-                        j_name = j.get("name", "unknown")
-                        j_url = j.get("url", "")
-                        next_path = f"{path}/job/{j_name}" if path else f"job/{j_name}"
-
-                        is_folder = (
-                            "Folder" in j_class
-                            or "MultiBranchProject" in j_class
-                            or "OrganizationFolder" in j_class
-                        )
-                        node_type = NodeType.FOLDER if is_folder else NodeType.JOB
-
-                        nodes.append(
-                            Node(
-                                id=j_name,
-                                name=j_name,
-                                type=node_type,
-                                path=next_path,
-                                has_children=is_folder,
-                                url=j_url,
-                            )
-                        )
-                    return nodes
+                    return self._parse_jenkins_explore_nodes(data.get("jobs", []), path)
                 elif resp.status_code in (401, 403):
                     from fastapi import HTTPException
 
