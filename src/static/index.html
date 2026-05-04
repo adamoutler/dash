@@ -48,7 +48,7 @@
 <div id="offline-banner" style="display:none; background-color: #ffcc00; color: #333; text-align: center; padding: 10px; font-weight: bold; width: 100%;">⚠️ You are offline...</div>
 <div id="logModal" class="modal">
   <div class="modal-content">
-    <span class="close-modal" onclick="document.getElementById('logModal').style.display='none'">&times;</span>
+    <span class="close-modal" tabindex="0" onclick="document.getElementById('logModal').style.display='none'" onkeydown="if(event.key==='Enter') this.click()">&times;</span>
     <h2 id="modalTitle" style="margin-top: 0;">Logs</h2>
     <div id="logContent" class="log-container">Loading...</div>
   </div>

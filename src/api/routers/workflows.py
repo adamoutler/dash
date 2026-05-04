@@ -96,8 +96,8 @@ async def get_logs(
         raise HTTPException(status_code=400, detail="Invalid log file path")
 
     if os.path.exists(filepath):
-        with open(filepath, "r", encoding="utf-8") as f:
-            return {"log": f.read()}
+        async with await anyio.open_file(filepath, "r", encoding="utf-8") as f:
+            return {"log": await f.read()}
 
     log = await workflow_service.get_logs(provider, owner, repo, workflow_id, branch)
     return {"log": log}
