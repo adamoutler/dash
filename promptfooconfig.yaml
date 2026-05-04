@@ -1,0 +1,10 @@
+prompts:
+  - "Test prompt {{topic}}"
+providers:
+  - id: "exec:echo testing"
+tests:
+  - vars:
+      topic: "testing"
+    assert:
+      - type: contains
+        value: "testing"

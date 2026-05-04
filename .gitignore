@@ -20,6 +20,7 @@
 !/LICENSE
 !/package-lock.json
 !/package.json
+!/promptfooconfig.yaml
 !/pytest.ini
 !/README.md
 !/requirements.txt
