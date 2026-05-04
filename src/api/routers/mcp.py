@@ -1,3 +1,4 @@
+from typing import Annotated
 import json
 import asyncio
 import urllib.parse
@@ -671,7 +672,9 @@ async def _handle_mcp_routing(
 
 @router.post("/mcp", summary="MCP JSON-RPC Endpoint")
 async def mcp_endpoint(
-    req: JsonRpcRequest, request: Request, user: str = Depends(get_current_user)
+    req: JsonRpcRequest,
+    request: Request,
+    user: Annotated[str, Depends(get_current_user)],
 ):
     from api.config import ConfigManager
 

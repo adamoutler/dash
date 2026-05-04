@@ -71,7 +71,7 @@ function evaluatePipeline(item, state) {
  * Polls the dashboard API until the specified repository's pipeline finishes.
  * @param {string} repo - Repository name or owner/name to wait for.
  */
-module.exports = async function(repo) {
+module.exports = async function waitCommand(repo) {
   if (!repo) {
     console.error(formatError('Repository argument is required for wait command'));
     process.exit(1);
@@ -100,6 +100,12 @@ module.exports = async function(repo) {
         }
         break;
       }
+    }
+    
+    await sleep(WAIT_INTERVAL_MS);
+  }
+};
+  }
     }
     
     await sleep(WAIT_INTERVAL_MS);

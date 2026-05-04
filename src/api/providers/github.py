@@ -119,15 +119,14 @@ class GitHubProvider(BaseProvider):
                 runs_data = runs_resp.json()
                 runs = runs_data.get("workflow_runs", [])
                 run = (
-                    sorted(
+                    max(
                         runs,
                         key=lambda x: (
                             (x.get("created_at") or x.get("created", ""))[:16],
                             self._get_status_weight(x),
                             x.get("updated_at") or x.get("updated", ""),
                         ),
-                        reverse=True,
-                    )[0]
+                    )
                     if runs
                     else {}
                 )

@@ -1,3 +1,4 @@
+from typing import Annotated
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from typing import Optional
@@ -18,7 +19,7 @@ class SettingsUpdate(BaseModel):
 
 
 @router.get("/settings", summary="Get Configured Providers")
-async def get_settings_status(user: str = Depends(require_basic_auth)):
+async def get_settings_status(user: Annotated[str, Depends(require_basic_auth)]):
     return {
         "github_configured": bool(
             config_manager.get_value("github_token", "GITHUB_TOKEN")
@@ -37,7 +38,7 @@ async def get_settings_status(user: str = Depends(require_basic_auth)):
 
 @router.post("/settings", summary="Update Settings")
 async def update_settings_status(
-    settings: SettingsUpdate, user: str = Depends(require_basic_auth)
+    settings: SettingsUpdate, user: Annotated[str, Depends(require_basic_auth)]
 ):
     updates = settings.model_dump(exclude_unset=True)
     config_manager.update_settings(updates)
@@ -45,7 +46,7 @@ async def update_settings_status(
 
 
 @router.get("/providers", summary="Get Fully Enabled Providers")
-async def get_enabled_providers(user: str = Depends(get_current_user)):
+async def get_enabled_providers(user: Annotated[str, Depends(get_current_user)]):
     providers = []
     if config_manager.get_value("github_token", "GITHUB_TOKEN"):
         providers.append("github")

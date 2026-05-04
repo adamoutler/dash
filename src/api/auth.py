@@ -1,3 +1,4 @@
+from typing import Annotated
 import json
 import os
 import secrets
@@ -118,8 +119,8 @@ async def get_current_user(request: Request):
     )
 
 
-async def require_basic_auth(
-    credentials: HTTPBasicCredentials = Depends(security_basic),
+def require_basic_auth(
+    credentials: Annotated[HTTPBasicCredentials, Depends(security_basic)],
 ):
     correct_user = os.environ.get("DASHBOARD_USER", "")
     correct_pass = os.environ.get("DASHBOARD_PASSWORD", "")

@@ -41,7 +41,9 @@ async function fetchDash(endpoint, options = {}) {
       try {
         const errObj = await response.json();
         if (errObj.detail) errStr += `: ${errObj.detail}`;
-      } catch (e) {}
+      } catch (e) {
+        console.debug('Failed to parse error JSON:', e.message);
+      }
       throw new Error(errStr);
     }
     

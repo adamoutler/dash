@@ -3,7 +3,7 @@
   "info": {
     "title": "Dash API",
     "description": "API for tracking and monitoring continuous integration workflows.",
-    "version": "v0.1.4.216"
+    "version": "v0.1.4.217"
   },
   "paths": {
     "/api/explore/{provider}/nodes": {
@@ -47,6 +47,15 @@
                 }
               }
             }
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "501": {
+            "description": "Not Implemented"
           },
           "422": {
             "description": "Validation Error",
@@ -547,6 +556,9 @@
               }
             }
           },
+          "400": {
+            "description": "Invalid log file path"
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -891,6 +903,9 @@
                 "schema": {}
               }
             }
+          },
+          "404": {
+            "description": "Token not found"
           },
           "422": {
             "description": "Validation Error",

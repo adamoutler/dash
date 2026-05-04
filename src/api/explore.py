@@ -1,3 +1,4 @@
+from typing import Annotated
 import logging
 from typing import List
 from fastapi import APIRouter, HTTPException, Query, Path, Depends
@@ -74,14 +75,22 @@ async def fetch_provider_nodes(provider: ProviderType, path: str) -> List[Node]:
     return await instance.explore(path)
 
 
-@router.get("/{provider}/nodes", response_model=NodeList)
+@router.get(
+    "/{provider}/nodes",
+    response_model=NodeList,
+    responses={
+        404: {"description": "Not Found"},
+        500: {"description": "Internal Server Error"},
+        501: {"description": "Not Implemented"},
+    },
+)
 async def get_nodes(
+    user: Annotated[str, Depends(get_current_user)],
     provider: ProviderType = Path(..., description="The provider name"),
     path: str = Query(
         "",
         description="The hierarchical path to explore. Leave empty for the root level.",
     ),
-    user: str = Depends(get_current_user),
 ):
     provider_lower = provider.value.lower()
     cache_key = f"{provider_lower}:{path}"

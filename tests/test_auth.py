@@ -142,17 +142,17 @@ async def test_require_basic_auth():
     os.environ["DASHBOARD_PASSWORD"] = dummy_pass
 
     creds = HTTPBasicCredentials(username="admin", password=dummy_pass)
-    user = await require_basic_auth(creds)
+    user = require_basic_auth(creds)
     assert user == "admin"
 
     bad_creds = HTTPBasicCredentials(username="admin", password=dummy_wrong)
     with pytest.raises(HTTPException) as exc:
-        await require_basic_auth(bad_creds)
+        require_basic_auth(bad_creds)
     assert exc.value.status_code == 401
 
 
 @pytest.mark.asyncio
 async def test_require_basic_auth_no_creds():
     with pytest.raises(HTTPException) as exc:
-        await require_basic_auth(None)
+        require_basic_auth(None)
     assert exc.value.status_code == 401

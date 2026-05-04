@@ -1,7 +1,7 @@
 const { fetchDash } = require('../api');
 const { formatError, formatSuccess, formatPending, formatInfo } = require('../ui');
 
-module.exports = async function(repo) {
+module.exports = async function statusCommand(repo) {
   try {
     let url = '/api/status';
     if (repo) url += `?repo=${encodeURIComponent(repo)}`;

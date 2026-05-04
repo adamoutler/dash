@@ -1,3 +1,4 @@
+from typing import Annotated
 import os
 import asyncio
 import anyio
@@ -20,11 +21,11 @@ MAX_LOG_SIZE = 2 * 1024 * 1024  # 2MB
 
 @router.get("/workflows", summary="List Available Workflows")
 async def get_workflows(
+    user: Annotated[str, Depends(get_current_user)],
     provider: ProviderType,
     owner: str,
     repo: str,
     branch: Optional[str] = None,
-    user: str = Depends(get_current_user),
 ):
     return await workflow_service.get_workflows(provider, owner, repo, branch)
 
@@ -34,9 +35,9 @@ async def get_artifacts(
     provider: ProviderType,
     owner: str,
     repo: str,
+    user: Annotated[str, Depends(get_current_user)],
     workflow_id: Optional[str] = None,
     branch: Optional[str] = None,
-    user: str = Depends(get_current_user),
 ):
     return await workflow_service.get_artifacts(
         provider, owner, repo, workflow_id, branch
@@ -45,13 +46,13 @@ async def get_artifacts(
 
 @router.post("/logs", summary="Upload External Logs")
 async def post_logs(
+    user: Annotated[str, Depends(get_current_user)],
     provider: ProviderType,
     owner: str,
     repo: str,
     request: Request,
     workflow_id: Optional[str] = None,
     branch: Optional[str] = None,
-    user: str = Depends(get_current_user),
 ):
     buffer = bytearray()
     async for chunk in request.stream():
@@ -81,14 +82,18 @@ async def post_logs(
     return {"message": "Log saved successfully", "file": filename}
 
 
-@router.get("/logs", summary="Retrieve Workflow Logs")
+@router.get(
+    "/logs",
+    summary="Retrieve Workflow Logs",
+    responses={400: {"description": "Invalid log file path"}},
+)
 async def get_logs(
     provider: ProviderType,
     owner: str,
     repo: str,
+    user: Annotated[str, Depends(get_current_user)],
     workflow_id: Optional[str] = None,
     branch: Optional[str] = None,
-    user: str = Depends(get_current_user),
 ):
     filename = get_log_filename(provider, owner, repo, workflow_id, branch)
     filepath = os.path.normpath(os.path.join(LOGS_DIR, filename))
@@ -105,7 +110,10 @@ async def get_logs(
 
 @router.get("/branches", summary="List Available Branches")
 async def get_branches(
-    provider: ProviderType, owner: str, repo: str, user: str = Depends(get_current_user)
+    user: Annotated[str, Depends(get_current_user)],
+    provider: ProviderType,
+    owner: str,
+    repo: str,
 ):
     return await workflow_service.get_branches(provider, owner, repo)
 
@@ -188,7 +196,9 @@ def _enhance_results(repos: list, results: list, base_url: str):
 
 @router.get("/status", summary="Retrieve all build statuses.")
 async def get_status(
-    request: Request, query: Optional[str] = None, user: str = Depends(get_current_user)
+    request: Request,
+    user: Annotated[str, Depends(get_current_user)],
+    query: Optional[str] = None,
 ):
     repos = storage.get_repos()
 
@@ -239,12 +249,12 @@ def _process_wait_iteration(
 
 @router.get("/wait", summary="Stream Execution Status")
 async def wait_status(
+    user: Annotated[str, Depends(get_current_user)],
     provider: ProviderType,
     owner: str,
     repo: str,
     workflow_id: Optional[str] = None,
     branch: Optional[str] = None,
-    user: str = Depends(get_current_user),
 ):
     async def event_stream():
         yield "waiting for complete."

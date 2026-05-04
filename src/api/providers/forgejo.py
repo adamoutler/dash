@@ -72,15 +72,14 @@ class ForgejoProvider(BaseProvider):
                 runs.append(r)
 
         return (
-            sorted(
+            max(
                 runs,
                 key=lambda x: (
                     (x.get("created_at") or x.get("created", ""))[:16],
                     self._get_status_weight(x),
                     x.get("updated_at") or x.get("updated", ""),
                 ),
-                reverse=True,
-            )[0]
+            )
             if runs
             else {}
         )
@@ -226,15 +225,14 @@ Recommendations:
                         runs.append(r)
 
                 run = (
-                    sorted(
+                    max(
                         runs,
                         key=lambda x: (
                             (x.get("created_at") or x.get("created", ""))[:16],
                             self._get_status_weight(x),
                             x.get("updated_at") or x.get("updated", ""),
                         ),
-                        reverse=True,
-                    )[0]
+                    )
                     if runs
                     else {}
                 )

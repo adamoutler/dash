@@ -44,10 +44,12 @@ async function promptConfig() {
  */
 async function ensureConfig() {
   let conf = await getConfig();
-  if (!conf || !conf.url || !conf.token) {
+  if (!conf?.url || !conf?.token) {
     conf = await promptConfig();
   }
   return conf;
 }
 
 module.exports = { getConfig, promptConfig, ensureConfig };
+fig, ensureConfig };
+ig };

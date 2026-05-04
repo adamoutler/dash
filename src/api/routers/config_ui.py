@@ -1,3 +1,4 @@
+from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import Optional
@@ -15,7 +16,7 @@ class TokenCreateRequest(BaseModel):
 
 @router.post("/tokens")
 async def create_new_token(
-    req: TokenCreateRequest, user: str = Depends(require_basic_auth)
+    req: TokenCreateRequest, user: Annotated[str, Depends(require_basic_auth)]
 ):
     from api.auth import token_manager
 
@@ -24,7 +25,7 @@ async def create_new_token(
 
 
 @router.get("/data")
-async def get_configure_data(user: str = Depends(require_basic_auth)):
+async def get_configure_data(user: Annotated[str, Depends(require_basic_auth)]):
     from api.auth import token_manager
 
     repos = storage.get_repos()
@@ -32,8 +33,8 @@ async def get_configure_data(user: str = Depends(require_basic_auth)):
     return {"repos": repos, "tokens": tokens}
 
 
-@router.delete("/tokens/{token}")
-async def delete_token(token: str, user: str = Depends(require_basic_auth)):
+@router.delete("/tokens/{token}", responses={404: {"description": "Token not found"}})
+async def delete_token(token: str, user: Annotated[str, Depends(require_basic_auth)]):
     from api.auth import token_manager
 
     success = token_manager.revoke_token(token)

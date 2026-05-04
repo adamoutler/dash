@@ -1,3 +1,4 @@
+from typing import Annotated
 import os
 import subprocess
 from fastapi import FastAPI, Depends
@@ -80,12 +81,12 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
 @app.get("/", include_in_schema=False)
-async def read_index(user: str = Depends(require_basic_auth)):
+async def read_index(user: Annotated[str, Depends(require_basic_auth)]):
     return FileResponse(os.path.join(STATIC_DIR, "index.html"))
 
 
 @app.get("/configure", include_in_schema=False)
-async def read_configure(user: str = Depends(require_basic_auth)):
+async def read_configure(user: Annotated[str, Depends(require_basic_auth)]):
     return FileResponse(os.path.join(STATIC_DIR, "configure.html"))
 
 
@@ -115,5 +116,5 @@ async def read_gemini_kanban():
 
 
 @app.get("/api", include_in_schema=False)
-async def redirect_to_docs(user: str = Depends(get_current_user)):
+async def redirect_to_docs(user: Annotated[str, Depends(get_current_user)]):
     return RedirectResponse(url="/docs")

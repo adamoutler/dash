@@ -73,6 +73,7 @@ class WorkflowService:
             else:
 
                 async def mock_error():
+                    await asyncio.sleep(0)
                     return {
                         "provider": r.get("provider", "unknown"),
                         "owner": r.get("owner"),
