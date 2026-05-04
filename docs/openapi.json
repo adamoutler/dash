@@ -3,7 +3,7 @@
   "info": {
     "title": "Dash API",
     "description": "API for tracking and monitoring continuous integration workflows.",
-    "version": "v0.1.4.217"
+    "version": "v0.1.4.218"
   },
   "paths": {
     "/api/explore/{provider}/nodes": {
@@ -468,6 +468,9 @@
                 "schema": {}
               }
             }
+          },
+          "400": {
+            "description": "Invalid provider, owner, repo, or log path"
           },
           "422": {
             "description": "Validation Error",

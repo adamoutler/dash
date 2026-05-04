@@ -215,27 +215,7 @@ Recommendations:
 
                 runs_data = runs_resp.json()
                 all_runs = runs_data.get("workflow_runs", [])
-                runs = []
-                for r in all_runs:
-                    if (
-                        not workflow_id
-                        or r.get("name") == workflow_id
-                        or str(r.get("workflow_id")) == workflow_id
-                    ):
-                        runs.append(r)
-
-                run = (
-                    max(
-                        runs,
-                        key=lambda x: (
-                            (x.get("created_at") or x.get("created", ""))[:16],
-                            self._get_status_weight(x),
-                            x.get("updated_at") or x.get("updated", ""),
-                        ),
-                    )
-                    if runs
-                    else {}
-                )
+                run = self._get_latest_forgejo_run(all_runs, workflow_id)
                 if not run.get("id"):
                     return {"error": "No runs found."}
 

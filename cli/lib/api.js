@@ -17,7 +17,7 @@ async function fetchDash(endpoint, options = {}) {
   const headers = {
     'Authorization': `Bearer ${config.token}`,
     'Content-Type': 'application/json',
-    ...(options.headers || {})
+    ...options.headers
   };
   
   try {

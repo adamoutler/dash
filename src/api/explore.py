@@ -86,11 +86,13 @@ async def fetch_provider_nodes(provider: ProviderType, path: str) -> List[Node]:
 )
 async def get_nodes(
     user: Annotated[str, Depends(get_current_user)],
-    provider: ProviderType = Path(..., description="The provider name"),
-    path: str = Query(
-        "",
-        description="The hierarchical path to explore. Leave empty for the root level.",
-    ),
+    provider: Annotated[ProviderType, Path(..., description="The provider name")],
+    path: Annotated[
+        str,
+        Query(
+            description="The hierarchical path to explore. Leave empty for the root level."
+        ),
+    ] = "",
 ):
     provider_lower = provider.value.lower()
     cache_key = f"{provider_lower}:{path}"

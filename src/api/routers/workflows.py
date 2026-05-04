@@ -44,7 +44,11 @@ async def get_artifacts(
     )
 
 
-@router.post("/logs", summary="Upload External Logs")
+@router.post(
+    "/logs",
+    summary="Upload External Logs",
+    responses={400: {"description": "Invalid provider, owner, repo, or log path"}},
+)
 async def post_logs(
     user: Annotated[str, Depends(get_current_user)],
     provider: ProviderType,
