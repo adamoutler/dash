@@ -20,15 +20,12 @@
 !/LICENSE
 !/package-lock.json
 !/package.json
-!/promptfooconfig.yaml
 !/pytest.ini
 !/README.md
 !/requirements.txt
-!/safeskill-registration.md
 !/safeskill.manifest.json
 !/SECURITY.md
 !/sonar-project.properties
-!/test_version.py
 !/VERSION
 
 # The original rules for subdirectories
