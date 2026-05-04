@@ -47,7 +47,12 @@ jobs:
 
     - name: Run Tests
       run: |
-        python -m pytest -v 2>&1 | tee job-logs.txt
+        python -m pytest --cov=src --cov=cli --cov-report=xml -v 2>&1 | tee job-logs.txt
+
+    - name: SonarQube Scan
+      uses: SonarSource/sonarqube-scan-action@v7
+      env:
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
     - name: Upload logs to Dashboard
       if: always()
