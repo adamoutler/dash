@@ -75,9 +75,9 @@ async def post_logs(
     if not safe_provider or not safe_owner or not safe_repo:
         raise HTTPException(status_code=400, detail="Invalid provider, owner, or repo.")
 
-    filename = get_log_filename(provider, owner, repo, workflow_id, branch)
-    filepath = os.path.normpath(os.path.join(LOGS_DIR, filename))
-    if not filepath.startswith(os.path.normpath(LOGS_DIR)):
+    filename = os.path.basename(get_log_filename(provider, owner, repo, workflow_id, branch))
+    filepath = os.path.abspath(os.path.join(LOGS_DIR, filename))
+    if not filepath.startswith(os.path.abspath(LOGS_DIR)):
         raise HTTPException(status_code=400, detail="Invalid log file path")
 
     async with await anyio.open_file(filepath, "w", encoding="utf-8") as f:
@@ -99,9 +99,9 @@ async def get_logs(
     workflow_id: Optional[str] = None,
     branch: Optional[str] = None,
 ):
-    filename = get_log_filename(provider, owner, repo, workflow_id, branch)
-    filepath = os.path.normpath(os.path.join(LOGS_DIR, filename))
-    if not filepath.startswith(os.path.normpath(LOGS_DIR)):
+    filename = os.path.basename(get_log_filename(provider, owner, repo, workflow_id, branch))
+    filepath = os.path.abspath(os.path.join(LOGS_DIR, filename))
+    if not filepath.startswith(os.path.abspath(LOGS_DIR)):
         raise HTTPException(status_code=400, detail="Invalid log file path")
 
     if os.path.exists(filepath):

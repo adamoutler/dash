@@ -11,7 +11,10 @@ async function fetchDash(endpoint, options = {}) {
   const config = await getConfig();
   if (!config) throw new Error('Missing config');
   
-  let urlStr = config.url.replace(/\/+$/, '');
+  let urlStr = config.url;
+  while (urlStr.endsWith('/')) {
+    urlStr = urlStr.slice(0, -1);
+  }
   if (!endpoint.startsWith('/')) endpoint = '/' + endpoint;
   
   const headers = {

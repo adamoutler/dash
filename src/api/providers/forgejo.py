@@ -343,9 +343,9 @@ Recommendations:
         raise ProviderPathNotFoundError(f"Owner {owner} not found or no access")
 
     async def explore(self, path: str) -> List[Node]:
-        if not self.url or not (
-            self.url.startswith("http://") or self.url.startswith("https://")
-        ):
+        from urllib.parse import urlparse
+        scheme = urlparse(self.url).scheme if self.url else ""
+        if scheme not in ("http", "https"):
             raise ProviderPathNotFoundError("Forgejo URL is missing or invalid")
         headers = {"Accept": ACCEPT_JSON}
         if self.token:

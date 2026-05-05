@@ -50,7 +50,7 @@ jobs:
         python -m pytest --cov=src --cov=cli --cov-report=xml -v 2>&1 | tee job-logs.txt
 
     - name: SonarQube Scan
-      uses: SonarSource/sonarqube-scan-action@v7
+      uses: SonarSource/sonarqube-scan-action@master
       env:
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 

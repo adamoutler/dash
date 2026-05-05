@@ -769,10 +769,9 @@ async def mcp_endpoint(
             branch,
         )
 
-    except Exception:
-        import traceback
-
-        traceback.print_exc()
+    except Exception as e:
+        import logging
+        logging.error(f"MCP internal error: {e}")
         return {
             "jsonrpc": "2.0",
             "id": req.id,
