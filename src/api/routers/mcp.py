@@ -185,17 +185,34 @@ def _check_recent_commit() -> bool:
 
 
 def _format_mcp_wait_payload(
-    result: dict, req_id: Any, is_tool_call: bool, status: str
+    result: dict,
+    req_id: Any,
+    is_tool_call: bool,
+    status: str,
+    log_url: str = None,
+    was_running: bool = True,
 ) -> dict:
     res_obj = {
-        "url": result.get("url"),
-        "repo_url": result.get("repo_url"),
-        "commit_message": result.get("commit_message"),
-        "started_at": result.get("started_at"),
-        "average_recent_duration": result.get("average_recent_duration"),
         "status": status,
+        "url": result.get("url"),
     }
-    yaml_lines = [f"{k}: {v}" for k, v in res_obj.items()]
+
+    if not was_running:
+        res_obj["note"] = "No active job in progress. Showing latest build."
+
+    if log_url:
+        res_obj["log_url"] = log_url
+
+    res_obj.update(
+        {
+            "repo_url": result.get("repo_url"),
+            "commit_message": result.get("commit_message"),
+            "started_at": result.get("started_at"),
+            "average_recent_duration": result.get("average_recent_duration"),
+        }
+    )
+
+    yaml_lines = [f"{k}: {v}" for k, v in res_obj.items() if v is not None]
     yaml_str = "\n".join(yaml_lines)
 
     return {
@@ -209,6 +226,7 @@ def _format_mcp_wait_payload(
 
 async def _wait_generator(
     workflow_service,
+    request: Request,
     provider: str,
     owner: str,
     repo_name: str,
@@ -248,12 +266,37 @@ async def _wait_generator(
                 await asyncio.sleep(10)
                 continue
 
-            if not was_running:
-                status = "no job in progress"
-                result["status"] = status
+            # Compute log url
+            base_url = str(request.base_url).rstrip("/")
+            dash_log_url = f"{base_url}/api/logs?provider={provider}&owner={owner}&repo={repo_name}"
+            if wf_id:
+                dash_log_url += f"&workflow_id={wf_id}"
+
+            import os
+            from api.config import LOGS_DIR
+            from api.services.workflow_service import get_log_filename
+
+            filepath = os.path.normpath(
+                os.path.join(
+                    LOGS_DIR, get_log_filename(provider, owner, repo_name, wf_id)
+                )
+            )
+            has_local_log = filepath.startswith(
+                os.path.normpath(LOGS_DIR)
+            ) and os.path.exists(filepath)
+            log_url = (
+                dash_log_url if has_local_log else (result.get("url") or dash_log_url)
+            )
 
             yield json.dumps(
-                _format_mcp_wait_payload(result, req_id, is_tool_call, status)
+                _format_mcp_wait_payload(
+                    result,
+                    req_id,
+                    is_tool_call,
+                    status,
+                    log_url=log_url,
+                    was_running=was_running,
+                )
             )
             break
 
@@ -553,6 +596,7 @@ async def _dispatch_mcp_method(
         return StreamingResponse(
             _wait_generator(
                 workflow_service,
+                request,
                 provider,
                 owner,
                 repo_name,

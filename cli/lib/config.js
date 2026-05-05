@@ -51,5 +51,3 @@ async function ensureConfig() {
 }
 
 module.exports = { getConfig, promptConfig, ensureConfig };
-fig, ensureConfig };
-ig };

@@ -157,7 +157,7 @@ def test_process_wait_iteration():
     res3, att3, out3 = _process_wait_iteration({"status": "success"}, False, 2)
     assert res3 is False
     assert att3 == 2
-    assert "no job in progress" in out3
+    assert "No active job in progress" in out3
 
 
 @pytest.mark.asyncio

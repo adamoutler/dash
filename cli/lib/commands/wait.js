@@ -39,12 +39,16 @@ function evaluatePipeline(item, state) {
   if (['success', 'passed'].includes(status)) {
     console.log(formatSuccess(`Pipeline succeeded!`));
     if (item.url) console.log(`  Link: ${item.url}`);
+    if (item.log_url) console.log(`  Log Link: ${item.log_url}`);
+    if (!state.wasRunning) console.log(formatInfo('  Note: No active job was in progress. Showing latest build.'));
     return { wait: false, code: 0 };
   }
   
   if (['failed', 'error', 'cancelled', 'action_required', 'timed_out'].includes(status)) {
     console.error(formatError(`Pipeline stopped with status: ${status}`));
     if (item.url) console.log(`  Link: ${item.url}`);
+    if (item.log_url) console.log(`  Log Link: ${item.log_url}`);
+    if (!state.wasRunning) console.log(formatInfo('  Note: No active job was in progress. Showing latest build.'));
     return { wait: false, code: 1 };
   }
   
@@ -60,7 +64,9 @@ function evaluatePipeline(item, state) {
       state.attemptsWhenNotRunning++;
       return { wait: true }; // continue waiting
     }
-    console.log(formatInfo('No pipeline in progress.'));
+    console.log(formatInfo(`No pipeline in progress. Last status was: ${status}`));
+    if (item.url) console.log(`  Link: ${item.url}`);
+    if (item.log_url) console.log(`  Log Link: ${item.log_url}`);
     return { wait: false, code: 0 };
   }
   
@@ -100,12 +106,6 @@ module.exports = async function waitCommand(repo) {
         }
         break;
       }
-    }
-    
-    await sleep(WAIT_INTERVAL_MS);
-  }
-};
-  }
     }
     
     await sleep(WAIT_INTERVAL_MS);

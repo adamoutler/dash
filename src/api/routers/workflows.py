@@ -217,10 +217,15 @@ async def get_status(
     return results
 
 
-def _format_wait_result(result: dict, status: str) -> str:
-    yaml_lines = [f"{k}: {v}" for k, v in result.items()]
+def _format_wait_result(result: dict, status: str, was_running: bool = True) -> str:
+    yaml_lines = [f"{k}: {v}" for k, v in result.items() if k != "status"]
+
+    prefix = ""
+    if not was_running:
+        prefix = "\nNote: No active job in progress. Showing latest build."
+
     yaml_str = "\n".join(yaml_lines)
-    return f"\nStatus changed to {status}\n{yaml_str}\n"
+    return f"{prefix}\nStatus changed to {status}\n{yaml_str}\n"
 
 
 def _is_running_status(status: Optional[str]) -> bool:
@@ -244,11 +249,11 @@ def _process_wait_iteration(
     if not was_running and attempts_when_not_running < 2:
         return was_running, attempts_when_not_running + 1, "."
 
-    if not was_running:
-        status = "no job in progress"
-        result["status"] = status
-
-    return was_running, attempts_when_not_running, _format_wait_result(result, status)
+    return (
+        was_running,
+        attempts_when_not_running,
+        _format_wait_result(result, status, was_running),
+    )
 
 
 @router.get("/wait", summary="Stream Execution Status")
