@@ -42,6 +42,4 @@ function renderStatus(item) {
   console.log(`  Status: ${statusStr}`);
   if (item.url) console.log(`  Link:   ${item.url}`);
   if (item.log_url) console.log(`  Log Link: ${item.log_url}`);
-  }
-  if (item.log_url) console.log(`  Log Link: ${item.log_url}`);
 }
