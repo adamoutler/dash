@@ -3,7 +3,7 @@
   "info": {
     "title": "Dash API",
     "description": "API for tracking and monitoring continuous integration workflows.",
-    "version": "v0.2.5.236"
+    "version": "v0.2.5.237"
   },
   "paths": {
     "/api/explore/{provider}/nodes": {
