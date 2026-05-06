@@ -268,36 +268,33 @@ async def wait_status(
     workflow_id: Optional[str] = None,
     branch: Optional[str] = None,
 ):
+    base_url = str(request.base_url).rstrip("/") if hasattr(request, "base_url") else ""
+    dash_log_url = (
+        _build_dash_log_url(base_url, provider, owner, repo, branch, workflow_id)
+        if base_url
+        else None
+    )
+
     async def event_stream():
         yield "waiting for complete."
-        attempts_when_not_running = 0
-        was_running = False
+        attempts = 0
+        running = False
 
         while True:
-            result = await workflow_service.get_single_status(
+            res = await workflow_service.get_single_status(
                 provider, owner, repo, workflow_id, branch
             )
             if (
-                result.get("status") == "error"
-                and result.get("commit_message") == "Unknown provider"
+                res.get("status") == "error"
+                and res.get("commit_message") == "Unknown provider"
             ):
                 yield "\nError: Unknown provider\n"
                 break
 
-            base_url = (
-                str(request.base_url).rstrip("/")
-                if hasattr(request, "base_url")
-                else ""
-            )
-            if base_url:
-                dash_log_url = _build_dash_log_url(
-                    base_url, provider, owner, repo, branch, workflow_id
-                )
-                result["log_url"] = dash_log_url
+            if dash_log_url:
+                res["log_url"] = dash_log_url
 
-            was_running, attempts_when_not_running, output = _process_wait_iteration(
-                result, was_running, attempts_when_not_running
-            )
+            running, attempts, output = _process_wait_iteration(res, running, attempts)
             yield output
 
             if "\nStatus changed to" in output or "\nError" in output:

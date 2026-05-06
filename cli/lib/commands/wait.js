@@ -1,6 +1,6 @@
 const { fetchDash } = require('../api');
 const { formatError, formatSuccess, formatPending, formatInfo } = require('../ui');
-const { execFileSync } = require('child_process');
+const { execFileSync } = require('node:child_process');
 
 const MAX_TRANSIENT_FAILURES = 5;
 const WAIT_INTERVAL_MS = 5000;
@@ -9,10 +9,10 @@ const MAX_ATTEMPTS_WHEN_NOT_RUNNING = 12;
 function isRecentCommit() {
   try {
     const stdout = execFileSync('git', ['log', '-1', '--format=%ct'], { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
-    const commitTime = parseInt(stdout.trim(), 10);
+    const commitTime = Number.parseInt(stdout.trim(), 10);
     const currentTime = Math.floor(Date.now() / 1000);
     return (currentTime - commitTime) <= 20;
-  } catch (err) {
+  } catch {
     return false;
   }}
 
@@ -27,10 +27,16 @@ async function fetchStatusWithRetry(repo, state) {
     state.transientFailures++;
     console.error(formatError(`Transient error (${state.transientFailures}/${MAX_TRANSIENT_FAILURES}): ${err.message}`));
     if (state.transientFailures >= MAX_TRANSIENT_FAILURES) {
-      process.exit(1);
+      throw err;
     }
     return null; // Return null to indicate failure but keep waiting if under max
   }
+}
+
+function printItemDetails(item, state) {
+  if (item.url) console.log(`  Link: ${item.url}`);
+  if (item.log_url) console.log(`  Log Link: ${item.log_url}`);
+  if (!state.wasRunning) console.log(formatInfo('  Note: No active job was in progress. Showing latest build.'));
 }
 
 function evaluatePipeline(item, state) {
@@ -38,23 +44,17 @@ function evaluatePipeline(item, state) {
   
   if (['success', 'passed'].includes(status)) {
     console.log(formatSuccess(`Pipeline succeeded!`));
-    if (item.url) console.log(`  Link: ${item.url}`);
-    if (item.log_url) console.log(`  Log Link: ${item.log_url}`);
-    if (!state.wasRunning) console.log(formatInfo('  Note: No active job was in progress. Showing latest build.'));
+    printItemDetails(item, state);
     return { wait: false, code: 0 };
   }
   
   if (['failed', 'error', 'cancelled', 'action_required', 'timed_out'].includes(status)) {
     console.error(formatError(`Pipeline stopped with status: ${status}`));
-    if (item.url) console.log(`  Link: ${item.url}`);
-    if (item.log_url) console.log(`  Log Link: ${item.log_url}`);
-    if (!state.wasRunning) console.log(formatInfo('  Note: No active job was in progress. Showing latest build.'));
+    printItemDetails(item, state);
     return { wait: false, code: 1 };
   }
   
-  const isRunning = ['running', 'in_progress', 'queued', 'waiting', 'requested', 'pending'].includes(status);
-  
-  if (isRunning) {
+  if (['running', 'in_progress', 'queued', 'waiting', 'requested', 'pending'].includes(status)) {
     state.wasRunning = true;
     return { wait: true }; // continue waiting
   }
@@ -65,8 +65,7 @@ function evaluatePipeline(item, state) {
       return { wait: true }; // continue waiting
     }
     console.log(formatInfo(`No pipeline in progress. Last status was: ${status}`));
-    if (item.url) console.log(`  Link: ${item.url}`);
-    if (item.log_url) console.log(`  Log Link: ${item.log_url}`);
+    printItemDetails(item, state);
     return { wait: false, code: 0 };
   }
   

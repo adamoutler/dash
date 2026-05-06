@@ -1,7 +1,7 @@
-const fs = require('fs');
-const fsPromises = require('fs').promises;
-const path = require('path');
-const os = require('os');
+const fs = require('node:fs');
+const fsPromises = require('node:fs').promises;
+const path = require('node:path');
+const os = require('node:os');
 const { input, password } = require('@inquirer/prompts');
 
 const CONFIG_DIR = path.join(os.homedir(), '.config', 'dash');
@@ -16,7 +16,7 @@ async function getConfig() {
     const fileContent = await fsPromises.readFile(CONFIG_FILE, 'utf8');
     const data = JSON.parse(fileContent);
     return data;
-  } catch (e) {
+  } catch {
     console.error(`Invalid or unreadable config at ${CONFIG_FILE}. Prompting for new config.`);
   }
   return null;
