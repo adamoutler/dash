@@ -115,7 +115,44 @@ async def test_handle_get_status():
 
 
 @pytest.mark.asyncio
-async def test_wait_generator():
+async def test_wait_generator_recent_commit():
+    from api.routers.mcp import _wait_generator
+    import json
+
+    class MockRequest:
+        base_url = "http://testserver/"
+
+    class MockWorkflowService:
+        def __init__(self):
+            self.calls = 0
+
+        async def get_single_status(self, *args, **kwargs):
+            self.calls += 1
+            if self.calls <= 2:
+                return {"status": "failed", "url": "http://real"}
+            return {"status": "success", "url": "http://real"}
+
+    mock_ws = MockWorkflowService()
+    req = MockRequest()
+
+    with patch("api.routers.mcp._check_recent_commit") as mock_check:
+        # First iteration returns True for recent commit, so it yields " " and sleeps
+        # Second iteration returns False, so it yields the JSON payload and breaks
+        mock_check.side_effect = [True, False]
+
+        gen = _wait_generator(
+            mock_ws, req, "github", "own", "rep", "wf1", "main", 1, False
+        )
+
+        # Iteration 1: recent commit wait
+        res1 = await anext(gen)
+        assert res1 == " "
+
+        # Iteration 2: recent commit wait over, return payload
+        res2 = await anext(gen)
+        data = json.loads(res2)
+        assert data["result"]["status"] == "failed"
+        assert "api/logs" in data["result"]["log_url"]
     from api.routers.mcp import _wait_generator
     import json
 
