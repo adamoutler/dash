@@ -83,3 +83,63 @@ def test_format_mcp_wait_payload():
     # True
     res2 = _format_mcp_wait_payload(result, 1, True, "success")
     assert "status: success" in res2["result"]["content"][0]["text"]
+
+
+@pytest.mark.asyncio
+async def test_handle_get_status():
+    from api.routers.mcp import _handle_get_status
+
+    class MockRequest:
+        base_url = "http://testserver/"
+
+    class MockWorkflowService:
+        async def get_single_status(self, *args, **kwargs):
+            return {"status": "success", "url": "http://real-url"}
+
+        def format_status_yaml(self, *args, **kwargs):
+            return "formatted"
+
+    mock_ws = MockWorkflowService()
+    req = MockRequest()
+
+    res1 = await _handle_get_status(
+        mock_ws, req, "github", "own", "rep", "wf1", "main", 1, False
+    )
+    assert res1["result"]["status"] == "success"
+    assert "api/logs" in res1["result"]["log_url"]
+
+    res2 = await _handle_get_status(
+        mock_ws, req, "github", "own", "rep", "wf1", "main", 2, True
+    )
+    assert "formatted" in res2["result"]["content"][0]["text"]
+
+
+@pytest.mark.asyncio
+async def test_wait_generator():
+    from api.routers.mcp import _wait_generator
+    import json
+
+    class MockRequest:
+        base_url = "http://testserver/"
+
+    class MockWorkflowService:
+        def __init__(self):
+            self.calls = 0
+
+        async def get_single_status(self, *args, **kwargs):
+            self.calls += 1
+            if self.calls == 1:
+                return {"status": "running"}
+            return {"status": "success", "url": "http://real"}
+
+    mock_ws = MockWorkflowService()
+    req = MockRequest()
+
+    gen = _wait_generator(mock_ws, req, "github", "own", "rep", "wf1", "main", 1, False)
+    res = await anext(gen)
+    assert res == " "
+
+    res2 = await anext(gen)
+    data = json.loads(res2)
+    assert data["result"]["status"] == "success"
+    assert "api/logs" in data["result"]["log_url"]
