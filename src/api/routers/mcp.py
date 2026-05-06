@@ -75,23 +75,13 @@ async def _handle_get_status(
     )
 
     base_url = str(request.base_url).rstrip("/")
-    dash_log_url = (
-        f"{base_url}/api/logs?provider={provider}&owner={owner}&repo={repo_name}"
-    )
-    if wf_id:
-        dash_log_url += f"&workflow_id={wf_id}"
+    from api.routers.workflows import _build_dash_log_url
 
-    import os
-    from api.config import LOGS_DIR
-    from api.services.workflow_service import get_log_filename
+    dash_log_url = _build_dash_log_url(
+        base_url, provider, owner, repo_name, target_branch, wf_id
+    )
 
-    filepath = os.path.normpath(
-        os.path.join(LOGS_DIR, get_log_filename(provider, owner, repo_name, wf_id))
-    )
-    has_local_log = filepath.startswith(os.path.normpath(LOGS_DIR)) and os.path.exists(
-        filepath
-    )
-    log_url = dash_log_url if has_local_log else (result.get("url") or dash_log_url)
+    log_url = dash_log_url
 
     res_obj = {
         "url": result.get("url"),
@@ -268,25 +258,13 @@ async def _wait_generator(
 
             # Compute log url
             base_url = str(request.base_url).rstrip("/")
-            dash_log_url = f"{base_url}/api/logs?provider={provider}&owner={owner}&repo={repo_name}"
-            if wf_id:
-                dash_log_url += f"&workflow_id={wf_id}"
+            from api.routers.workflows import _build_dash_log_url
 
-            import os
-            from api.config import LOGS_DIR
-            from api.services.workflow_service import get_log_filename
+            dash_log_url = _build_dash_log_url(
+                base_url, provider, owner, repo_name, target_branch, wf_id
+            )
 
-            filepath = os.path.normpath(
-                os.path.join(
-                    LOGS_DIR, get_log_filename(provider, owner, repo_name, wf_id)
-                )
-            )
-            has_local_log = filepath.startswith(
-                os.path.normpath(LOGS_DIR)
-            ) and os.path.exists(filepath)
-            log_url = (
-                dash_log_url if has_local_log else (result.get("url") or dash_log_url)
-            )
+            log_url = dash_log_url
 
             yield json.dumps(
                 _format_mcp_wait_payload(
@@ -771,6 +749,7 @@ async def mcp_endpoint(
 
     except Exception as e:
         import logging
+
         logging.error(f"MCP internal error: {e}")
         return {
             "jsonrpc": "2.0",

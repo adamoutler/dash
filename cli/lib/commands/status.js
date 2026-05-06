@@ -38,8 +38,10 @@ function renderStatus(item) {
   if (item.status === 'success' || item.status === 'passed') statusStr = formatSuccess(item.status);
   else if (item.status === 'failed' || item.status === 'error') statusStr = formatError(item.status);
   else statusStr = formatPending(item.status);
-  
   console.log(`\n${formatInfo(item.repo || item.name)}`);
   console.log(`  Status: ${statusStr}`);
   if (item.url) console.log(`  Link:   ${item.url}`);
+  if (item.log_url) console.log(`  Log Link: ${item.log_url}`);
+  }
+  if (item.log_url) console.log(`  Log Link: ${item.log_url}`);
 }

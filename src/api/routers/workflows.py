@@ -75,7 +75,9 @@ async def post_logs(
     if not safe_provider or not safe_owner or not safe_repo:
         raise HTTPException(status_code=400, detail="Invalid provider, owner, or repo.")
 
-    filename = os.path.basename(get_log_filename(provider, owner, repo, workflow_id, branch))
+    filename = os.path.basename(
+        get_log_filename(provider, owner, repo, workflow_id, branch)
+    )
     filepath = os.path.abspath(os.path.join(LOGS_DIR, filename))
     if not filepath.startswith(os.path.abspath(LOGS_DIR)):
         raise HTTPException(status_code=400, detail="Invalid log file path")
@@ -99,7 +101,9 @@ async def get_logs(
     workflow_id: Optional[str] = None,
     branch: Optional[str] = None,
 ):
-    filename = os.path.basename(get_log_filename(provider, owner, repo, workflow_id, branch))
+    filename = os.path.basename(
+        get_log_filename(provider, owner, repo, workflow_id, branch)
+    )
     filepath = os.path.abspath(os.path.join(LOGS_DIR, filename))
     if not filepath.startswith(os.path.abspath(LOGS_DIR)):
         raise HTTPException(status_code=400, detail="Invalid log file path")
@@ -188,9 +192,7 @@ def _enhance_results(repos: list, results: list, base_url: str):
             base_url, provider, owner, repo, branch, wf_id
         )
 
-        res["log_url"] = (
-            dash_log_url if has_local_log else (current_url or dash_log_url)
-        )
+        res["log_url"] = dash_log_url
 
         if current_url and current_url != "#" and current_url != saved_url:
             storage.update_repo_run_url(provider, owner, repo, current_url, wf_id)
@@ -258,6 +260,7 @@ def _process_wait_iteration(
 
 @router.get("/wait", summary="Stream Execution Status")
 async def wait_status(
+    request: Request,
     user: Annotated[str, Depends(get_current_user)],
     provider: ProviderType,
     owner: str,
@@ -280,6 +283,17 @@ async def wait_status(
             ):
                 yield "\nError: Unknown provider\n"
                 break
+
+            base_url = (
+                str(request.base_url).rstrip("/")
+                if hasattr(request, "base_url")
+                else ""
+            )
+            if base_url:
+                dash_log_url = _build_dash_log_url(
+                    base_url, provider, owner, repo, branch, workflow_id
+                )
+                result["log_url"] = dash_log_url
 
             was_running, attempts_when_not_running, output = _process_wait_iteration(
                 result, was_running, attempts_when_not_running

@@ -129,7 +129,10 @@ async def test_get_status_with_query():
             assert response.status_code == 200
             data = response.json()
             assert len(data) == 1
-            assert data[0]["log_url"] == "http://current"
+            assert (
+                "api/logs?provider=github&owner=test&repo=testrepo"
+                in data[0]["log_url"]
+            )
 
 
 def test_is_running_status():
