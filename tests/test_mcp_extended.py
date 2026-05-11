@@ -86,6 +86,63 @@ def test_format_mcp_wait_payload():
 
 
 @pytest.mark.asyncio
+async def test_handle_get_logs():
+    from api.routers.mcp import _handle_get_logs
+
+    class MockRequest:
+        base_url = "http://testserver/"
+
+    class MockWorkflowService:
+        async def get_logs(self, *args, **kwargs):
+            return "line1\nline2\nline3"
+
+    mock_ws = MockWorkflowService()
+    req = MockRequest()
+
+    # Test is_tool_call=False
+    res_no_tool = await _handle_get_logs(
+        mock_ws, req, "github", "own", "rep", "wf1", "main", 1, False
+    )
+    assert res_no_tool["jsonrpc"] == "2.0"
+    assert "api/logs" in res_no_tool["result"]
+
+    # Test is_tool_call=True
+    res_tool = await _handle_get_logs(
+        mock_ws, req, "github", "own", "rep", "wf1", "main", 2, True
+    )
+    assert (
+        "```log\nline1\nline2\nline3\n```" in res_tool["result"]["content"][0]["text"]
+    )
+    assert "api/logs" in res_tool["result"]["content"][0]["text"]
+
+    class MockWorkflowServiceLargeLog:
+        async def get_logs(self, *args, **kwargs):
+            return "\n".join([f"line{i}" for i in range(1000)])
+
+    mock_ws_large = MockWorkflowServiceLargeLog()
+    res_tool_large = await _handle_get_logs(
+        mock_ws_large, req, "github", "own", "rep", "wf1", "main", 3, True
+    )
+    assert "...\nline500" in res_tool_large["result"]["content"][0]["text"]
+    assert "line999" in res_tool_large["result"]["content"][0]["text"]
+
+    class MockWorkflowServiceFailedLog:
+        async def get_logs(self, *args, **kwargs):
+            return "Failed to fetch logs from provider"
+
+    mock_ws_failed = MockWorkflowServiceFailedLog()
+    res_tool_failed = await _handle_get_logs(
+        mock_ws_failed, req, "github", "own", "rep", "wf1", "main", 4, True
+    )
+    assert (
+        "Failed to fetch logs from provider"
+        in res_tool_failed["result"]["content"][0]["text"]
+    )
+    assert "```yaml" in res_tool_failed["result"]["content"][0]["text"]
+    assert "```log" not in res_tool_failed["result"]["content"][0]["text"]
+
+
+@pytest.mark.asyncio
 async def test_handle_get_status():
     from api.routers.mcp import _handle_get_status
 

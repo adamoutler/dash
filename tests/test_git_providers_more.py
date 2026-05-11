@@ -36,13 +36,19 @@ async def test_fetch_forgejo_status(mock_get):
 @pytest.mark.asyncio
 @patch("api.providers.github.httpx.AsyncClient.get")
 async def test_fetch_github_logs(mock_get):
+    # Test success path with a failed job
     mock_runs = MagicMock()
     mock_runs.status_code = 200
     mock_runs.json.return_value = {"workflow_runs": [{"id": 1}]}
 
     mock_jobs = MagicMock()
     mock_jobs.status_code = 200
-    mock_jobs.json.return_value = {"jobs": [{"id": 2}]}
+    mock_jobs.json.return_value = {
+        "jobs": [
+            {"id": 2, "conclusion": "success"},
+            {"id": 3, "conclusion": "failure"},
+        ]
+    }
 
     mock_logs = MagicMock()
     mock_logs.status_code = 200
@@ -53,6 +59,32 @@ async def test_fetch_github_logs(mock_get):
     provider = GitHubProvider("token")
     res = await provider.fetch_logs("owner", "repo")
     assert res == "logs here"
+
+    # Verify the failed job log was requested
+    call_args = mock_get.call_args_list[2]
+    assert "/actions/jobs/3/logs" in call_args[0][0]
+
+    # Test jobs_resp != 200
+    mock_jobs_err = MagicMock()
+    mock_jobs_err.status_code = 404
+    mock_get.side_effect = [mock_runs, mock_jobs_err]
+    res_jobs_err = await provider.fetch_logs("owner", "repo")
+    assert res_jobs_err == "Failed to fetch jobs for the run."
+
+    # Test no jobs
+    mock_jobs_empty = MagicMock()
+    mock_jobs_empty.status_code = 200
+    mock_jobs_empty.json.return_value = {"jobs": []}
+    mock_get.side_effect = [mock_runs, mock_jobs_empty]
+    res_jobs_empty = await provider.fetch_logs("owner", "repo")
+    assert res_jobs_empty == "No jobs found for the run."
+
+    # Test logs_resp != 200
+    mock_logs_err = MagicMock()
+    mock_logs_err.status_code = 404
+    mock_get.side_effect = [mock_runs, mock_jobs, mock_logs_err]
+    res_logs_err = await provider.fetch_logs("owner", "repo")
+    assert "Failed to fetch logs. HTTP 404" in res_logs_err
 
 
 @pytest.mark.asyncio
