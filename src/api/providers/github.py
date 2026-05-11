@@ -208,8 +208,13 @@ class GitHubProvider(BaseProvider):
                 if not jobs:
                     return "No jobs found for the run."
 
+                # Find the first failed job, otherwise default to the first job
+                target_job = next(
+                    (j for j in jobs if j.get("conclusion") == "failure"), jobs[0]
+                )
+
                 logs_resp = await client.get(
-                    f"{base_url}/actions/jobs/{jobs[0]['id']}/logs",
+                    f"{base_url}/actions/jobs/{target_job['id']}/logs",
                     headers=headers,
                     follow_redirects=True,
                 )

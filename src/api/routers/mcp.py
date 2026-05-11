@@ -105,7 +105,8 @@ async def _handle_get_status(
     return {"jsonrpc": "2.0", "id": req_id, "result": result_payload}
 
 
-def _handle_get_logs(
+async def _handle_get_logs(
+    workflow_service,
     request: Request,
     provider: str,
     owner: str,
@@ -122,12 +123,35 @@ def _handle_get_logs(
     if target_branch:
         url += f"&branch={target_branch}"
 
+    log_content = await workflow_service.get_logs(
+        provider, owner, repo_name, wf_id, target_branch
+    )
+
+    if is_tool_call:
+        if (
+            log_content
+            and not log_content.startswith("Failed to fetch")
+            and not log_content.startswith("Error fetching")
+        ):
+            lines = log_content.splitlines()
+            if len(lines) > 500:
+                log_snippet = "...\n" + "\n".join(lines[-500:])
+            else:
+                log_snippet = log_content
+            text_response = f"```yaml\nurl: {url}\n```\n\n```log\n{log_snippet}\n```"
+        else:
+            text_response = (
+                f"```yaml\nurl: {url}\n```\n\n{log_content or 'No logs available.'}"
+            )
+
+        result_payload = {"content": [{"type": "text", "text": text_response}]}
+    else:
+        result_payload = url
+
     return {
         "jsonrpc": "2.0",
         "id": req_id,
-        "result": {"content": [{"type": "text", "text": f"```yaml\nurl: {url}\n```"}]}
-        if is_tool_call
-        else url,
+        "result": result_payload,
     }
 
 
@@ -558,7 +582,8 @@ async def _dispatch_mcp_method(
             is_tool_call,
         )
     elif method_name == "get_logs":
-        return _handle_get_logs(
+        return await _handle_get_logs(
+            workflow_service,
             request,
             provider,
             owner,
