@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import patch
+from unittest.mock import patch, AsyncMock
 from fastapi.testclient import TestClient
 from main import app
 
@@ -172,7 +172,8 @@ async def test_handle_get_status():
 
 
 @pytest.mark.asyncio
-async def test_wait_generator_recent_commit():
+@patch("api.routers.mcp.asyncio.sleep", new_callable=AsyncMock)
+async def test_wait_generator_recent_commit(mock_sleep):
     from api.routers.mcp import _wait_generator
     import json
 

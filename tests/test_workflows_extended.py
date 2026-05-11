@@ -164,7 +164,8 @@ def test_process_wait_iteration():
 
 
 @pytest.mark.asyncio
-async def test_wait_status():
+@patch("api.routers.workflows.asyncio.sleep", new_callable=AsyncMock)
+async def test_wait_status(mock_sleep):
     with patch(
         "api.routers.workflows.workflow_service.get_single_status",
         new_callable=AsyncMock,
