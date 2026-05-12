@@ -419,11 +419,18 @@
         if (!dashboardData) return;
         const now = Date.now();
 
+        let maxDuration = 120;
         dashboardData.forEach(item => {
+            let d = item.expected_duration_sec || item.average_recent_duration || 0;
+            if (d > maxDuration) maxDuration = d;
+        });
+
+        dashboardData.forEach((item, index) => {
             let duration = item.expected_duration_sec || item.average_recent_duration || 0;
+            if (duration <= 0) duration = maxDuration;
             if (duration > 0) duration = duration * 1.05; // Add 5% buffer to reduce overtime anxiety
             if (item.status === 'running' && duration > 0 && item.started_at) {
-                const repoId = `${item.provider}-${item.owner}-${item.repo}-${item.workflow_id || 'all'}-${item.branch || 'all'}`.replace(/[^a-zA-Z0-9-]/g, '-');
+                const repoId = `repo-${index}`;
                 const progressEl = document.getElementById(`progress-${repoId}`);
                 const etaEl = document.getElementById(`eta-${repoId}`);
 
@@ -473,17 +480,24 @@
                 return;
             }
 
-        list.innerHTML = dashboardData.map(item => {
+            let maxDuration = 120;
+            dashboardData.forEach(item => {
+                let d = item.expected_duration_sec || item.average_recent_duration || 0;
+                if (d > maxDuration) maxDuration = d;
+            });
+
+        list.innerHTML = dashboardData.map((item, index) => {
             const linksHtml = (item.custom_links && item.custom_links.length > 0) ?
                 `<div class="custom-links-container">
                     ${item.custom_links.map(link => `<a href="${link.url}" target="_blank" class="custom-link">🔗 ${link.name}</a>`).join('')}
                 </div>` : '';
 
             const customLinksEncoded = encodeURIComponent(JSON.stringify(item.custom_links || []));
-            const repoId = `${item.provider}-${item.owner}-${item.repo}-${item.workflow_id || 'all'}-${item.branch || 'all'}`.replace(/[^a-zA-Z0-9-]/g, '-');
+            const repoId = `repo-${index}`;
 
             let progressHtml = '';
             let duration = item.expected_duration_sec || item.average_recent_duration || 0;
+            if (duration <= 0) duration = maxDuration;
             if (duration > 0) duration = duration * 1.05; // Add 5% buffer to reduce overtime anxiety
             if (item.status === 'running' && duration > 0 && item.started_at) {
                 progressHtml = `
