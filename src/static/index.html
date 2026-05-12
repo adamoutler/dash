@@ -423,7 +423,7 @@
             let duration = item.expected_duration_sec || item.average_recent_duration || 0;
             if (duration > 0) duration = duration * 1.05; // Add 5% buffer to reduce overtime anxiety
             if (item.status === 'running' && duration > 0 && item.started_at) {
-                const repoId = `${item.provider}-${item.owner}-${item.repo}-${item.workflow_id || 'all'}`.replace(/[^a-zA-Z0-9-]/g, '-');
+                const repoId = `${item.provider}-${item.owner}-${item.repo}-${item.workflow_id || 'all'}-${item.branch || 'all'}`.replace(/[^a-zA-Z0-9-]/g, '-');
                 const progressEl = document.getElementById(`progress-${repoId}`);
                 const etaEl = document.getElementById(`eta-${repoId}`);
 
