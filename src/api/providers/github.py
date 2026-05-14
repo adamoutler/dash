@@ -208,19 +208,21 @@ class GitHubProvider(BaseProvider):
                 if not jobs:
                     return "No jobs found for the run."
 
-                # Find the first failed job, otherwise default to the first job
-                target_job = next(
-                    (j for j in jobs if j.get("conclusion") == "failure"), jobs[0]
-                )
-
-                logs_resp = await client.get(
-                    f"{base_url}/actions/jobs/{target_job['id']}/logs",
-                    headers=headers,
-                    follow_redirects=True,
-                )
-                if logs_resp.status_code == 200:
-                    return logs_resp.text
-                return f"Failed to fetch logs. HTTP {logs_resp.status_code}"
+                all_logs = []
+                for j in jobs:
+                    logs_resp = await client.get(
+                        f"{base_url}/actions/jobs/{j['id']}/logs",
+                        headers=headers,
+                        follow_redirects=True,
+                    )
+                    if logs_resp.status_code == 200:
+                        # Append job name as a header to separate logs visually
+                        all_logs.append(f"--- Job: {j.get('name')} ---\n{logs_resp.text}")
+                
+                if all_logs:
+                    return "\n".join(all_logs)
+                
+                return "Failed to fetch any job logs."
         except Exception:
             return "Error fetching GitHub logs."
 
