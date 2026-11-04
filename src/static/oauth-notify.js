@@ -32,7 +32,7 @@
         }
 
         try {
-            const res = await window['fetch'](`/api/oauth/pending/${encodeURIComponent(requestId)}/${action}`, {
+            const res = await fetch(`/api/oauth/pending/${encodeURIComponent(requestId)}/${action}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' }
             });
@@ -141,7 +141,7 @@
 
     async function checkPendingOAuth() {
         try {
-            const res = await window['fetch']('/api/oauth/pending', { cache: 'no-store', credentials: 'same-origin' });
+            const res = await fetch('/api/oauth/pending', { cache: 'no-store', credentials: 'same-origin' });
             if (!res.ok) return;
             const data = await res.json();
             const pending = data.pending || [];
