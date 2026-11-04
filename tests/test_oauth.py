@@ -1,10 +1,12 @@
 import base64
 import hashlib
+
 import pytest
 from fastapi.testclient import TestClient
-from main import app
+
 from api.auth import TokenManager
 from api.routers.oauth import OAuthManager
+from main import app
 
 client = TestClient(app)
 
@@ -234,7 +236,7 @@ def test_full_oauth_approval_and_mcp_access_flow():
     assert "state=xyz987" in redirect_url
     assert "code=" in redirect_url
 
-    from urllib.parse import urlparse, parse_qs
+    from urllib.parse import parse_qs, urlparse
 
     parsed_qs = parse_qs(urlparse(redirect_url).query)
     auth_code = parsed_qs["code"][0]

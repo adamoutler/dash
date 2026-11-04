@@ -206,7 +206,7 @@ def get_base_url(request: Request) -> str:
         ):
             proto = "https"
         return f"{proto}://{host}".rstrip("/")
-    except Exception:
+    except (AttributeError, TypeError, ValueError):
         return "http://localhost"
 
 

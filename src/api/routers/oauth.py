@@ -5,12 +5,14 @@ import os
 import re
 import secrets
 import time
-from typing import Annotated, Any, Optional
+from typing import Annotated, Any
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import FileResponse, JSONResponse
 from filelock import FileLock
 from pydantic import BaseModel
+
 from api.auth import DATA_DIR, get_base_url, require_basic_auth
 
 router = APIRouter(tags=["oauth"])
@@ -39,19 +41,16 @@ def _is_valid_redirect_uri(uri: str) -> bool:
         return False
     try:
         parsed = urlparse(uri)
-    except Exception:
+    except ValueError:
         return False
     if parsed.fragment or parsed.username or parsed.password:
         return False
     if parsed.scheme == "https" and bool(parsed.netloc):
         return True
-    if parsed.scheme == "http" and parsed.hostname in (
-        "localhost",
-        "127.0.0.1",
-        "::1",
-    ):
-        return True
-    return False
+    return bool(
+        parsed.scheme == "http"
+        and parsed.hostname in ("localhost", "127.0.0.1", "::1")
+    )
 
 
 def _verify_pkce_s256(code_verifier: str, code_challenge: str) -> bool:
@@ -61,7 +60,7 @@ def _verify_pkce_s256(code_verifier: str, code_challenge: str) -> bool:
         digest = hashlib.sha256(code_verifier.encode("ascii")).digest()
         computed = base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
         return secrets.compare_digest(computed, code_challenge.rstrip("="))
-    except Exception:
+    except (UnicodeEncodeError, ValueError, TypeError):
         return False
 
 
@@ -75,7 +74,7 @@ async def _parse_request_params(request: Request) -> dict[str, Any]:
         try:
             parsed = json.loads(text)
             return parsed if isinstance(parsed, dict) else {}
-        except Exception:
+        except (json.JSONDecodeError, TypeError, ValueError):
             return {}
     if "application/x-www-form-urlencoded" in content_type:
         return dict(parse_qsl(text, keep_blank_values=True))
@@ -83,15 +82,15 @@ async def _parse_request_params(request: Request) -> dict[str, Any]:
         parsed = json.loads(text)
         if isinstance(parsed, dict):
             return parsed
-    except Exception:
-        pass
+    except (json.JSONDecodeError, TypeError, ValueError):
+        return dict(parse_qsl(text, keep_blank_values=True))
     return dict(parse_qsl(text, keep_blank_values=True))
 
 
 class OAuthManager:
     """Thread-safe and process-safe OAuth 2.0 state store backed by FileLock."""
 
-    def __init__(self, filepath: Optional[str] = None):
+    def __init__(self, filepath: str | None = None):
         self.filepath = filepath or os.path.join(DATA_DIR, "oauth.json")
         self.lockpath = f"{self.filepath}.lock"
         os.makedirs(os.path.dirname(self.filepath), exist_ok=True)
@@ -139,8 +138,8 @@ class OAuthManager:
         self,
         client_name: str,
         redirect_uris: list[str],
-        grant_types: Optional[list[str]] = None,
-        response_types: Optional[list[str]] = None,
+        grant_types: list[str] | None = None,
+        response_types: list[str] | None = None,
         token_endpoint_auth_method: str = "none",
     ) -> dict[str, Any]:
         with FileLock(self.lockpath):
@@ -264,7 +263,7 @@ class OAuthManager:
             pending.sort(key=lambda r: r["created_at"], reverse=True)
             return pending
 
-    def approve_request(self, req_id: str) -> Optional[dict[str, Any]]:
+    def approve_request(self, req_id: str) -> dict[str, Any] | None:
         with FileLock(self.lockpath):
             now = time.time()
             data = self._load_nolock()
@@ -301,7 +300,7 @@ class OAuthManager:
                 "username": req["username"],
             }
 
-    def deny_request(self, req_id: str) -> Optional[dict[str, Any]]:
+    def deny_request(self, req_id: str) -> dict[str, Any] | None:
         with FileLock(self.lockpath):
             now = time.time()
             data = self._load_nolock()
@@ -328,7 +327,7 @@ class OAuthManager:
             }
 
     def get_request_status(
-        self, req_id: str, poll_token: Optional[str] = None
+        self, req_id: str, poll_token: str | None = None
     ) -> dict[str, Any]:
         with FileLock(self.lockpath):
             now = time.time()
@@ -340,9 +339,12 @@ class OAuthManager:
                 return {"status": "expired"}
 
             expected_hash = req.get("poll_token_hash")
-            if expected_hash and poll_token is not None:
-                if not secrets.compare_digest(_hash_secret(poll_token), expected_hash):
-                    raise HTTPException(status_code=403, detail="Invalid poll token")
+            if (
+                expected_hash
+                and poll_token is not None
+                and not secrets.compare_digest(_hash_secret(poll_token), expected_hash)
+            ):
+                raise HTTPException(status_code=403, detail="Invalid poll token")
 
             status_val = req.get("status", "expired")
             result: dict[str, Any] = {
@@ -357,9 +359,9 @@ class OAuthManager:
         self,
         raw_code: str,
         code_verifier: str,
-        redirect_uri: Optional[str] = None,
-        client_id: Optional[str] = None,
-    ) -> Optional[dict[str, Any]]:
+        redirect_uri: str | None = None,
+        client_id: str | None = None,
+    ) -> dict[str, Any] | None:
         with FileLock(self.lockpath):
             now = time.time()
             data = self._load_nolock()
@@ -511,11 +513,11 @@ async def openid_configuration_prefix(request: Request, subpath: str):
 
 
 class ClientRegistrationRequest(BaseModel):
-    client_name: Optional[str] = "MCP Client"
-    redirect_uris: Optional[list[str]] = None
-    grant_types: Optional[list[str]] = None
-    response_types: Optional[list[str]] = None
-    token_endpoint_auth_method: Optional[str] = "none"
+    client_name: str | None = "MCP Client"
+    redirect_uris: list[str] | None = None
+    grant_types: list[str] | None = None
+    response_types: list[str] | None = None
+    token_endpoint_auth_method: str | None = "none"
 
 
 @router.post(
@@ -611,7 +613,7 @@ async def oauth_authorize_submit(request: Request):
     "/oauth/authorize/status/{request_id}",
     summary="Poll OAuth 2.0 Authorization Request Status",
 )
-async def oauth_authorize_status(request_id: str, poll_token: Optional[str] = None):
+async def oauth_authorize_status(request_id: str, poll_token: str | None = None):
     status_data = oauth_manager.get_request_status(request_id, poll_token)
     return JSONResponse(
         status_code=200,
