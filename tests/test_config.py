@@ -1,11 +1,13 @@
-import os
+import base64
 import json
+import os
+
 import pytest
 from fastapi.testclient import TestClient
-import base64
+
+from api.auth import token_manager
 from api.config import ConfigManager
 from main import app
-from api.auth import token_manager
 
 
 @pytest.fixture
@@ -52,7 +54,7 @@ def client_with_mocked_config(tmp_path, monkeypatch):
 
 
 def test_api_settings_get(client_with_mocked_config, monkeypatch):
-    client, mock_cm = client_with_mocked_config
+    client, _mock_cm = client_with_mocked_config
     monkeypatch.setenv("DASHBOARD_USER", "admin")
     monkeypatch.setenv("DASHBOARD_PASSWORD", "password")
     auth_str = base64.b64encode(b"admin:password").decode("ascii")

@@ -1,13 +1,14 @@
-from typing import Annotated
-import json
 import asyncio
+import json
 import urllib.parse
+from typing import Annotated, Any
+
 from fastapi import APIRouter, Depends, Request
-from typing import Optional, Any
 from pydantic import BaseModel
+
 from api.auth import get_current_user
-from api.storage import RepoStorage
 from api.services.workflow_service import WorkflowService
+from api.storage import RepoStorage
 
 router = APIRouter(tags=["mcp"])
 storage = RepoStorage()
@@ -30,8 +31,8 @@ def format_jenkins_repo(url: str) -> str:
 class JsonRpcRequest(BaseModel):
     jsonrpc: str
     method: str
-    params: Optional[dict] = None
-    id: Optional[Any] = None
+    params: dict | None = None
+    id: Any | None = None
 
 
 def resolve_provider_conflict(repo: str, repos: list, req_id: Any):
@@ -65,8 +66,8 @@ async def _handle_get_status(
     provider: str,
     owner: str,
     repo_name: str,
-    wf_id: Optional[str],
-    target_branch: Optional[str],
+    wf_id: str | None,
+    target_branch: str | None,
     req_id: str,
     is_tool_call: bool,
 ) -> dict:
@@ -111,8 +112,8 @@ async def _handle_get_logs(
     provider: str,
     owner: str,
     repo_name: str,
-    wf_id: Optional[str],
-    target_branch: Optional[str],
+    wf_id: str | None,
+    target_branch: str | None,
     req_id: str,
     is_tool_call: bool,
 ) -> dict:
@@ -186,12 +187,13 @@ def _check_recent_commit() -> bool:
             capture_output=True,
             text=True,
             timeout=2,
+            check=False,
         )
         if res.returncode == 0:
             commit_time = int(res.stdout.strip())
             if (time.time() - commit_time) <= 20:
                 return True
-    except Exception:
+    except (OSError, ValueError, RuntimeError, subprocess.SubprocessError):
         import traceback
 
         traceback.print_exc()
@@ -203,7 +205,7 @@ def _format_mcp_wait_payload(
     req_id: Any,
     is_tool_call: bool,
     status: str,
-    log_url: str = None,
+    log_url: str | None = None,
     was_running: bool = True,
 ) -> dict:
     res_obj = {
@@ -244,8 +246,8 @@ async def _wait_generator(
     provider: str,
     owner: str,
     repo_name: str,
-    wf_id: Optional[str],
-    target_branch: Optional[str],
+    wf_id: str | None,
+    target_branch: str | None,
     req_id: Any,
     is_tool_call: bool,
 ):
@@ -394,7 +396,7 @@ def _get_tools_list_response(req_id: Any) -> dict:
 
 def _handle_help_request(
     repo: str, workflow: str, repos: list, req_id: Any
-) -> Optional[dict]:
+) -> dict | None:
     if repo == "help":
         provider_emojis = {"github": "🐙", "forgejo": "🍵", "jenkins": "🤵"}
         valid_repos = [
@@ -460,7 +462,7 @@ def _is_workflow_match(r: dict, workflow: str) -> bool:
 
 def _find_matched_repo(
     repo: str, provider_arg: str, workflow: str, repos: list
-) -> tuple[Optional[dict], bool]:
+) -> tuple[dict | None, bool]:
     matched_repo = None
     target_repo_matched = False
 
@@ -524,7 +526,7 @@ def _handle_repo_not_found(
 
 def _parse_mcp_request_args(
     req: JsonRpcRequest, request: Request
-) -> tuple[bool, str, Optional[str], Optional[str], Optional[str], Optional[str]]:
+) -> tuple[bool, str, str | None, str | None, str | None, str | None]:
     params = req.params or {}
     is_tool_call = req.method == "tools/call"
     method_name = params.get("name") if is_tool_call else req.method
@@ -559,7 +561,7 @@ async def _dispatch_mcp_method(
     workflow_service,
     request: Request,
     matched_repo: dict,
-    branch: Optional[str],
+    branch: str | None,
     req_id: Any,
     is_tool_call: bool,
 ):
@@ -617,8 +619,8 @@ async def _dispatch_mcp_method(
 
 
 def _validate_repo_required(
-    repo: Optional[str], method_name: str, req_id: Any
-) -> Optional[dict]:
+    repo: str | None, method_name: str, req_id: Any
+) -> dict | None:
     if not repo and method_name in [
         "get_status",
         "get_logs",
@@ -642,10 +644,10 @@ async def _process_mcp_method(
     workflow_service,
     is_tool_call: bool,
     method_name: str,
-    provider_arg: Optional[str],
+    provider_arg: str | None,
     repo: str,
-    workflow: Optional[str],
-    branch: Optional[str],
+    workflow: str | None,
+    branch: str | None,
 ) -> dict:
     repos = storage.get_repos()
 
@@ -688,10 +690,10 @@ async def _handle_mcp_routing(
     workflow_service,
     is_tool_call: bool,
     method_name: str,
-    provider_arg: Optional[str],
-    repo: Optional[str],
-    workflow: Optional[str],
-    branch: Optional[str],
+    provider_arg: str | None,
+    repo: str | None,
+    workflow: str | None,
+    branch: str | None,
 ) -> dict:
     validation_err = _validate_repo_required(repo, method_name, req.id)
     if validation_err:
@@ -772,10 +774,10 @@ async def mcp_endpoint(
             branch,
         )
 
-    except Exception as e:
+    except (OSError, ValueError, RuntimeError, KeyError, TypeError) as e:
         import logging
 
-        logging.error(f"MCP internal error: {e}")
+        logging.getLogger(__name__).error(f"MCP internal error: {e}")
         return {
             "jsonrpc": "2.0",
             "id": req.id,

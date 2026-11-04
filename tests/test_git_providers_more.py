@@ -1,8 +1,10 @@
-import pytest
+from unittest.mock import MagicMock, patch
+
 import httpx
-from unittest.mock import patch, MagicMock
-from api.providers.github import GitHubProvider
+import pytest
+
 from api.providers.forgejo import ForgejoProvider
+from api.providers.github import GitHubProvider
 from api.providers.jenkins import JenkinsProvider
 
 

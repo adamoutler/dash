@@ -1,15 +1,16 @@
-from typing import Annotated
-import os
 import asyncio
+import os
+from typing import Annotated
+
 import anyio
-from fastapi import APIRouter, Depends, Request, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
-from typing import Optional
+
 from api.auth import get_current_user
-from api.config import ConfigManager, LOGS_DIR
+from api.config import LOGS_DIR, ConfigManager
 from api.models.domain import ProviderType
-from api.storage import RepoStorage
 from api.services.workflow_service import WorkflowService, get_log_filename
+from api.storage import RepoStorage
 
 router = APIRouter(prefix="/api", tags=["workflows"])
 config_manager = ConfigManager()
@@ -25,7 +26,7 @@ async def get_workflows(
     provider: ProviderType,
     owner: str,
     repo: str,
-    branch: Optional[str] = None,
+    branch: str | None = None,
 ):
     return await workflow_service.get_workflows(provider, owner, repo, branch)
 
@@ -36,8 +37,8 @@ async def get_artifacts(
     owner: str,
     repo: str,
     user: Annotated[str, Depends(get_current_user)],
-    workflow_id: Optional[str] = None,
-    branch: Optional[str] = None,
+    workflow_id: str | None = None,
+    branch: str | None = None,
 ):
     return await workflow_service.get_artifacts(
         provider, owner, repo, workflow_id, branch
@@ -55,8 +56,8 @@ async def post_logs(
     owner: str,
     repo: str,
     request: Request,
-    workflow_id: Optional[str] = None,
-    branch: Optional[str] = None,
+    workflow_id: str | None = None,
+    branch: str | None = None,
 ):
     buffer = bytearray()
     async for chunk in request.stream():
@@ -98,8 +99,8 @@ async def get_logs(
     owner: str,
     repo: str,
     user: Annotated[str, Depends(get_current_user)],
-    workflow_id: Optional[str] = None,
-    branch: Optional[str] = None,
+    workflow_id: str | None = None,
+    branch: str | None = None,
 ):
     filename = os.path.basename(
         get_log_filename(provider, owner, repo, workflow_id, branch)
@@ -144,8 +145,8 @@ def _build_dash_log_url(
     provider: str,
     owner: str,
     repo: str,
-    branch: Optional[str],
-    wf_id: Optional[str],
+    branch: str | None,
+    wf_id: str | None,
 ) -> str:
     url = f"{base_url}/api/logs?provider={provider}&owner={owner}&repo={repo}"
     if branch:
@@ -161,8 +162,8 @@ def _handle_local_log_cleanup(
     try:
         os.remove(filepath)
         res["log_url"] = current_url or dash_log_url
-    except Exception:
-        pass
+    except OSError as exc:
+        _ = exc
 
 
 def _enhance_results(repos: list, results: list, base_url: str):
@@ -204,7 +205,7 @@ def _enhance_results(repos: list, results: list, base_url: str):
 async def get_status(
     request: Request,
     user: Annotated[str, Depends(get_current_user)],
-    query: Optional[str] = None,
+    query: str | None = None,
 ):
     repos = storage.get_repos()
 
@@ -230,7 +231,7 @@ def _format_wait_result(result: dict, status: str, was_running: bool = True) -> 
     return f"{prefix}\nStatus changed to {status}\n{yaml_str}\n"
 
 
-def _is_running_status(status: Optional[str]) -> bool:
+def _is_running_status(status: str | None) -> bool:
     return status in [
         "running",
         "in_progress",
@@ -243,7 +244,7 @@ def _is_running_status(status: Optional[str]) -> bool:
 
 def _process_wait_iteration(
     result: dict, was_running: bool, attempts_when_not_running: int
-) -> tuple[bool, int, Optional[str]]:
+) -> tuple[bool, int, str | None]:
     status = result.get("status")
     if _is_running_status(status):
         return True, attempts_when_not_running, "."
@@ -265,8 +266,8 @@ async def wait_status(
     provider: ProviderType,
     owner: str,
     repo: str,
-    workflow_id: Optional[str] = None,
-    branch: Optional[str] = None,
+    workflow_id: str | None = None,
+    branch: str | None = None,
 ):
     base_url = str(request.base_url).rstrip("/") if hasattr(request, "base_url") else ""
     dash_log_url = (

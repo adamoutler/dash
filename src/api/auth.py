@@ -1,21 +1,23 @@
-from typing import Annotated
 import json
 import os
 import secrets
 import time
-from filelock import FileLock
+from typing import Annotated
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.security.utils import get_authorization_scheme_param
+from filelock import FileLock
 from starlette.requests import Request
 
 security_basic = HTTPBasic(auto_error=False)
 
 DATA_DIR = os.getenv("DATA_DIR", "data")
+DEFAULT_TOKENS_PATH = os.path.join(DATA_DIR, "tokens.json")
 
 
 class TokenManager:
-    def __init__(self, filepath=os.path.join(DATA_DIR, "tokens.json")):
+    def __init__(self, filepath=DEFAULT_TOKENS_PATH):
         self.filepath = filepath
         self.lockpath = f"{filepath}.lock"
         os.makedirs(os.path.dirname(self.filepath), exist_ok=True)

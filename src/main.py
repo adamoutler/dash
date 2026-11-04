@@ -1,29 +1,31 @@
-from typing import Annotated
 import os
 import subprocess
-from fastapi import FastAPI, Depends
-from fastapi.staticfiles import StaticFiles
+from typing import Annotated
+
+from fastapi import Depends, FastAPI
 from fastapi.responses import FileResponse, RedirectResponse
-from api.auth import require_basic_auth, get_current_user
+from fastapi.staticfiles import StaticFiles
+
+from api.auth import get_current_user, require_basic_auth
 from api.explore import router as explore_router
-from api.routers.settings import router as settings_router
-from api.routers.repos import router as repos_router
-from api.routers.workflows import router as workflows_router
-from api.routers.mcp import router as mcp_router
 from api.routers.config_ui import router as config_ui_router
+from api.routers.mcp import router as mcp_router
+from api.routers.repos import router as repos_router
+from api.routers.settings import router as settings_router
+from api.routers.workflows import router as workflows_router
 
 
 def _get_app_version():
     try:
         with open(os.path.join(os.path.dirname(__file__), "VERSION"), "r") as f:
             return f.read().strip()
-    except Exception:
-        pass
+    except OSError as exc:
+        _ = exc
 
     try:
         with open(os.path.join(os.path.dirname(__file__), "..", "VERSION"), "r") as f:
             hc = f.read().strip()
-    except Exception:
+    except OSError:
         hc = "0.1"
 
     releases_count = "0"
@@ -38,8 +40,8 @@ def _get_app_version():
             .split("\n")
         )
         releases_count = str(len([r for r in releases if r.strip()]))
-    except Exception:
-        pass
+    except (OSError, subprocess.SubprocessError) as exc:
+        _ = exc
     try:
         commits_count = (
             subprocess.check_output(
@@ -48,8 +50,8 @@ def _get_app_version():
             .decode()
             .strip()
         )
-    except Exception:
-        pass
+    except (OSError, subprocess.SubprocessError) as exc:
+        _ = exc
     return f"v{hc}.{releases_count}.{commits_count}"
 
 

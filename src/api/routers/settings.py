@@ -1,8 +1,9 @@
 from typing import Annotated
+
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from typing import Optional
-from api.auth import require_basic_auth, get_current_user
+
+from api.auth import get_current_user, require_basic_auth
 from api.config import ConfigManager
 
 router = APIRouter(prefix="/api", tags=["settings"])
@@ -10,12 +11,12 @@ config_manager = ConfigManager()
 
 
 class SettingsUpdate(BaseModel):
-    github_token: Optional[str] = None
-    forgejo_token: Optional[str] = None
-    forgejo_url: Optional[str] = None
-    jenkins_user: Optional[str] = None
-    jenkins_token: Optional[str] = None
-    jenkins_url: Optional[str] = None
+    github_token: str | None = None
+    forgejo_token: str | None = None
+    forgejo_url: str | None = None
+    jenkins_user: str | None = None
+    jenkins_token: str | None = None
+    jenkins_url: str | None = None
 
 
 @router.get("/settings", summary="Get Configured Providers")

@@ -1,10 +1,15 @@
-import httpx
 import datetime
-from typing import Dict, Any, List, Optional
-from api.providers.base import BaseProvider, ProviderPathNotFoundError
+import logging
+from typing import Any
+
+import httpx
+
 from api.models.domain import Node, NodeType
+from api.providers.base import BaseProvider, ProviderPathNotFoundError
 
 ACCEPT_JSON = "application/json"
+logger = logging.getLogger(__name__)
+PROVIDER_EXC = (httpx.HTTPError, ValueError, KeyError, TypeError, RuntimeError, OSError)
 
 
 class ForgejoProvider(BaseProvider):
@@ -23,7 +28,7 @@ class ForgejoProvider(BaseProvider):
             )
         return ""
 
-    def _get_run_duration(self, r: dict) -> Optional[float]:
+    def _get_run_duration(self, r: dict) -> float | None:
         duration = r.get("duration")
         if duration:
             return duration / 1000000000
@@ -32,18 +37,14 @@ class ForgejoProvider(BaseProvider):
         r_end = r.get("stopped") or r.get("updated")
         if r_start and r_end:
             try:
-                start_dt = datetime.datetime.fromisoformat(
-                    r_start.replace("Z", "+00:00")
-                )
-                end_dt = datetime.datetime.fromisoformat(r_end.replace("Z", "+00:00"))
+                start_dt = datetime.datetime.fromisoformat(r_start)
+                end_dt = datetime.datetime.fromisoformat(r_end)
                 return (end_dt - start_dt).total_seconds()
-            except Exception as e:
-                import logging
-
-                logging.warning(f"Error parsing date in Forgejo response: {e}")
+            except PROVIDER_EXC as e:
+                logger.warning(f"Error parsing date in Forgejo response: {e}")
         return None
 
-    def _calculate_expected_duration(self, runs: list) -> Optional[float]:
+    def _calculate_expected_duration(self, runs: list) -> float | None:
         successful_runs = [
             r for r in runs if (r.get("status") or "").lower() == "success"
         ]
@@ -59,9 +60,7 @@ class ForgejoProvider(BaseProvider):
                 valid_runs += 1
         return total_duration / valid_runs if valid_runs > 0 else None
 
-    def _get_latest_forgejo_run(
-        self, all_runs: list, workflow_id: Optional[str]
-    ) -> dict:
+    def _get_latest_forgejo_run(self, all_runs: list, workflow_id: str | None) -> dict:
         runs = []
         for r in all_runs:
             if (
@@ -88,9 +87,9 @@ class ForgejoProvider(BaseProvider):
         self,
         owner: str,
         repo: str,
-        workflow_id: Optional[str] = None,
-        branch: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        workflow_id: str | None = None,
+        branch: str | None = None,
+    ) -> dict[str, Any]:
         if workflow_id == "any":
             workflow_id = None
         if not self.url:
@@ -149,15 +148,15 @@ class ForgejoProvider(BaseProvider):
                     "expected_duration_sec": expected_duration_sec,
                     "workflow_name": run.get("name", ""),
                 }
-        except Exception:
+        except PROVIDER_EXC:
             return self._error_result("forgejo", owner, repo)
 
     async def fetch_logs(
         self,
         owner: str,
         repo: str,
-        workflow_id: Optional[str] = None,
-        branch: Optional[str] = None,
+        workflow_id: str | None = None,
+        branch: str | None = None,
     ) -> str:
         wf_param = (
             f"&workflow_id={workflow_id}"
@@ -187,9 +186,9 @@ Recommendations:
         self,
         owner: str,
         repo: str,
-        workflow_id: Optional[str] = None,
-        branch: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        workflow_id: str | None = None,
+        branch: str | None = None,
+    ) -> dict[str, Any]:
         if workflow_id == "any":
             workflow_id = None
         if not self.url:
@@ -231,10 +230,10 @@ Recommendations:
                 return {
                     "error": f"Failed to fetch artifacts. HTTP {artifacts_resp.status_code}"
                 }
-        except Exception:
+        except PROVIDER_EXC:
             return {"error": "Error fetching Forgejo artifacts."}
 
-    async def fetch_branches(self, owner: str, repo: str) -> List[str]:
+    async def fetch_branches(self, owner: str, repo: str) -> list[str]:
         if not self.url:
             return []
         headers = (
@@ -249,12 +248,12 @@ Recommendations:
                 if resp.status_code == 200:
                     return [b["name"] for b in resp.json()]
                 return []
-        except Exception:
+        except PROVIDER_EXC:
             return []
 
     async def get_workflows(
-        self, owner: str, repo: str, branch: Optional[str] = None
-    ) -> List[Dict[str, str]]:
+        self, owner: str, repo: str, branch: str | None = None
+    ) -> list[dict[str, str]]:
         if not self.url:
             return []
         headers = (
@@ -278,12 +277,12 @@ Recommendations:
                             workflows[w_id] = r.get("name", w_id)
                     return [{"id": k, "name": v} for k, v in workflows.items()]
                 return []
-        except Exception:
+        except PROVIDER_EXC:
             return []
 
     async def _explore_root(
         self, client: httpx.AsyncClient, url: str, headers: dict
-    ) -> List[Node]:
+    ) -> list[Node]:
         nodes = []
         user_resp = await client.get(f"{url}/api/v1/user", headers=headers)
         if user_resp.status_code == 200:
@@ -319,7 +318,7 @@ Recommendations:
 
     async def _explore_owner(
         self, client: httpx.AsyncClient, url: str, owner: str, headers: dict
-    ) -> List[Node]:
+    ) -> list[Node]:
         repos_resp = await client.get(
             f"{url}/api/v1/orgs/{owner}/repos?limit=100", headers=headers
         )
@@ -342,7 +341,7 @@ Recommendations:
             ]
         raise ProviderPathNotFoundError(f"Owner {owner} not found or no access")
 
-    async def explore(self, path: str) -> List[Node]:
+    async def explore(self, path: str) -> list[Node]:
         from urllib.parse import urlparse
 
         scheme = urlparse(self.url).scheme if self.url else ""
@@ -375,7 +374,7 @@ Recommendations:
             raise ProviderPathNotFoundError(f"Failed to connect to Forgejo server: {e}")
         except ProviderPathNotFoundError:
             raise
-        except Exception as e:
+        except PROVIDER_EXC as e:
             raise ProviderPathNotFoundError(f"Error exploring Forgejo path: {e}")
 
         return []

@@ -1,10 +1,12 @@
-import pytest
-import os
 import concurrent.futures
-from api.auth import TokenManager, verify_basic, get_current_user, require_basic_auth
-from fastapi.security import HTTPBasicCredentials
-from fastapi import HTTPException
+import os
 from unittest.mock import MagicMock
+
+import pytest
+from fastapi import HTTPException
+from fastapi.security import HTTPBasicCredentials
+
+from api.auth import TokenManager, get_current_user, require_basic_auth, verify_basic
 
 
 @pytest.fixture

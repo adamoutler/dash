@@ -1,13 +1,14 @@
-from typing import Annotated
 import logging
-from typing import List
-from fastapi import APIRouter, HTTPException, Query, Path, Depends
+import time
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
+
 from api.auth import get_current_user
 from api.config import ConfigManager
-from api.models.domain import ProviderType, Node, NodeList
+from api.models.domain import Node, NodeList, ProviderType
+from api.providers.base import ProviderNotImplementedError, ProviderPathNotFoundError
 from api.providers.factory import ProviderFactory
-from api.providers.base import ProviderPathNotFoundError, ProviderNotImplementedError
-import time
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +67,7 @@ def _get_provider_instance(provider: ProviderType):
     return None
 
 
-async def fetch_provider_nodes(provider: ProviderType, path: str) -> List[Node]:
+async def fetch_provider_nodes(provider: ProviderType, path: str) -> list[Node]:
     instance = _get_provider_instance(provider)
     if not instance:
         raise ProviderNotImplementedError(
@@ -110,7 +111,7 @@ async def get_nodes(
         raise HTTPException(status_code=501, detail=str(e))
     except HTTPException:
         raise
-    except Exception as e:
+    except (RuntimeError, ValueError, OSError, KeyError, TypeError) as e:
         logger.error(f"Error exploring {provider_lower} path '{path}': {e}")
         raise HTTPException(
             status_code=500, detail="Internal server error while fetching nodes."

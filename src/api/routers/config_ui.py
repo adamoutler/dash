@@ -1,7 +1,8 @@
 from typing import Annotated
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from typing import Optional
+
 from api.auth import require_basic_auth
 from api.storage import RepoStorage
 
@@ -11,7 +12,7 @@ storage = RepoStorage()
 
 class TokenCreateRequest(BaseModel):
     name: str
-    expiry: Optional[float] = None
+    expiry: float | None = None
 
 
 @router.post("/tokens")

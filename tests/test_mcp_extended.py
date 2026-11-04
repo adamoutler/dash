@@ -1,6 +1,8 @@
+from unittest.mock import AsyncMock, patch
+
 import pytest
-from unittest.mock import patch, AsyncMock
 from fastapi.testclient import TestClient
+
 from main import app
 
 client = TestClient(app)
@@ -34,8 +36,9 @@ def test_resolve_provider_conflict():
 @patch("subprocess.run")
 @patch("time.time")
 def test_check_recent_commit(mock_time, mock_run):
-    from api.routers.mcp import _check_recent_commit
     import subprocess
+
+    from api.routers.mcp import _check_recent_commit
 
     # Test valid commit recently
     mock_run.return_value = subprocess.CompletedProcess(
@@ -52,7 +55,7 @@ def test_check_recent_commit(mock_time, mock_run):
     assert _check_recent_commit() is False
 
     # Test error
-    mock_run.side_effect = Exception("failed")
+    mock_run.side_effect = RuntimeError("failed")
     assert _check_recent_commit() is False
 
 
@@ -174,8 +177,9 @@ async def test_handle_get_status():
 @pytest.mark.asyncio
 @patch("api.routers.mcp.asyncio.sleep", new_callable=AsyncMock)
 async def test_wait_generator_recent_commit(mock_sleep):
-    from api.routers.mcp import _wait_generator
     import json
+
+    from api.routers.mcp import _wait_generator
 
     class MockRequest:
         base_url = "http://testserver/"
@@ -211,8 +215,9 @@ async def test_wait_generator_recent_commit(mock_sleep):
         data = json.loads(res2)
         assert data["result"]["status"] == "failed"
         assert "api/logs" in data["result"]["log_url"]
-    from api.routers.mcp import _wait_generator
     import json
+
+    from api.routers.mcp import _wait_generator
 
     class MockRequest:
         base_url = "http://testserver/"

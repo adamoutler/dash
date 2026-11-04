@@ -1,8 +1,10 @@
 import json
 import os
+
 from filelock import FileLock
 
 DATA_DIR = os.getenv("DATA_DIR", "data")
+DEFAULT_REPOS_PATH = os.path.join(DATA_DIR, "repos.json")
 
 
 class RepoStorage:
@@ -23,7 +25,7 @@ class RepoStorage:
     - `json.JSONDecodeError`: Can occur if the underlying JSON file becomes corrupted.
     """
 
-    def __init__(self, file_path=os.path.join(DATA_DIR, "repos.json")):
+    def __init__(self, file_path=DEFAULT_REPOS_PATH):
         self.file_path = os.path.abspath(file_path)
         self.lock_path = f"{self.file_path}.lock"
         os.makedirs(os.path.dirname(self.file_path), exist_ok=True)
@@ -44,9 +46,8 @@ class RepoStorage:
         Failure Modes:
         - Raises `json.JSONDecodeError` if the file is corrupted.
         """
-        with FileLock(self.lock_path, timeout=5):
-            with open(self.file_path, "r") as f:
-                return json.load(f)
+        with FileLock(self.lock_path, timeout=5), open(self.file_path, "r") as f:
+            return json.load(f)
 
     def _save_repos(self, repos):
         """
@@ -58,9 +59,8 @@ class RepoStorage:
         Failure Modes:
         - `Timeout` if the file lock cannot be acquired.
         """
-        with FileLock(self.lock_path, timeout=5):
-            with open(self.file_path, "w") as f:
-                json.dump(repos, f, indent=2)
+        with FileLock(self.lock_path, timeout=5), open(self.file_path, "w") as f:
+            json.dump(repos, f, indent=2)
 
     def add_repo(
         self,

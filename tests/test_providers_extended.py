@@ -1,7 +1,9 @@
+from unittest.mock import AsyncMock, patch
+
 import pytest
-from unittest.mock import patch, AsyncMock
-from api.providers.github import GitHubProvider
+
 from api.providers.forgejo import ForgejoProvider
+from api.providers.github import GitHubProvider
 
 
 @pytest.fixture

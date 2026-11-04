@@ -1,10 +1,15 @@
-import httpx
 import datetime
-from typing import Dict, Any, List, Optional
-from api.providers.base import BaseProvider, ProviderPathNotFoundError
+import logging
+from typing import Any
+
+import httpx
+
 from api.models.domain import Node, NodeType
+from api.providers.base import BaseProvider, ProviderPathNotFoundError
 
 ACCEPT_GITHUB_JSON = "application/vnd.github.v3+json"
+logger = logging.getLogger(__name__)
+PROVIDER_EXC = (httpx.HTTPError, ValueError, KeyError, TypeError, RuntimeError, OSError)
 
 
 NO_COMMIT_MSG = "No commit message"
@@ -23,7 +28,7 @@ class GitHubProvider(BaseProvider):
         return NO_COMMIT_MSG
 
     @staticmethod
-    def _calculate_expected_duration(runs: list) -> Optional[float]:
+    def _calculate_expected_duration(runs: list) -> float | None:
         successful_runs = [
             r
             for r in runs
@@ -47,24 +52,18 @@ class GitHubProvider(BaseProvider):
                     )
                     total_duration += (end_dt - start_dt).total_seconds()
                     valid_runs += 1
-                except Exception as e:
-                    import logging
-
-                    logging.warning(f"Error parsing date in GitHub response: {e}")
+                except PROVIDER_EXC as e:
+                    logger.warning(f"Error parsing date in GitHub response: {e}")
         return total_duration / valid_runs if valid_runs > 0 else None
 
     async def _resolve_workflow_id(
-        self, owner: str, repo: str, workflow_id: Optional[str]
-    ) -> Optional[str]:
+        self, owner: str, repo: str, workflow_id: str | None
+    ) -> str | None:
         if not workflow_id or workflow_id == "any":
             return None
 
         # If it's numeric or ends in .yml/.yaml, it's likely already an ID/filename
-        if (
-            workflow_id.isdigit()
-            or workflow_id.endswith(".yml")
-            or workflow_id.endswith(".yaml")
-        ):
+        if workflow_id.isdigit() or workflow_id.endswith((".yml", ".yaml")):
             return workflow_id
 
         # Otherwise, try to find a workflow with this name
@@ -79,9 +78,9 @@ class GitHubProvider(BaseProvider):
         self,
         owner: str,
         repo: str,
-        workflow_id: Optional[str] = None,
-        branch: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        workflow_id: str | None = None,
+        branch: str | None = None,
+    ) -> dict[str, Any]:
         workflow_id = await self._resolve_workflow_id(owner, repo, workflow_id)
         headers = (
             {
@@ -159,7 +158,7 @@ class GitHubProvider(BaseProvider):
                     "expected_duration_sec": expected_duration_sec,
                     "workflow_name": run.get("name", ""),
                 }
-        except Exception:
+        except PROVIDER_EXC:
             err = self._error_result("github", owner, repo)
             err["commit_message"] = "Exception occurred while fetching."
             return err
@@ -168,8 +167,8 @@ class GitHubProvider(BaseProvider):
         self,
         owner: str,
         repo: str,
-        workflow_id: Optional[str] = None,
-        branch: Optional[str] = None,
+        workflow_id: str | None = None,
+        branch: str | None = None,
     ) -> str:
         workflow_id = await self._resolve_workflow_id(owner, repo, workflow_id)
         headers = (
@@ -225,16 +224,16 @@ class GitHubProvider(BaseProvider):
                     return "\n".join(all_logs)
 
                 return "Failed to fetch any job logs."
-        except Exception:
+        except PROVIDER_EXC:
             return "Error fetching GitHub logs."
 
     async def fetch_artifacts(
         self,
         owner: str,
         repo: str,
-        workflow_id: Optional[str] = None,
-        branch: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        workflow_id: str | None = None,
+        branch: str | None = None,
+    ) -> dict[str, Any]:
         workflow_id = await self._resolve_workflow_id(owner, repo, workflow_id)
         headers = (
             {
@@ -272,10 +271,10 @@ class GitHubProvider(BaseProvider):
                 return {
                     "error": f"Failed to fetch artifacts. HTTP {artifacts_resp.status_code}"
                 }
-        except Exception:
+        except PROVIDER_EXC:
             return {"error": "Error fetching GitHub artifacts."}
 
-    async def fetch_branches(self, owner: str, repo: str) -> List[str]:
+    async def fetch_branches(self, owner: str, repo: str) -> list[str]:
         headers = (
             {
                 "Authorization": f"Bearer {self.token}",
@@ -291,12 +290,12 @@ class GitHubProvider(BaseProvider):
                 if resp.status_code == 200:
                     return [b["name"] for b in resp.json()]
                 return []
-        except Exception:
+        except PROVIDER_EXC:
             return []
 
     async def get_workflows(
-        self, owner: str, repo: str, branch: Optional[str] = None
-    ) -> List[Dict[str, str]]:
+        self, owner: str, repo: str, branch: str | None = None
+    ) -> list[dict[str, str]]:
         headers = (
             {
                 "Authorization": f"Bearer {self.token}",
@@ -318,10 +317,10 @@ class GitHubProvider(BaseProvider):
                         for w in workflows
                     ]
                 return []
-        except Exception:
+        except PROVIDER_EXC:
             return []
 
-    def _parse_github_link_header(self, link_header: str) -> Optional[str]:
+    def _parse_github_link_header(self, link_header: str) -> str | None:
         if not link_header:
             return None
         for link in link_header.split(","):
@@ -351,7 +350,7 @@ class GitHubProvider(BaseProvider):
 
     async def _explore_root(
         self, client: httpx.AsyncClient, headers: dict
-    ) -> List[Node]:
+    ) -> list[Node]:
         nodes = []
         user_resp = await client.get("https://api.github.com/user", headers=headers)
         if user_resp.status_code == 403:
@@ -391,7 +390,7 @@ class GitHubProvider(BaseProvider):
 
     async def _explore_owner(
         self, client: httpx.AsyncClient, owner: str, headers: dict
-    ) -> List[Node]:
+    ) -> list[Node]:
         repos = await self._fetch_all_github_pages(
             client,
             f"https://api.github.com/users/{owner}/repos?per_page=100",
@@ -415,7 +414,7 @@ class GitHubProvider(BaseProvider):
 
     async def _explore_repo(
         self, client: httpx.AsyncClient, owner: str, repo: str, headers: dict
-    ) -> List[Node]:
+    ) -> list[Node]:
         wfs = await self._fetch_all_github_pages(
             client,
             f"https://api.github.com/repos/{owner}/{repo}/actions/workflows?per_page=100",
@@ -438,7 +437,7 @@ class GitHubProvider(BaseProvider):
             f"Workflows for {owner}/{repo} not found or rate limited"
         )
 
-    async def explore(self, path: str) -> List[Node]:
+    async def explore(self, path: str) -> list[Node]:
         headers = {"Accept": ACCEPT_GITHUB_JSON}
         if self.token:
             headers["Authorization"] = f"Bearer {self.token}"
@@ -456,7 +455,7 @@ class GitHubProvider(BaseProvider):
             raise ProviderPathNotFoundError(f"Failed to connect to GitHub server: {e}")
         except ProviderPathNotFoundError:
             raise
-        except Exception as e:
+        except PROVIDER_EXC as e:
             raise ProviderPathNotFoundError(f"Error exploring GitHub path: {e}")
 
         return []

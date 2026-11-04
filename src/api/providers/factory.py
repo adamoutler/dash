@@ -1,4 +1,3 @@
-from typing import Optional
 from api.models.domain import ProviderType
 from api.providers.base import BaseProvider
 
@@ -9,7 +8,7 @@ class ProviderFactory:
     """
 
     @staticmethod
-    def get_provider(provider_type: ProviderType, **kwargs) -> Optional[BaseProvider]:
+    def get_provider(provider_type: ProviderType, **kwargs) -> BaseProvider | None:
         if provider_type == ProviderType.github:
             from api.providers.github import GitHubProvider
 

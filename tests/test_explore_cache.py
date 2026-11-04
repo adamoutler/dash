@@ -1,6 +1,8 @@
-import pytest
 import time
-from unittest.mock import patch, AsyncMock
+from unittest.mock import AsyncMock, patch
+
+import pytest
+
 from api.explore import (
     SimpleTTLCache,
     _get_provider_instance,
@@ -8,7 +10,7 @@ from api.explore import (
     get_nodes,
 )
 from api.models.domain import ProviderType
-from api.providers.base import ProviderPathNotFoundError, ProviderNotImplementedError
+from api.providers.base import ProviderNotImplementedError, ProviderPathNotFoundError
 
 
 def test_ttl_cache():
@@ -62,7 +64,7 @@ async def test_get_nodes_exceptions():
             await get_nodes("user", ProviderType.github, "path_501")
         assert exc.value.status_code == 501
 
-        mock_fetch.side_effect = Exception("generic")
+        mock_fetch.side_effect = RuntimeError("generic")
         with pytest.raises(HTTPException) as exc:
             await get_nodes("user", ProviderType.github, "path_500")
         assert exc.value.status_code == 500

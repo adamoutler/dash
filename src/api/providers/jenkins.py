@@ -1,8 +1,10 @@
-import httpx
 import datetime
-from typing import Dict, Any, List, Optional
-from api.providers.base import BaseProvider, ProviderPathNotFoundError
+from typing import Any
+
+import httpx
+
 from api.models.domain import Node, NodeType
+from api.providers.base import BaseProvider, ProviderPathNotFoundError
 
 
 class JenkinsProvider(BaseProvider):
@@ -16,9 +18,9 @@ class JenkinsProvider(BaseProvider):
         self,
         owner: str,
         repo: str,
-        workflow_id: Optional[str] = None,
-        branch: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        workflow_id: str | None = None,
+        branch: str | None = None,
+    ) -> dict[str, Any]:
         if workflow_id == "any":
             workflow_id = None
 
@@ -34,10 +36,17 @@ class JenkinsProvider(BaseProvider):
         try:
             async with httpx.AsyncClient(timeout=10.0, auth=auth) as client:
                 return await self._resolve_jenkins_status(client, base_url, owner, repo)
-        except Exception:
+        except (
+            httpx.HTTPError,
+            ValueError,
+            KeyError,
+            TypeError,
+            RuntimeError,
+            OSError,
+        ):
             return self._error_result("jenkins", owner, repo)
 
-    def _extract_jenkins_status(self, status: str, last_build: Optional[dict]) -> str:
+    def _extract_jenkins_status(self, status: str, last_build: dict | None) -> str:
         if not last_build:
             return status
         result = last_build.get("result")
@@ -90,7 +99,7 @@ class JenkinsProvider(BaseProvider):
         timestamp_ms = last_build.get("timestamp")
         started_at = (
             datetime.datetime.fromtimestamp(
-                timestamp_ms / 1000.0, tz=datetime.timezone.utc
+                timestamp_ms / 1000.0, tz=datetime.UTC
             ).isoformat()
             if timestamp_ms
             else ""
@@ -151,8 +160,8 @@ class JenkinsProvider(BaseProvider):
         self,
         owner: str,
         repo: str,
-        workflow_id: Optional[str] = None,
-        branch: Optional[str] = None,
+        workflow_id: str | None = None,
+        branch: str | None = None,
     ) -> str:
         if workflow_id == "any":
             workflow_id = None
@@ -169,7 +178,14 @@ class JenkinsProvider(BaseProvider):
         try:
             async with httpx.AsyncClient(timeout=10.0, auth=auth) as client:
                 return await self._resolve_jenkins_logs(client, base_url, max_depth=3)
-        except Exception:
+        except (
+            httpx.HTTPError,
+            ValueError,
+            KeyError,
+            TypeError,
+            RuntimeError,
+            OSError,
+        ):
             return "Error fetching Jenkins logs."
 
     async def _resolve_jenkins_logs(self, client, url, max_depth=3):
@@ -213,20 +229,20 @@ class JenkinsProvider(BaseProvider):
         self,
         owner: str,
         repo: str,
-        workflow_id: Optional[str] = None,
-        branch: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        workflow_id: str | None = None,
+        branch: str | None = None,
+    ) -> dict[str, Any]:
         return {"error": "Jenkins artifacts not implemented yet."}
 
-    async def fetch_branches(self, owner: str, repo: str) -> List[str]:
+    async def fetch_branches(self, owner: str, repo: str) -> list[str]:
         return []
 
     async def get_workflows(
-        self, owner: str, repo: str, branch: Optional[str] = None
-    ) -> List[Dict[str, str]]:
+        self, owner: str, repo: str, branch: str | None = None
+    ) -> list[dict[str, str]]:
         return []
 
-    def _parse_jenkins_explore_nodes(self, jobs: list, path: str) -> List[Node]:
+    def _parse_jenkins_explore_nodes(self, jobs: list, path: str) -> list[Node]:
         nodes = []
         for j in jobs:
             j_class = j.get("_class", "")
@@ -253,7 +269,7 @@ class JenkinsProvider(BaseProvider):
             )
         return nodes
 
-    async def explore(self, path: str) -> List[Node]:
+    async def explore(self, path: str) -> list[Node]:
         if not self.url:
             from fastapi import HTTPException
 

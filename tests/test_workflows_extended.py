@@ -1,6 +1,8 @@
+from unittest.mock import AsyncMock, patch
+
 import pytest
-from unittest.mock import patch, AsyncMock
 from fastapi.testclient import TestClient
+
 from main import app
 
 client = TestClient(app)
@@ -99,7 +101,7 @@ def test_handle_local_log_cleanup():
         assert res["log_url"] == "http://current"
 
     res = {}
-    with patch("os.remove", side_effect=Exception("error")):
+    with patch("os.remove", side_effect=OSError("error")):
         _handle_local_log_cleanup("fake/path", None, "http://dash", res)
         assert "log_url" not in res
 

@@ -1,7 +1,9 @@
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import MagicMock, AsyncMock, patch
-from api.services.workflow_service import WorkflowService, get_log_filename
+
 from api.config import ConfigManager
+from api.services.workflow_service import WorkflowService, get_log_filename
 
 
 @pytest.fixture

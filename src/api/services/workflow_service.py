@@ -1,9 +1,10 @@
 import asyncio
-from typing import List, Dict, Any, Optional
+import logging
+from typing import Any
+
+from api.config import ConfigManager
 from api.models.domain import ProviderType
 from api.providers.factory import ProviderFactory
-from api.config import ConfigManager
-import logging
 
 logger = logging.getLogger(__name__)
 UNKNOWN_PROVIDER = "Unknown provider"
@@ -13,8 +14,8 @@ def get_log_filename(
     provider: str,
     owner: str,
     repo: str,
-    workflow_id: Optional[str] = None,
-    branch: Optional[str] = None,
+    workflow_id: str | None = None,
+    branch: str | None = None,
 ) -> str:
     safe_provider = "".join(c for c in provider if c.isalnum() or c in "-_")
     safe_owner = "".join(c for c in owner if c.isalnum() or c in "-_")
@@ -56,8 +57,8 @@ class WorkflowService:
         return None
 
     async def get_all_statuses(
-        self, repos: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+        self, repos: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
         tasks = []
         for r in repos:
             provider_instance = self._get_provider_instance(r.get("provider", ""))
@@ -72,12 +73,12 @@ class WorkflowService:
                 )
             else:
 
-                async def mock_error():
+                async def mock_error(repo_item=r):
                     await asyncio.sleep(0)
                     return {
-                        "provider": r.get("provider", "unknown"),
-                        "owner": r.get("owner"),
-                        "repo": r.get("repo"),
+                        "provider": repo_item.get("provider", "unknown"),
+                        "owner": repo_item.get("owner"),
+                        "repo": repo_item.get("repo"),
                         "status": "error",
                         "commit_message": "Unsupported provider",
                     }
@@ -108,9 +109,9 @@ class WorkflowService:
         provider: str,
         owner: str,
         repo: str,
-        workflow_id: Optional[str] = None,
-        branch: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        workflow_id: str | None = None,
+        branch: str | None = None,
+    ) -> dict[str, Any]:
         provider_instance = self._get_provider_instance(provider)
         if provider_instance:
             return await provider_instance.fetch_status(
@@ -125,7 +126,7 @@ class WorkflowService:
         }
 
     def format_status_yaml(
-        self, res_obj: Dict[str, Any], provider: str, owner: str, repo_name: str
+        self, res_obj: dict[str, Any], provider: str, owner: str, repo_name: str
     ) -> str:
         raw_status = res_obj.get("status", "unknown").lower()
         status_emoji = {
@@ -168,8 +169,8 @@ class WorkflowService:
         provider: str,
         owner: str,
         repo: str,
-        workflow_id: Optional[str] = None,
-        branch: Optional[str] = None,
+        workflow_id: str | None = None,
+        branch: str | None = None,
     ) -> str:
         provider_instance = self._get_provider_instance(provider)
         if provider_instance:
@@ -181,9 +182,9 @@ class WorkflowService:
         provider: str,
         owner: str,
         repo: str,
-        workflow_id: Optional[str] = None,
-        branch: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        workflow_id: str | None = None,
+        branch: str | None = None,
+    ) -> dict[str, Any]:
         provider_instance = self._get_provider_instance(provider)
         if provider_instance:
             return await provider_instance.fetch_artifacts(
@@ -191,15 +192,15 @@ class WorkflowService:
             )
         return {"error": UNKNOWN_PROVIDER}
 
-    async def get_branches(self, provider: str, owner: str, repo: str) -> List[str]:
+    async def get_branches(self, provider: str, owner: str, repo: str) -> list[str]:
         provider_instance = self._get_provider_instance(provider)
         if provider_instance:
             return await provider_instance.fetch_branches(owner, repo)
         return []
 
     async def get_workflows(
-        self, provider: str, owner: str, repo: str, branch: Optional[str] = None
-    ) -> List[Dict[str, str]]:
+        self, provider: str, owner: str, repo: str, branch: str | None = None
+    ) -> list[dict[str, str]]:
         provider_instance = self._get_provider_instance(provider)
         if provider_instance:
             return await provider_instance.get_workflows(owner, repo, branch)

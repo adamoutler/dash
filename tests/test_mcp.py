@@ -1,11 +1,13 @@
 import asyncio
 import os
 import tempfile
-import pytest
 from unittest.mock import patch
+
+import pytest
 from fastapi.testclient import TestClient
-from main import app
+
 from api.storage import RepoStorage
+from main import app
 
 storage = RepoStorage()
 client = TestClient(app)
@@ -224,7 +226,7 @@ async def test_mcp_wait(mock_sleep, mock_fetch):
     ]
     storage.add_repo("github", "testowner", "testrepo", None, None, None)
 
-    from httpx import AsyncClient, ASGITransport, BasicAuth
+    from httpx import ASGITransport, AsyncClient, BasicAuth
 
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"

@@ -1,6 +1,7 @@
 from enum import Enum
+from typing import Any
+
 from pydantic import BaseModel, Field
-from typing import Optional, Dict, Any, List
 
 
 class ProviderType(str, Enum):
@@ -14,19 +15,19 @@ class RepoItem(BaseModel):
     provider: ProviderType = Field(..., description="The git provider")
     owner: str = Field(..., description="The repository owner or organization name")
     repo: str = Field(..., description="The repository name")
-    branch: Optional[str] = Field(
+    branch: str | None = Field(
         None,
         description="The specific branch to track. If omitted, uses the default branch.",
     )
-    custom_links: Optional[list] = Field(
+    custom_links: list | None = Field(
         None,
         description="An optional list of custom links (name and url) to display alongside the repository",
     )
-    workflow_id: Optional[str] = Field(
+    workflow_id: str | None = Field(
         None,
         description="The specific workflow ID or filename to track. If omitted, the dashboard tracks the most recent run of any workflow.",
     )
-    workflow_name: Optional[str] = Field(
+    workflow_name: str | None = Field(
         None, description="A friendly, human-readable name for the selected workflow"
     )
 
@@ -49,10 +50,8 @@ class Node(BaseModel):
     has_children: bool = Field(
         default=False, description="Whether this node can be expanded further"
     )
-    url: Optional[str] = Field(
-        default=None, description="External URL to view this node"
-    )
-    metadata: Optional[Dict[str, Any]] = Field(
+    url: str | None = Field(default=None, description="External URL to view this node")
+    metadata: dict[str, Any] | None = Field(
         default=None, description="Provider-specific metadata"
     )
 
@@ -60,6 +59,6 @@ class Node(BaseModel):
 class NodeList(BaseModel):
     provider: ProviderType = Field(..., description="The git provider")
     path: str = Field(..., description="The path that was explored")
-    nodes: List[Node] = Field(
+    nodes: list[Node] = Field(
         ..., description="List of child nodes under the given path"
     )

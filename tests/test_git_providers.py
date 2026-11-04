@@ -1,7 +1,9 @@
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
-from api.providers.github import GitHubProvider
+
 from api.providers.forgejo import ForgejoProvider
+from api.providers.github import GitHubProvider
 
 
 @pytest.mark.asyncio
@@ -52,7 +54,7 @@ async def test_fetch_github_status_with_branch(mock_get):
     provider = GitHubProvider("token")
     await provider.fetch_status("owner", "repo", branch="feature-branch")
 
-    args, kwargs = mock_get.call_args
+    args, _kwargs = mock_get.call_args
     url = args[0]
     assert "branch=feature-branch" in url
 

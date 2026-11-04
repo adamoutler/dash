@@ -1,17 +1,19 @@
-import os
 import json
 import logging
+import os
+
 from filelock import FileLock
 
 logger = logging.getLogger(__name__)
 
 DATA_DIR = os.getenv("DATA_DIR", "data")
 LOGS_DIR = os.getenv("LOGS_DIR", "logs")
+DEFAULT_SETTINGS_PATH = os.path.join(DATA_DIR, "settings.json")
 os.makedirs(LOGS_DIR, exist_ok=True)
 
 
 class ConfigManager:
-    def __init__(self, filepath=os.path.join(DATA_DIR, "settings.json")):
+    def __init__(self, filepath=DEFAULT_SETTINGS_PATH):
         self.filepath = filepath
         self.lockpath = f"{filepath}.lock"
         os.makedirs(os.path.dirname(self.filepath), exist_ok=True)
@@ -27,7 +29,7 @@ class ConfigManager:
                     return {}
                 with open(self.filepath, "r") as f:
                     return json.load(f)
-        except Exception as e:
+        except (OSError, ValueError, RuntimeError) as e:
             logger.error(f"Failed to read settings: {e}")
             return {}
 
@@ -48,11 +50,11 @@ class ConfigManager:
                     json.dump(settings, f, indent=4)
         except Exception as e:
             logger.error(f"Failed to update settings: {e}")
-            raise e
+            raise
 
-    def get_value(self, json_key: str, env_key: str = None) -> str:
+    def get_value(self, json_key: str, env_key: str | None = None) -> str:
         settings = self.get_settings()
-        if json_key in settings and settings[json_key]:
+        if settings.get(json_key):
             return settings[json_key]
         if env_key:
             return os.environ.get(env_key, "")

@@ -1,7 +1,9 @@
+from unittest.mock import AsyncMock, patch
+
 import pytest
-from unittest.mock import patch, AsyncMock
-from api.providers.forgejo import ForgejoProvider
 from httpx import Response
+
+from api.providers.forgejo import ForgejoProvider
 
 
 @pytest.fixture
@@ -44,7 +46,7 @@ async def test_forgejo_fetch_status_waiting(forgejo_provider):
 
 @pytest.mark.asyncio
 async def test_forgejo_fetch_status_exception(forgejo_provider):
-    with patch("httpx.AsyncClient.get", side_effect=Exception("error")):
+    with patch("httpx.AsyncClient.get", side_effect=RuntimeError("error")):
         res = await forgejo_provider.fetch_status("owner", "repo")
         assert res["status"] == "error"
 
