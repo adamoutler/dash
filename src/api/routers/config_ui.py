@@ -33,7 +33,17 @@ async def get_configure_data(user: Annotated[str, Depends(require_basic_auth)]):
     repos = storage.get_repos()
     tokens = token_manager.list_tokens()
     pending_oauth = oauth_manager.list_pending_requests()
-    return {"repos": repos, "tokens": tokens, "pending_oauth": pending_oauth}
+    oauth_sessions = [
+        t
+        for t in tokens
+        if t.get("oauth") or str(t.get("name", "")).startswith("OAuth:")
+    ]
+    return {
+        "repos": repos,
+        "tokens": tokens,
+        "pending_oauth": pending_oauth,
+        "oauth_sessions": oauth_sessions,
+    }
 
 
 @router.delete("/tokens/{token}", responses={404: {"description": "Token not found"}})

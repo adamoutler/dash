@@ -164,6 +164,17 @@
             document.getElementById('client-display').textContent = clientId;
             document.getElementById('scope-display').textContent = scope;
 
+            if (clientId) {
+                fetch(`/api/oauth/clients/${encodeURIComponent(clientId)}`, { cache: 'no-store' })
+                    .then(r => r.ok ? r.json() : null)
+                    .then(info => {
+                        if (info && info.client_name) {
+                            document.getElementById('client-display').textContent = info.client_name;
+                        }
+                    })
+                    .catch(() => {});
+            }
+
             const errorBox = document.getElementById('oauth-error-box');
             const stepUsername = document.getElementById('step-username');
             const stepWaiting = document.getElementById('step-waiting');
@@ -176,14 +187,30 @@
                 errorBox.style.display = 'block';
             }
 
+            function isSafeRedirectUri(uri) {
+                if (!uri) return false;
+                try {
+                    const parsed = new URL(uri);
+                    if (parsed.hash || parsed.username || parsed.password) return false;
+                    if (parsed.protocol === 'https:') return true;
+                    return parsed.protocol === 'http:' && (
+                        parsed.hostname === 'localhost' ||
+                        parsed.hostname === '127.0.0.1' ||
+                        parsed.hostname === '[::1]'
+                    );
+                } catch (e) {
+                    return false;
+                }
+            }
+
             cancelBtn.addEventListener('click', () => {
-                if (redirectUri) {
-                    const sep = redirectUri.includes('?') ? '&' : '?';
-                    let target = redirectUri + sep + 'error=access_denied';
+                if (isSafeRedirectUri(redirectUri)) {
+                    const parsed = new URL(redirectUri);
+                    parsed.searchParams.set('error', 'access_denied');
                     if (state) {
-                        target += '&state=' + encodeURIComponent(state);
+                        parsed.searchParams.set('state', state);
                     }
-                    window.location.replace(target);
+                    window.location.replace(parsed.toString());
                 } else {
                     showError('Authorization cancelled.');
                 }

@@ -47,10 +47,16 @@
             <span id="oauth-pending-badge" class="oauth-badge" style="display: none;">0 Pending</span>
         </div>
         <p style="margin-top: 0; color: var(--text-secondary); font-size: 0.9rem;">
-            Approve or disapprove incoming OAuth 2.0 connection requests (such as Google Gemini App).
+            Approve or disapprove incoming OAuth 2.0 connection requests (such as Google Gemini App), and manage or delete connected OAuth accounts.
         </p>
         <div id="oauth-pending-list">
             <div class="oauth-empty">No pending connection requests.</div>
+        </div>
+        <div style="margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+            <h3 style="margin: 0 0 0.5rem 0; font-size: 1rem;">Connected OAuth Accounts</h3>
+            <div id="oauth-sessions-list">
+                <div class="oauth-empty">No connected OAuth accounts.</div>
+            </div>
         </div>
     </div>
 
@@ -154,8 +160,54 @@
                 });
 
                 renderPendingOAuth(data.pending_oauth || []);
+                renderOAuthSessions(data.oauth_sessions || (data.tokens || []).filter(t => t.oauth || String(t.name || '').startsWith('OAuth:')));
             } else if (res.status === 401) {
                 alert('Authentication required');
+            }
+        }
+
+        function renderOAuthSessions(sessionsList) {
+            const listEl = document.getElementById('oauth-sessions-list');
+            if (!listEl) return;
+            listEl.innerHTML = '';
+
+            if (!Array.isArray(sessionsList) || sessionsList.length === 0) {
+                const empty = document.createElement('div');
+                empty.className = 'oauth-empty';
+                empty.textContent = 'No connected OAuth accounts.';
+                listEl.appendChild(empty);
+                return;
+            }
+
+            sessionsList.forEach((sess) => {
+                const row = document.createElement('div');
+                row.className = 'oauth-pending-item';
+
+                const infoDiv = document.createElement('div');
+                const userStrong = document.createElement('strong');
+                userStrong.textContent = sess.username ? `Username: ${sess.username}` : sess.name;
+                infoDiv.appendChild(userStrong);
+
+                const metaDiv = document.createElement('div');
+                metaDiv.className = 'oauth-popup-meta';
+                metaDiv.textContent = sess.client_id ? `Client: ${sess.client_id} (${sess.name})` : sess.name;
+                infoDiv.appendChild(metaDiv);
+
+                const deleteBtn = document.createElement('button');
+                deleteBtn.className = 'oauth-btn-deny';
+                deleteBtn.textContent = '✘ Delete';
+                deleteBtn.onclick = () => deleteOAuthSession(sess.token);
+
+                row.appendChild(infoDiv);
+                row.appendChild(deleteBtn);
+                listEl.appendChild(row);
+            });
+        }
+
+        async function deleteOAuthSession(token) {
+            const res = await fetch(`/api/oauth/sessions/${encodeURIComponent(token)}`, { method: 'DELETE' });
+            if (res.ok) {
+                loadData();
             }
         }
 
@@ -230,6 +282,9 @@
         window.addEventListener('oauth-pending-data', (e) => {
             if (e.detail && Array.isArray(e.detail.pending)) {
                 renderPendingOAuth(e.detail.pending);
+            }
+            if (e.detail && Array.isArray(e.detail.sessions)) {
+                renderOAuthSessions(e.detail.sessions);
             }
         });
 

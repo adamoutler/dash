@@ -719,17 +719,35 @@ async def _handle_mcp_routing(
     }
 
 
+DASH_SVG_ICON = (
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">'
+    '<rect width="100" height="100" rx="20" fill="#1f2937"/>'
+    '<path d="M25 52 L42 69 L75 34" stroke="#22c55e" stroke-width="10" '
+    'fill="none" stroke-linecap="round" stroke-linejoin="round"/>'
+    "</svg>"
+)
+
+
 def _build_server_info(request: Request) -> dict[str, Any]:
+    import base64
+
     from api.auth import get_base_url
 
     base_url = get_base_url(request)
     icon_url = f"{base_url}/icon.png"
+    svg_url = f"{base_url}/icon.svg"
+    icon_data_uri = "data:image/svg+xml;base64," + base64.b64encode(
+        DASH_SVG_ICON.encode("utf-8")
+    ).decode("ascii")
     return {
         "name": "dashboard-mcp",
+        "title": "Dash CI/CD Monitor MCP",
         "version": "1.0.0",
+        "icon": icon_data_uri,
         "iconUrl": icon_url,
         "icons": [
             {"src": icon_url, "mimeType": "image/png", "sizes": ["192x192"]},
+            {"src": svg_url, "mimeType": "image/svg+xml", "sizes": ["any"]},
         ],
     }
 
@@ -744,6 +762,7 @@ def _build_server_info(request: Request) -> dict[str, Any]:
     methods=["GET", "HEAD", "DELETE"],
     include_in_schema=False,
 )
+@router.delete("/", include_in_schema=False)
 async def mcp_discovery_probe(
     request: Request,
     user: Annotated[str, Depends(get_mcp_user)],
@@ -796,6 +815,7 @@ def _build_initialize_response(req: JsonRpcRequest, request: Request) -> dict[st
 
 @router.post("/mcp", summary="MCP JSON-RPC Endpoint")
 @router.post("/sse", include_in_schema=False)
+@router.post("/", include_in_schema=False)
 async def mcp_endpoint(
     req: JsonRpcRequest,
     request: Request,

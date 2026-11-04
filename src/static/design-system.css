@@ -108,7 +108,7 @@ h1 { margin: 0; }
 .repo-list { display: flex; flex-direction: column; gap: 10px; }
 .repo-item { display: flex; align-items: stretch; background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 6px; overflow: hidden; transition: background-color 0.3s ease, border-color 0.3s ease; }
 
-.status-block { flex: 0 0 120px; width: 120px; min-width: 120px; max-width: 120px; box-sizing: border-box; align-self: stretch; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; justify-content: center; text-decoration: none; font-weight: bold; font-size: 18px; border-right: 1px solid var(--border-color); text-align: center; border-left: 4px solid transparent; transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease; }
+.status-block { flex: 0 0 120px; width: 120px; min-width: 120px; max-width: 120px; padding: 0 6px; box-sizing: border-box; align-self: stretch; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; justify-content: center; text-decoration: none; font-weight: bold; font-size: 18px; border-right: 1px solid var(--border-color); text-align: center; border-left: 4px solid transparent; transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease; }
 .status-success { background: var(--status-success-bg); color: var(--status-success-color); border-left-color: var(--status-success-border); }
 .status-failure { background: var(--status-failure-bg); color: var(--status-failure-color); border-left-color: var(--status-failure-border); }
 .status-running { background: var(--status-running-bg); color: var(--status-running-color); border-left-color: var(--status-running-border); }

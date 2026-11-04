@@ -385,6 +385,18 @@ class OAuthManager:
             return code_info
 
 
+    def get_client_public_info(self, client_id: str) -> dict[str, str]:
+        with FileLock(self.lockpath):
+            data = self._load_nolock()
+            client_info = data.get("clients", {}).get(client_id)
+            if client_info:
+                return {
+                    "client_id": client_id,
+                    "client_name": str(client_info.get("client_name") or client_id),
+                }
+            return {"client_id": client_id, "client_name": client_id}
+
+
 oauth_manager = OAuthManager()
 
 
@@ -400,6 +412,7 @@ def _build_protected_resource_metadata(
         "bearer_methods_supported": ["header"],
         "scopes_supported": ["mcp:access", "openid", "profile"],
         "resource_documentation": f"{base_url}/llms.txt",
+        "logo_uri": f"{base_url}/icon.png",
     }
 
 
@@ -422,6 +435,7 @@ def _build_auth_server_metadata(request: Request) -> dict[str, Any]:
         ],
         "code_challenge_methods_supported": ["S256"],
         "client_id_metadata_document_supported": True,
+        "logo_uri": f"{base_url}/icon.png",
     }
 
 
@@ -714,9 +728,25 @@ def _handle_refresh_token_grant(params: dict[str, Any]) -> JSONResponse:
     )
 
 
+def _extract_basic_client_id(request: Request) -> str | None:
+    auth_header = request.headers.get("authorization", "")
+    if not auth_header.lower().startswith("basic "):
+        return None
+    try:
+        decoded = base64.b64decode(auth_header[6:].strip()).decode("utf-8")
+        client_id, _, _ = decoded.partition(":")
+        return client_id.strip() or None
+    except (ValueError, UnicodeDecodeError):
+        return None
+
+
 @router.post("/oauth/token", summary="OAuth 2.0 Token Exchange")
 async def oauth_token_exchange(request: Request):
     params = await _parse_request_params(request)
+    if not params.get("client_id"):
+        basic_client_id = _extract_basic_client_id(request)
+        if basic_client_id:
+            params["client_id"] = basic_client_id
     grant_type = str(params.get("grant_type") or "").strip()
     if grant_type == "authorization_code":
         return _handle_auth_code_grant(params)
@@ -729,6 +759,34 @@ async def oauth_token_exchange(request: Request):
             "error_description": "Supported grant_types: authorization_code, refresh_token",
         },
     )
+
+
+@router.get(
+    "/api/oauth/clients/{client_id}",
+    include_in_schema=False,
+)
+async def get_oauth_client_info(client_id: str):
+    return oauth_manager.get_client_public_info(client_id)
+
+
+@router.delete(
+    "/api/oauth/sessions/{token}",
+    summary="Delete Connected OAuth Session",
+    responses={404: {"description": "OAuth session not found"}},
+)
+@router.delete(
+    "/configure/oauth/sessions/{token}",
+    include_in_schema=False,
+)
+async def delete_oauth_session(
+    token: str, user: Annotated[str, Depends(require_basic_auth)]
+):
+    from api.auth import token_manager
+
+    success = token_manager.revoke_token(token)
+    if not success:
+        raise HTTPException(status_code=404, detail="OAuth session not found")
+    return {"message": "OAuth session deleted"}
 
 
 @router.post("/oauth/revoke", summary="OAuth 2.0 Token Revocation")

@@ -37,7 +37,7 @@ def test_status_indicator_sizing_css():
 
     sw_res = client.get("/sw.js")
     assert sw_res.status_code == 200
-    assert "ci-dashboard-v5" in sw_res.text
+    assert "ci-dashboard-v6" in sw_res.text
 
 
 def test_add_and_get_repos():

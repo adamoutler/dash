@@ -1,8 +1,9 @@
-const CACHE_NAME = 'ci-dashboard-v5';
+const CACHE_NAME = 'ci-dashboard-v6';
 const STATIC_ASSETS = [
     '/',
     '/static/index.html',
     '/static/design-system.css',
+    '/static/oauth-notify.js',
     '/manifest.json',
     '/static/img/icon-192.png',
     '/static/img/icon-512.png',

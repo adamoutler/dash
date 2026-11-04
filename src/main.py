@@ -2,14 +2,20 @@ import os
 import subprocess
 from typing import Annotated
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from api.auth import get_current_user, require_basic_auth
+from api.auth import (
+    get_current_user,
+    get_mcp_user,
+    require_basic_auth,
+    security_basic,
+)
 from api.explore import router as explore_router
 from api.routers.config_ui import router as config_ui_router
+from api.routers.mcp import DASH_SVG_ICON, mcp_discovery_probe
 from api.routers.mcp import router as mcp_router
 from api.routers.oauth import router as oauth_router
 from api.routers.repos import router as repos_router
@@ -93,8 +99,28 @@ STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
-@app.get("/", include_in_schema=False)
-async def read_index(user: Annotated[str, Depends(require_basic_auth)]):
+def _is_mcp_probe_request(request: Request) -> bool:
+    if request.method == "HEAD":
+        return True
+    auth_header = request.headers.get("authorization", "").lower()
+    if auth_header.startswith("bearer "):
+        return True
+    user_agent = request.headers.get("user-agent", "").lower()
+    if "googleother" in user_agent or "mcp" in user_agent:
+        return True
+    accept = request.headers.get("accept", "").lower()
+    return "text/html" not in accept and (
+        "text/event-stream" in accept or "application/json" in accept
+    )
+
+
+@app.api_route("/", methods=["GET", "HEAD"], include_in_schema=False)
+async def read_index(request: Request):
+    if _is_mcp_probe_request(request):
+        mcp_user = await get_mcp_user(request)
+        return await mcp_discovery_probe(request, mcp_user)
+    credentials = await security_basic(request)
+    require_basic_auth(credentials)
     return FileResponse(os.path.join(STATIC_DIR, "index.html"))
 
 
@@ -113,15 +139,30 @@ async def read_manifest():
     return FileResponse(os.path.join(STATIC_DIR, "manifest.json"))
 
 
-@app.get("/favicon.ico", include_in_schema=False)
+@app.api_route("/favicon.ico", methods=["GET", "HEAD"], include_in_schema=False)
 async def read_favicon():
-    return FileResponse(os.path.join(os.path.dirname(__file__), "favicon.ico"))
+    return FileResponse(
+        os.path.join(os.path.dirname(__file__), "favicon.ico"),
+        headers={"Access-Control-Allow-Origin": "*"},
+    )
 
 
-@app.get("/icon.png", include_in_schema=False)
-@app.get("/favicon.png", include_in_schema=False)
+@app.api_route("/icon.png", methods=["GET", "HEAD"], include_in_schema=False)
+@app.api_route("/favicon.png", methods=["GET", "HEAD"], include_in_schema=False)
 async def read_icon_png():
-    return FileResponse(os.path.join(STATIC_DIR, "favicon.png"))
+    return FileResponse(
+        os.path.join(STATIC_DIR, "favicon.png"),
+        headers={"Access-Control-Allow-Origin": "*"},
+    )
+
+
+@app.api_route("/icon.svg", methods=["GET", "HEAD"], include_in_schema=False)
+async def read_icon_svg():
+    return Response(
+        content=DASH_SVG_ICON,
+        media_type="image/svg+xml",
+        headers={"Access-Control-Allow-Origin": "*"},
+    )
 
 
 @app.get("/llms.txt", summary="LLM Agent Instructions")

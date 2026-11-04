@@ -416,3 +416,103 @@ def test_oauth_deny_flow_and_edge_cases():
         ).status_code
         == 400
     )
+
+
+def test_root_mcp_probes_and_session_deletion():
+    from urllib.parse import parse_qs, urlparse
+
+    admin_auth = ("adminuser", "adminpass")
+    verifier, challenge = _pkce_pair()
+
+    # 1. Root bare-domain MCP pre-flight probes (GoogleOther / HEAD / POST / DELETE)
+    assert "resource_metadata=" in client.head("/").headers.get("WWW-Authenticate", "")
+    assert "resource_metadata=" in client.get(
+        "/", headers={"User-Agent": "GoogleOther"}
+    ).headers.get("WWW-Authenticate", "")
+    assert "resource_metadata=" in client.post(
+        "/", json={"jsonrpc": "2.0", "method": "ping", "id": 1}
+    ).headers.get("WWW-Authenticate", "")
+    assert "resource_metadata=" in client.delete("/").headers.get(
+        "WWW-Authenticate", ""
+    )
+
+    # 2. Icons (/icon.svg, /icon.png)
+    svg_res = client.get("/icon.svg")
+    assert svg_res.status_code == 200
+    assert "image/svg+xml" in svg_res.headers["content-type"]
+
+    # 3. Register client, lookup client public info, authorize, approve, exchange with Basic Auth
+    reg = client.post(
+        "/oauth/register",
+        json={
+            "client_name": "Gemini App Test",
+            "redirect_uris": ["https://vertexaisearch.cloud.google.com/oauth-redirect"],
+            "token_endpoint_auth_method": "client_secret_basic",
+        },
+    ).json()
+    cid = reg["client_id"]
+
+    info_res = client.get(f"/api/oauth/clients/{cid}")
+    assert info_res.status_code == 200
+    assert info_res.json()["client_name"] == "Gemini App Test"
+
+    sub_res = client.post(
+        "/oauth/authorize",
+        json={
+            "username": "charlie",
+            "client_id": cid,
+            "redirect_uri": "https://vertexaisearch.cloud.google.com/oauth-redirect",
+            "response_type": "code",
+            "state": "s99",
+            "code_challenge": challenge,
+            "code_challenge_method": "S256",
+        },
+    ).json()
+    req_id = sub_res["request_id"]
+    client.post(f"/api/oauth/pending/{req_id}/approve", auth=admin_auth)
+    poll = client.get(
+        f"/oauth/authorize/status/{req_id}",
+        params={"poll_token": sub_res["poll_token"]},
+    ).json()
+    code = parse_qs(urlparse(poll["redirect_url"]).query)["code"][0]
+
+    basic_creds = base64.b64encode(f"{cid}:secret".encode()).decode("ascii")
+    tok_res = client.post(
+        "/oauth/token",
+        data={
+            "grant_type": "authorization_code",
+            "code": code,
+            "redirect_uri": "https://vertexaisearch.cloud.google.com/oauth-redirect",
+            "code_verifier": verifier,
+        },
+        headers={
+            "Content-Type": "application/x-www-form-urlencoded",
+            "Authorization": f"Basic {basic_creds}",
+        },
+    )
+    assert tok_res.status_code == 200
+    access_token = tok_res.json()["access_token"]
+
+    # 4. Authenticated root / MCP discovery and JSON-RPC
+    root_get = client.get("/", headers={"Authorization": f"Bearer {access_token}"})
+    assert root_get.status_code == 200
+    assert "data:image/svg+xml;base64," in root_get.json()["serverInfo"]["icon"]
+
+    root_post = client.post(
+        "/",
+        json={"jsonrpc": "2.0", "method": "ping", "id": 7},
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    assert root_post.status_code == 200
+    assert root_post.json()["result"] == {}
+
+    # 5. Configure data lists oauth_sessions and allows deletion from /configure
+    cfg_data = client.get("/configure/data", auth=admin_auth).json()
+    assert any(s["token"] == access_token for s in cfg_data["oauth_sessions"])
+
+    del_res = client.delete(f"/api/oauth/sessions/{access_token}", auth=admin_auth)
+    assert del_res.status_code == 200
+    assert (
+        client.delete(f"/api/oauth/sessions/{access_token}", auth=admin_auth).status_code
+        == 404
+    )
