@@ -41,6 +41,19 @@
         </div>
     </div>
 
+    <div class="section" id="oauth-section">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+            <h2 style="margin: 0;">OAuth Connection Requests</h2>
+            <span id="oauth-pending-badge" class="oauth-badge" style="display: none;">0 Pending</span>
+        </div>
+        <p style="margin-top: 0; color: var(--text-secondary); font-size: 0.9rem;">
+            Approve or disapprove incoming OAuth 2.0 connection requests (such as Google Gemini App).
+        </p>
+        <div id="oauth-pending-list">
+            <div class="oauth-empty">No pending connection requests.</div>
+        </div>
+    </div>
+
     <div class="section" id="tokens-section">
         <h2>Tokens</h2>
         <div>
@@ -90,7 +103,8 @@
         <h2>MCP Server Connection</h2>
         <p>Use these details to connect an MCP client:</p>
         <div><strong>URL:</strong> <span id="mcp-url"></span></div>
-        <div><strong>Auth Header:</strong> Bearer &lt;YOUR_TOKEN&gt;</div>
+        <div style="margin-top: 6px;"><strong>OAuth 2.0 (Gemini App):</strong> Enter the URL above directly, provide your username, and approve the incoming request on this page.</div>
+        <div style="margin-top: 6px;"><strong>Auth Header:</strong> Bearer &lt;YOUR_TOKEN&gt;</div>
     </div>
 
     <script>
@@ -115,7 +129,7 @@
         document.getElementById('mcp-url').textContent = window.location.origin + '/mcp';
 
         async function loadData() {
-            const res = await fetch('/configure/data');
+            const res = await fetch('/configure/data', { cache: 'no-store', credentials: 'same-origin' });
             if (res.ok) {
                 const data = await res.json();
 
@@ -138,10 +152,90 @@
                     li.appendChild(btn);
                     tokensList.appendChild(li);
                 });
+
+                renderPendingOAuth(data.pending_oauth || []);
             } else if (res.status === 401) {
                 alert('Authentication required');
             }
         }
+
+        function renderPendingOAuth(pendingList) {
+            const listEl = document.getElementById('oauth-pending-list');
+            const badgeEl = document.getElementById('oauth-pending-badge');
+            if (!listEl) return;
+            listEl.innerHTML = '';
+
+            if (!Array.isArray(pendingList) || pendingList.length === 0) {
+                if (badgeEl) badgeEl.style.display = 'none';
+                const empty = document.createElement('div');
+                empty.className = 'oauth-empty';
+                empty.textContent = 'No pending connection requests.';
+                listEl.appendChild(empty);
+                return;
+            }
+
+            if (badgeEl) {
+                badgeEl.textContent = `${pendingList.length} Pending`;
+                badgeEl.style.display = 'inline-block';
+            }
+
+            pendingList.forEach((req) => {
+                const reqId = req.id || req.req_id;
+                const row = document.createElement('div');
+                row.className = 'oauth-pending-item';
+
+                const infoDiv = document.createElement('div');
+                const userStrong = document.createElement('strong');
+                userStrong.textContent = `Username: ${req.username}`;
+                infoDiv.appendChild(userStrong);
+
+                const metaDiv = document.createElement('div');
+                metaDiv.className = 'oauth-popup-meta';
+                const codeLabel = req.user_code ? ` | Code: ${req.user_code}` : '';
+                metaDiv.textContent = `Client: ${req.client_name || req.client_id}${codeLabel}`;
+                infoDiv.appendChild(metaDiv);
+
+                const btnGroup = document.createElement('div');
+                btnGroup.style.display = 'flex';
+                btnGroup.style.gap = '8px';
+
+                const approveBtn = document.createElement('button');
+                approveBtn.className = 'oauth-btn-approve';
+                approveBtn.textContent = '✔ Approve';
+
+                const denyBtn = document.createElement('button');
+                denyBtn.className = 'oauth-btn-deny';
+                denyBtn.textContent = '✘ Disapprove';
+
+                approveBtn.onclick = () => {
+                    if (window.handleOAuthDecision) {
+                        window.handleOAuthDecision(reqId, 'approve', approveBtn, denyBtn);
+                    }
+                };
+                denyBtn.onclick = () => {
+                    if (window.handleOAuthDecision) {
+                        window.handleOAuthDecision(reqId, 'deny', approveBtn, denyBtn);
+                    }
+                };
+
+                btnGroup.appendChild(approveBtn);
+                btnGroup.appendChild(denyBtn);
+
+                row.appendChild(infoDiv);
+                row.appendChild(btnGroup);
+                listEl.appendChild(row);
+            });
+        }
+
+        window.addEventListener('oauth-pending-data', (e) => {
+            if (e.detail && Array.isArray(e.detail.pending)) {
+                renderPendingOAuth(e.detail.pending);
+            }
+        });
+
+        window.addEventListener('oauth-requests-updated', () => {
+            loadData();
+        });
 
         async function createToken() {
             const name = document.getElementById('token-name').value;
@@ -233,5 +327,6 @@
             });
         }
     </script>
+    <script src="/static/oauth-notify.js"></script>
 </body>
 </html>

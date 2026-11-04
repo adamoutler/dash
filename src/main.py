@@ -3,6 +3,7 @@ import subprocess
 from typing import Annotated
 
 from fastapi import Depends, FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -10,6 +11,7 @@ from api.auth import get_current_user, require_basic_auth
 from api.explore import router as explore_router
 from api.routers.config_ui import router as config_ui_router
 from api.routers.mcp import router as mcp_router
+from api.routers.oauth import router as oauth_router
 from api.routers.repos import router as repos_router
 from api.routers.settings import router as settings_router
 from api.routers.workflows import router as workflows_router
@@ -63,6 +65,14 @@ app = FastAPI(
     version=APP_VERSION,
 )
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["GET", "HEAD", "POST", "DELETE", "OPTIONS"],
+    allow_headers=["*"],
+    expose_headers=["Mcp-Session-Id", "WWW-Authenticate", "Link"],
+)
+
 # Include Routers
 app.include_router(explore_router)
 app.include_router(settings_router)
@@ -70,6 +80,7 @@ app.include_router(repos_router)
 app.include_router(workflows_router)
 app.include_router(mcp_router)
 app.include_router(config_ui_router)
+app.include_router(oauth_router)
 
 
 @app.get("/api/version", summary="Get App Version")
@@ -105,6 +116,12 @@ async def read_manifest():
 @app.get("/favicon.ico", include_in_schema=False)
 async def read_favicon():
     return FileResponse(os.path.join(os.path.dirname(__file__), "favicon.ico"))
+
+
+@app.get("/icon.png", include_in_schema=False)
+@app.get("/favicon.png", include_in_schema=False)
+async def read_icon_png():
+    return FileResponse(os.path.join(STATIC_DIR, "favicon.png"))
 
 
 @app.get("/llms.txt", summary="LLM Agent Instructions")

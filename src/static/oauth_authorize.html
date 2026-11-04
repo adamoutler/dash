@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dash OAuth Authorization</title>
+    <link rel="icon" type="image/png" href="/static/favicon.png">
+    <link rel="stylesheet" href="/static/design-system.css">
+    <script>
+        (function() {
+            const savedTheme = localStorage.getItem('theme');
+            const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            if (savedTheme === 'dark' || (!savedTheme && systemPrefersDark)) {
+                document.documentElement.setAttribute('data-theme', 'dark');
+            } else {
+                document.documentElement.setAttribute('data-theme', 'light');
+            }
+        })();
+    </script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 16px;
+            box-sizing: border-box;
+        }
+        .oauth-card {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            max-width: 440px;
+            width: 100%;
+            padding: 28px;
+            box-shadow: 0 8px 24px var(--modal-shadow);
+        }
+        .oauth-card h1 {
+            margin: 0 0 8px 0;
+            font-size: 22px;
+        }
+        .oauth-subtitle {
+            color: var(--text-secondary);
+            font-size: 14px;
+            margin-bottom: 20px;
+            line-height: 1.4;
+        }
+        .oauth-field {
+            margin-bottom: 16px;
+        }
+        .oauth-field label {
+            display: block;
+            font-weight: 600;
+            font-size: 14px;
+            margin-bottom: 6px;
+        }
+        .oauth-field input {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--input-border);
+            border-radius: 6px;
+            background: var(--input-bg);
+            color: var(--input-text);
+            font-size: 15px;
+            box-sizing: border-box;
+        }
+        .oauth-error {
+            display: none;
+            background: var(--status-failure-bg);
+            color: var(--status-failure-color);
+            border: 1px solid var(--status-failure-border);
+            padding: 10px 12px;
+            border-radius: 6px;
+            font-size: 13px;
+            margin-bottom: 16px;
+        }
+        .oauth-info-box {
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 12px;
+            font-size: 13px;
+            margin-bottom: 18px;
+        }
+        .oauth-user-code {
+            display: inline-block;
+            font-family: monospace;
+            font-size: 18px;
+            font-weight: bold;
+            padding: 4px 10px;
+            border-radius: 6px;
+            background: var(--link-bg);
+            color: var(--link-color);
+            margin: 8px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="oauth-card">
+        <h1>🔐 Dash MCP Authorization</h1>
+        <p class="oauth-subtitle">
+            Enter your username to request MCP connection access. An administrator must approve your request from the Configure Dashboard screen.
+        </p>
+
+        <div id="oauth-error-box" class="oauth-error" role="alert"></div>
+
+        <div id="step-username">
+            <div class="oauth-info-box">
+                <div><strong>Client:</strong> <span id="client-display"></span></div>
+                <div style="margin-top: 4px;"><strong>Scope:</strong> <span id="scope-display"></span></div>
+            </div>
+
+            <form id="oauth-form">
+                <div class="oauth-field">
+                    <label for="username-input">Username</label>
+                    <input
+                        type="text"
+                        id="username-input"
+                        name="username"
+                        placeholder="Enter your username"
+                        required
+                        maxlength="64"
+                        pattern="[a-zA-Z0-9_.@-]{1,64}"
+                        autocomplete="username"
+                        autofocus
+                    >
+                </div>
+                <div class="oauth-popup-actions">
+                    <button type="submit" id="submit-btn" class="oauth-btn-approve">Request Access</button>
+                    <button type="button" id="cancel-btn" class="oauth-btn-deny">Cancel</button>
+                </div>
+            </form>
+        </div>
+
+        <div id="step-waiting" style="display: none; text-align: center;">
+            <div id="waiting-spinner" class="oauth-spinner"></div>
+            <h2 id="waiting-title" style="font-size: 18px; margin: 0 0 8px 0;">Waiting for Approval...</h2>
+            <p style="font-size: 14px; color: var(--text-secondary); margin: 0 0 12px 0;">
+                Open the <strong>Configure Dashboard</strong> screen (or use the notification popup) and click <strong>Approve</strong> for:
+            </p>
+            <div>
+                <div><strong>Username:</strong> <code id="waiting-username" class="oauth-username-badge"></code></div>
+                <div style="margin-top: 6px;"><strong>Request Code:</strong> <span id="waiting-code" class="oauth-user-code"></span></div>
+                <div id="waiting-timer" style="margin-top: 8px; font-size: 12px; color: var(--text-secondary);"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            const params = new URLSearchParams(window.location.search);
+            const clientId = params.get('client_id') || 'mcp-client';
+            const redirectUri = params.get('redirect_uri') || '';
+            const responseType = params.get('response_type') || 'code';
+            const state = params.get('state') || '';
+            const codeChallenge = params.get('code_challenge') || '';
+            const codeChallengeMethod = params.get('code_challenge_method') || 'S256';
+            const scope = params.get('scope') || 'mcp:access';
+
+            document.getElementById('client-display').textContent = clientId;
+            document.getElementById('scope-display').textContent = scope;
+
+            const errorBox = document.getElementById('oauth-error-box');
+            const stepUsername = document.getElementById('step-username');
+            const stepWaiting = document.getElementById('step-waiting');
+            const form = document.getElementById('oauth-form');
+            const submitBtn = document.getElementById('submit-btn');
+            const cancelBtn = document.getElementById('cancel-btn');
+
+            function showError(msg) {
+                errorBox.textContent = msg;
+                errorBox.style.display = 'block';
+            }
+
+            cancelBtn.addEventListener('click', () => {
+                if (redirectUri) {
+                    const sep = redirectUri.includes('?') ? '&' : '?';
+                    let target = redirectUri + sep + 'error=access_denied';
+                    if (state) {
+                        target += '&state=' + encodeURIComponent(state);
+                    }
+                    window.location.replace(target);
+                } else {
+                    showError('Authorization cancelled.');
+                }
+            });
+
+            let pollInterval = null;
+
+            function startPolling(requestId, pollToken) {
+                pollInterval = setInterval(async () => {
+                    try {
+                        const url = `/oauth/authorize/status/${encodeURIComponent(requestId)}?poll_token=${encodeURIComponent(pollToken)}`;
+                        const res = await fetch(url, { cache: 'no-store' });
+                        if (!res.ok) return;
+                        const data = await res.json();
+
+                        if (typeof data.remaining_seconds === 'number') {
+                            document.getElementById('waiting-timer').textContent =
+                                `Expires in ${data.remaining_seconds}s`;
+                        }
+
+                        if (data.status === 'approved' && data.redirect_url) {
+                            clearInterval(pollInterval);
+                            document.getElementById('waiting-title').textContent = '✔ Approved! Redirecting...';
+                            window.location.replace(data.redirect_url);
+                        } else if (data.status === 'denied') {
+                            clearInterval(pollInterval);
+                            document.getElementById('waiting-spinner').style.display = 'none';
+                            document.getElementById('waiting-title').textContent = '✘ Request Disapproved';
+                            showError('The connection request was disapproved from the Configure Dashboard.');
+                            if (data.redirect_url) {
+                                setTimeout(() => window.location.replace(data.redirect_url), 2000);
+                            }
+                        } else if (data.status === 'expired') {
+                            clearInterval(pollInterval);
+                            document.getElementById('waiting-spinner').style.display = 'none';
+                            document.getElementById('waiting-title').textContent = '⌛ Request Expired';
+                            showError('The approval request expired. Please return to the application and try again.');
+                        }
+                    } catch (err) {
+                        console.error('Status poll error:', err);
+                    }
+                }, 1500);
+            }
+
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                errorBox.style.display = 'none';
+                const username = document.getElementById('username-input').value.trim();
+                if (!username) {
+                    showError('Please enter your username.');
+                    return;
+                }
+
+                submitBtn.disabled = true;
+                submitBtn.textContent = 'Submitting...';
+
+                try {
+                    const res = await fetch('/oauth/authorize', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            username: username,
+                            client_id: clientId,
+                            redirect_uri: redirectUri,
+                            response_type: responseType,
+                            state: state,
+                            code_challenge: codeChallenge,
+                            code_challenge_method: codeChallengeMethod,
+                            scope: scope
+                        })
+                    });
+                    const data = await res.json();
+                    if (!res.ok) {
+                        showError(data.detail || 'Failed to submit authorization request.');
+                        submitBtn.disabled = false;
+                        submitBtn.textContent = 'Request Access';
+                        return;
+                    }
+
+                    stepUsername.style.display = 'none';
+                    stepWaiting.style.display = 'block';
+                    document.getElementById('waiting-username').textContent = username;
+                    document.getElementById('waiting-code').textContent = data.user_code || data.request_id;
+                    startPolling(data.request_id, data.poll_token || '');
+                } catch (err) {
+                    showError('Network error submitting authorization request.');
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Request Access';
+                }
+            });
+        })();
+    </script>
+</body>
+</html>

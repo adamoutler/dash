@@ -3,10 +3,10 @@ import json
 import urllib.parse
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel
 
-from api.auth import get_current_user
+from api.auth import get_mcp_user
 from api.services.workflow_service import WorkflowService
 from api.storage import RepoStorage
 
@@ -719,11 +719,87 @@ async def _handle_mcp_routing(
     }
 
 
+def _build_server_info(request: Request) -> dict[str, Any]:
+    from api.auth import get_base_url
+
+    base_url = get_base_url(request)
+    icon_url = f"{base_url}/icon.png"
+    return {
+        "name": "dashboard-mcp",
+        "version": "1.0.0",
+        "iconUrl": icon_url,
+        "icons": [
+            {"src": icon_url, "mimeType": "image/png", "sizes": ["192x192"]},
+        ],
+    }
+
+
+@router.api_route(
+    "/mcp",
+    methods=["GET", "HEAD", "DELETE"],
+    include_in_schema=False,
+)
+@router.api_route(
+    "/sse",
+    methods=["GET", "HEAD", "DELETE"],
+    include_in_schema=False,
+)
+async def mcp_discovery_probe(
+    request: Request,
+    user: Annotated[str, Depends(get_mcp_user)],
+):
+    if request.method == "HEAD":
+        return Response(status_code=200)
+    if request.method == "DELETE":
+        return {"status": "closed"}
+    accept = request.headers.get("accept", "")
+    if "text/event-stream" in accept:
+        return Response(
+            content=": mcp-stream-ready\n\n",
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache"},
+        )
+    return {
+        "mcp_version": "2024-11-05",
+        "protocolVersion": "2024-11-05",
+        "transport": "streamable-http",
+        "status": "authenticated",
+        "capabilities": {
+            "tools": {"listChanged": False},
+            "resources": {"listChanged": False},
+            "prompts": {"listChanged": False},
+        },
+        "serverInfo": _build_server_info(request),
+    }
+
+
+def _build_initialize_response(req: JsonRpcRequest, request: Request) -> dict[str, Any]:
+    requested_version = "2024-11-05"
+    if isinstance(req.params, dict):
+        client_ver = req.params.get("protocolVersion")
+        if client_ver in ("2025-06-18", "2025-03-26", "2024-11-05"):
+            requested_version = client_ver
+    return {
+        "jsonrpc": "2.0",
+        "id": req.id,
+        "result": {
+            "protocolVersion": requested_version,
+            "capabilities": {
+                "tools": {"listChanged": False},
+                "resources": {"listChanged": False},
+                "prompts": {"listChanged": False},
+            },
+            "serverInfo": _build_server_info(request),
+        },
+    }
+
+
 @router.post("/mcp", summary="MCP JSON-RPC Endpoint")
+@router.post("/sse", include_in_schema=False)
 async def mcp_endpoint(
     req: JsonRpcRequest,
     request: Request,
-    user: Annotated[str, Depends(get_current_user)],
+    user: Annotated[str, Depends(get_mcp_user)],
 ):
     from api.config import ConfigManager
 
@@ -739,24 +815,22 @@ async def mcp_endpoint(
 
     try:
         if req.method == "initialize":
-            return {
-                "jsonrpc": "2.0",
-                "id": req.id,
-                "result": {
-                    "protocolVersion": "2024-11-05",
-                    "capabilities": {"tools": {}},
-                    "serverInfo": {"name": "dashboard-mcp", "version": "1.0.0"},
-                },
-            }
+            return _build_initialize_response(req, request)
 
-        if req.method == "notifications/initialized":
-            return None
+        if req.method.startswith("notifications/"):
+            return Response(status_code=202)
 
         if req.method == "ping":
             return {"jsonrpc": "2.0", "id": req.id, "result": {}}
 
         if req.method == "tools/list":
             return _get_tools_list_response(req.id)
+
+        if req.method == "resources/list":
+            return {"jsonrpc": "2.0", "id": req.id, "result": {"resources": []}}
+
+        if req.method == "prompts/list":
+            return {"jsonrpc": "2.0", "id": req.id, "result": {"prompts": []}}
 
         is_tool_call, method_name, provider_arg, repo, workflow, branch = (
             _parse_mcp_request_args(req, request)

@@ -28,10 +28,12 @@ async def create_new_token(
 @router.get("/data")
 async def get_configure_data(user: Annotated[str, Depends(require_basic_auth)]):
     from api.auth import token_manager
+    from api.routers.oauth import oauth_manager
 
     repos = storage.get_repos()
     tokens = token_manager.list_tokens()
-    return {"repos": repos, "tokens": tokens}
+    pending_oauth = oauth_manager.list_pending_requests()
+    return {"repos": repos, "tokens": tokens, "pending_oauth": pending_oauth}
 
 
 @router.delete("/tokens/{token}", responses={404: {"description": "Token not found"}})

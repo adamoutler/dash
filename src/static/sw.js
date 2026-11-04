@@ -33,8 +33,13 @@ self.addEventListener('activate', event => {
 
 self.addEventListener('fetch', event => {
     const url = new URL(event.request.url);
-    if (url.pathname.startsWith('/api/')) {
-        // Network First for APIs
+    if (
+        url.pathname.startsWith('/api/') ||
+        url.pathname.startsWith('/oauth') ||
+        url.pathname.startsWith('/configure') ||
+        url.pathname.startsWith('/.well-known')
+    ) {
+        // Network First for APIs and OAuth endpoints
         event.respondWith(
             self['fetch'](event.request).catch(() => {
                 return self['caches']['match'](event.request);
