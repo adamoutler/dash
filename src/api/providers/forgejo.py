@@ -344,6 +344,7 @@ Recommendations:
 
     async def explore(self, path: str) -> List[Node]:
         from urllib.parse import urlparse
+
         scheme = urlparse(self.url).scheme if self.url else ""
         if scheme not in ("http", "https"):
             raise ProviderPathNotFoundError("Forgejo URL is missing or invalid")

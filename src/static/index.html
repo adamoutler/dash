@@ -524,12 +524,19 @@
                 iconPath = '/assets/img/favicon.svg';
             }
 
-            const faviconHtml = `<img src="${baseUrl}${iconPath}" class="provider-icon provider-${item.provider}" style="width: 18px; height: 18px; margin-right: 8px; vertical-align: middle;" onerror="this.style.display='none'">`;
+            const faviconHtml = `<img src="${baseUrl}${iconPath}" class="provider-icon provider-${item.provider}" style="width: 18px; height: 18px; margin-right: 8px; vertical-align: middle; flex-shrink: 0;" onerror="this.style.display='none'">`;
+            const rawCommitMsg = item.commit_message || 'No commit info';
+            const safeCommitMsg = String(rawCommitMsg)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
 
             return `
             <div class="repo-item">
-                <a href="${item.url}" target="_blank" class="status-block ${getStatusClass(item.status)}" style="${progressHtml ? 'flex-direction: column; padding: 10px; gap: 4px;' : ''}">
-                    <div>${getStatusIcon(item.status)}</div>
+                <a href="${item.url}" target="_blank" class="status-block ${getStatusClass(item.status)}" style="${progressHtml ? 'flex-direction: column; padding: 10px 4px; gap: 4px;' : ''}">
+                    <div style="white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis;">${getStatusIcon(item.status)}</div>
                     ${progressHtml}
                 </a>                <div class="info-block">
                     <div class="info-header">
@@ -545,8 +552,8 @@
                             <button class="icon-btn delete-btn" onclick="removeRepo('${item.provider}', '${item.owner}', '${item.repo}', '${item.workflow_id || ''}', '${item.branch || ''}')" title="Remove">✕</button>
                         </div>
                     </div>
-                    <a href="${item.repo_url}" target="_blank" style="text-decoration: none; color: inherit;">
-                        <div class="commit-msg">${item.commit_message || 'No commit info'}</div>
+                    <a href="${item.repo_url}" target="_blank" style="text-decoration: none; color: inherit; display: block; min-width: 0; max-width: 100%;">
+                        <div class="commit-msg" title="${safeCommitMsg}">${safeCommitMsg}</div>
                     </a>
                     ${linksHtml}
                 </div>
@@ -621,7 +628,8 @@
             const res = await fetch('/api/version');
             if (res.ok) {
                 const data = await res.json();
-                document.getElementById('appVersionDisplay').innerText = `v${data.version}`;
+                const ver = String(data.version || '');
+                document.getElementById('appVersionDisplay').innerText = ver.startsWith('v') ? ver : `v${ver}`;
             }
         } catch (e) {
             console.error("Error fetching version:", e);

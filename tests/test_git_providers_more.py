@@ -45,8 +45,8 @@ async def test_fetch_github_logs(mock_get):
     mock_jobs.status_code = 200
     mock_jobs.json.return_value = {
         "jobs": [
-            {"id": 2, "conclusion": "success"},
-            {"id": 3, "conclusion": "failure"},
+            {"id": 2, "name": "build", "conclusion": "success"},
+            {"id": 3, "name": "test", "conclusion": "failure"},
         ]
     }
 
@@ -54,15 +54,19 @@ async def test_fetch_github_logs(mock_get):
     mock_logs.status_code = 200
     mock_logs.text = "logs here"
 
-    mock_get.side_effect = [mock_runs, mock_jobs, mock_logs]
+    mock_get.side_effect = [mock_runs, mock_jobs, mock_logs, mock_logs]
 
     provider = GitHubProvider("token")
     res = await provider.fetch_logs("owner", "repo")
-    assert res == "logs here"
+    assert "logs here" in res
+    assert "--- Job: build ---" in res
+    assert "--- Job: test ---" in res
 
-    # Verify the failed job log was requested
-    call_args = mock_get.call_args_list[2]
-    assert "/actions/jobs/3/logs" in call_args[0][0]
+    # Verify both job logs were requested
+    call_args_2 = mock_get.call_args_list[2]
+    call_args_3 = mock_get.call_args_list[3]
+    assert "/actions/jobs/2/logs" in call_args_2[0][0]
+    assert "/actions/jobs/3/logs" in call_args_3[0][0]
 
     # Test jobs_resp != 200
     mock_jobs_err = MagicMock()
@@ -82,9 +86,9 @@ async def test_fetch_github_logs(mock_get):
     # Test logs_resp != 200
     mock_logs_err = MagicMock()
     mock_logs_err.status_code = 404
-    mock_get.side_effect = [mock_runs, mock_jobs, mock_logs_err]
+    mock_get.side_effect = [mock_runs, mock_jobs, mock_logs_err, mock_logs_err]
     res_logs_err = await provider.fetch_logs("owner", "repo")
-    assert "Failed to fetch logs. HTTP 404" in res_logs_err
+    assert "Failed to fetch any job logs." in res_logs_err
 
 
 @pytest.mark.asyncio

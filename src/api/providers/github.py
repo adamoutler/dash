@@ -217,11 +217,13 @@ class GitHubProvider(BaseProvider):
                     )
                     if logs_resp.status_code == 200:
                         # Append job name as a header to separate logs visually
-                        all_logs.append(f"--- Job: {j.get('name')} ---\n{logs_resp.text}")
-                
+                        all_logs.append(
+                            f"--- Job: {j.get('name')} ---\n{logs_resp.text}"
+                        )
+
                 if all_logs:
                     return "\n".join(all_logs)
-                
+
                 return "Failed to fetch any job logs."
         except Exception:
             return "Error fetching GitHub logs."

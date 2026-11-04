@@ -16,6 +16,26 @@ def test_read_index():
     response = client.get("/", auth=("testuser", "testpass"))
     assert response.status_code == 200
     assert "Dash" in response.text
+    assert (
+        "white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis;"
+        in response.text
+    )
+
+
+def test_status_indicator_sizing_css():
+    css_res = client.get("/static/design-system.css")
+    assert css_res.status_code == 200
+    css = css_res.text
+    assert "flex: 0 0 120px;" in css
+    assert "min-width: 120px;" in css
+    assert "max-width: 120px;" in css
+    assert "align-self: stretch;" in css
+    assert "text-overflow: ellipsis;" in css
+    assert "-webkit-line-clamp: 2;" in css
+
+    sw_res = client.get("/sw.js")
+    assert sw_res.status_code == 200
+    assert "ci-dashboard-v5" in sw_res.text
 
 
 def test_add_and_get_repos():
