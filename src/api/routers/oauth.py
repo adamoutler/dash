@@ -762,6 +762,10 @@ async def oauth_token_exchange(request: Request):
 
 
 @router.get(
+    "/oauth/clients/{client_id}",
+    include_in_schema=False,
+)
+@router.get(
     "/api/oauth/clients/{client_id}",
     include_in_schema=False,
 )

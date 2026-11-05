@@ -4,8 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dash OAuth Authorization</title>
-    <link rel="icon" type="image/png" href="/static/favicon.png">
-    <link rel="stylesheet" href="/static/design-system.css">
+    <link rel="icon" type="image/png" href="/oauth/icon.png">
     <script>
         (function() {
             const savedTheme = localStorage.getItem('theme');
@@ -18,6 +17,44 @@
         })();
     </script>
     <style>
+        :root {
+            --bg-primary: #f6f8fa;
+            --bg-surface: #ffffff;
+            --text-primary: #24292e;
+            --text-secondary: #586069;
+            --border-color: #e1e4e8;
+            --btn-primary-bg: #2ea44f;
+            --btn-primary-text: #ffffff;
+            --status-failure-bg: #ffebee;
+            --status-failure-color: #c62828;
+            --status-failure-border: #e1e4e8;
+            --link-color: #0366d6;
+            --link-bg: #f1f8ff;
+            --modal-shadow: rgba(0,0,0,0.2);
+            --input-border: #d1d5da;
+            --input-bg: #ffffff;
+            --input-text: #24292e;
+            --danger-color: #cb2431;
+        }
+        [data-theme="dark"] {
+            --bg-primary: #0d1117;
+            --bg-surface: #161b22;
+            --text-primary: #c9d1d9;
+            --text-secondary: #8b949e;
+            --border-color: #30363d;
+            --btn-primary-bg: #238636;
+            --btn-primary-text: #ffffff;
+            --status-failure-bg: #161b22;
+            --status-failure-color: #f85149;
+            --status-failure-border: #da3633;
+            --link-color: #58a6ff;
+            --link-bg: rgba(56, 139, 253, 0.1);
+            --modal-shadow: rgba(0,0,0,0.6);
+            --input-border: #30363d;
+            --input-bg: #0d1117;
+            --input-text: #c9d1d9;
+            --danger-color: #f85149;
+        }
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             background: var(--bg-primary);
@@ -97,6 +134,51 @@
             color: var(--link-color);
             margin: 8px 0;
         }
+        .oauth-popup-actions {
+            display: flex;
+            gap: 8px;
+        }
+        .oauth-btn-approve {
+            flex: 1;
+            background: var(--btn-primary-bg);
+            color: var(--btn-primary-text);
+            border: none;
+            border-radius: 6px;
+            padding: 8px 12px;
+            font-weight: 600;
+            font-size: 13px;
+            cursor: pointer;
+        }
+        .oauth-btn-deny {
+            flex: 1;
+            background: transparent;
+            color: var(--danger-color);
+            border: 1px solid var(--danger-color);
+            border-radius: 6px;
+            padding: 8px 12px;
+            font-weight: 600;
+            font-size: 13px;
+            cursor: pointer;
+        }
+        .oauth-username-badge {
+            background: var(--link-bg);
+            color: var(--link-color);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 600;
+        }
+        .oauth-spinner {
+            width: 32px;
+            height: 32px;
+            border: 3px solid var(--border-color);
+            border-top-color: var(--link-color);
+            border-radius: 50%;
+            animation: oauth-spin 0.9s linear infinite;
+            margin: 0 auto 14px auto;
+        }
+        @keyframes oauth-spin {
+            to { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body>
@@ -165,7 +247,7 @@
             document.getElementById('scope-display').textContent = scope;
 
             if (clientId) {
-                fetch(`/api/oauth/clients/${encodeURIComponent(clientId)}`, { cache: 'no-store' })
+                fetch(`/oauth/clients/${encodeURIComponent(clientId)}`, { cache: 'no-store' })
                     .then(r => r.ok ? r.json() : null)
                     .then(info => {
                         if (info && info.client_name) {

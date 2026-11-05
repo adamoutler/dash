@@ -734,8 +734,8 @@ def _build_server_info(request: Request) -> dict[str, Any]:
     from api.auth import get_base_url
 
     base_url = get_base_url(request)
-    icon_url = f"{base_url}/icon.png"
-    svg_url = f"{base_url}/icon.svg"
+    icon_url = f"{base_url}/mcp/icon.png"
+    svg_url = f"{base_url}/mcp/icon.svg"
     icon_data_uri = "data:image/svg+xml;base64," + base64.b64encode(
         DASH_SVG_ICON.encode("utf-8")
     ).decode("ascii")

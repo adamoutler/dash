@@ -3,7 +3,7 @@
   "info": {
     "title": "Dash API",
     "description": "API for tracking and monitoring continuous integration workflows.",
-    "version": "v0.2.7.248"
+    "version": "v0.2.7.251"
   },
   "paths": {
     "/api/explore/{provider}/nodes": {
@@ -1068,6 +1068,54 @@
             "content": {
               "application/json": {
                 "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/oauth/sessions/{token}": {
+      "delete": {
+        "tags": [
+          "oauth"
+        ],
+        "summary": "Delete Connected OAuth Session",
+        "operationId": "delete_oauth_session_api_oauth_sessions__token__delete",
+        "security": [
+          {
+            "HTTPBasic": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "404": {
+            "description": "OAuth session not found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
               }
             }
           }

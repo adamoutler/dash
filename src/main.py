@@ -149,6 +149,8 @@ async def read_favicon():
 
 @app.api_route("/icon.png", methods=["GET", "HEAD"], include_in_schema=False)
 @app.api_route("/favicon.png", methods=["GET", "HEAD"], include_in_schema=False)
+@app.api_route("/mcp/icon.png", methods=["GET", "HEAD"], include_in_schema=False)
+@app.api_route("/oauth/icon.png", methods=["GET", "HEAD"], include_in_schema=False)
 async def read_icon_png():
     return FileResponse(
         os.path.join(STATIC_DIR, "favicon.png"),
@@ -157,6 +159,8 @@ async def read_icon_png():
 
 
 @app.api_route("/icon.svg", methods=["GET", "HEAD"], include_in_schema=False)
+@app.api_route("/mcp/icon.svg", methods=["GET", "HEAD"], include_in_schema=False)
+@app.api_route("/oauth/icon.svg", methods=["GET", "HEAD"], include_in_schema=False)
 async def read_icon_svg():
     return Response(
         content=DASH_SVG_ICON,
