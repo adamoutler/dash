@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ci-dashboard-v6';
+const CACHE_NAME = 'ci-dashboard-v7';
 const STATIC_ASSETS = [
     '/',
     '/static/index.html',
@@ -11,6 +11,7 @@ const STATIC_ASSETS = [
 ];
 
 self.addEventListener('install', event => {
+    self.skipWaiting();
     event.waitUntil(
         self['caches']['open'](CACHE_NAME).then(cache => {
             return cache.addAll(STATIC_ASSETS);
@@ -26,31 +27,54 @@ self.addEventListener('activate', event => {
                     if (cacheName !== CACHE_NAME) {
                         return self['caches']['delete'](cacheName);
                     }
+                    return Promise.resolve();
                 })
             );
-        })
+        }).then(() => self.clients.claim())
     );
 });
 
 self.addEventListener('fetch', event => {
     const url = new URL(event.request.url);
+    if (url.origin !== self.location.origin) {
+        return;
+    }
+
     if (
         url.pathname.startsWith('/api/') ||
         url.pathname.startsWith('/oauth') ||
         url.pathname.startsWith('/configure') ||
         url.pathname.startsWith('/.well-known')
     ) {
-        // Network First for APIs and OAuth endpoints
+        // Network First for APIs and OAuth endpoints, with valid Response fallback
         event.respondWith(
             self['fetch'](event.request).catch(() => {
-                return self['caches']['match'](event.request);
+                return self['caches']['match'](event.request).then(cached => {
+                    return cached || new Response(
+                        JSON.stringify({ error: 'Network error or server unreachable' }),
+                        {
+                            status: 503,
+                            statusText: 'Service Unavailable',
+                            headers: { 'Content-Type': 'application/json' }
+                        }
+                    );
+                });
             })
         );
     } else {
-        // Cache First for static assets
+        // Cache First for static assets, with valid Response fallback
         event.respondWith(
             self['caches']['match'](event.request).then(response => {
-                return response || self['fetch'](event.request);
+                if (response) {
+                    return response;
+                }
+                return self['fetch'](event.request).catch(() => {
+                    return new Response('Offline or asset unavailable', {
+                        status: 503,
+                        statusText: 'Service Unavailable',
+                        headers: { 'Content-Type': 'text/plain' }
+                    });
+                });
             })
         );
     }
