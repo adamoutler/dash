@@ -37,7 +37,52 @@ def test_status_indicator_sizing_css():
 
     sw_res = client.get("/sw.js")
     assert sw_res.status_code == 200
-    assert "ci-dashboard-v7" in sw_res.text
+    assert "ci-dashboard-v8" in sw_res.text
+
+
+def test_automatic_light_dark_theme_support():
+    # Verify index page includes color-scheme and auto theme logic
+    res = client.get("/", auth=("testuser", "testpass"))
+    assert res.status_code == 200
+    assert '<meta name="color-scheme" content="light dark">' in res.text
+    assert "prefers-color-scheme: dark" in res.text
+    assert "data-theme-preference" in res.text
+
+    # Verify configure page includes color-scheme and auto theme logic
+    res_conf = client.get("/configure", auth=("testuser", "testpass"))
+    assert res_conf.status_code == 200
+    assert '<meta name="color-scheme" content="light dark">' in res_conf.text
+    assert "prefers-color-scheme: dark" in res_conf.text
+    assert "data-theme-preference" in res_conf.text
+
+    # Verify CSS includes prefers-color-scheme media query and color-scheme properties
+    css_res = client.get("/static/design-system.css")
+    assert css_res.status_code == 200
+    assert "@media (prefers-color-scheme: dark)" in css_res.text
+    assert "color-scheme: dark;" in css_res.text
+    assert "color-scheme: light;" in css_res.text
+
+
+def test_node_version_configuration():
+    import json
+    from pathlib import Path
+
+    # Verify package.json engines specifies >=26.0.0
+    pkg_path = Path(__file__).resolve().parent.parent / "package.json"
+    with open(pkg_path, "r", encoding="utf-8") as f:
+        pkg = json.load(f)
+    assert pkg.get("engines", {}).get("node") == ">=26.0.0"
+
+    # Verify dev and prod GitHub Actions workflows specify node-version 26
+    dev_workflow = (
+        Path(__file__).resolve().parent.parent / ".github" / "workflows" / "dev.yml"
+    )
+    assert "node-version: '26'" in dev_workflow.read_text(encoding="utf-8")
+
+    prod_workflow = (
+        Path(__file__).resolve().parent.parent / ".github" / "workflows" / "prod.yml"
+    )
+    assert "node-version: '26'" in prod_workflow.read_text(encoding="utf-8")
 
 
 def test_add_and_get_repos():
@@ -157,10 +202,14 @@ def test_invalid_url_handled_gracefully():
     auth = ("testuser", "testpass")
     long_segment = "a" * 3000
     for provider in ("github", "forgejo", "jenkins"):
-        for endpoint in ("/api/artifacts", "/api/branches", "/api/logs", "/api/workflows"):
+        for endpoint in (
+            "/api/artifacts",
+            "/api/branches",
+            "/api/logs",
+            "/api/workflows",
+        ):
             res = client.get(
                 f"{endpoint}?provider={provider}&owner={long_segment}&repo={long_segment}",
                 auth=auth,
             )
             assert res.status_code == 200
-

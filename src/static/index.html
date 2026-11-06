@@ -5,19 +5,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dash</title>
     <link rel="manifest" href="/manifest.json">
+    <meta name="color-scheme" content="light dark">
     <meta name="theme-color" content="#ffffff" id="theme-color-meta">
     <link rel="icon" type="image/png" href="/static/favicon.png">
     <link rel="apple-touch-icon" href="/static/img/icon-192.png">
     <link rel="stylesheet" href="/static/design-system.css">
     <script>
         (function() {
-            const savedTheme = localStorage.getItem('theme');
-            const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-            if (savedTheme === 'dark' || (!savedTheme && systemPrefersDark)) {
-                document.documentElement.setAttribute('data-theme', 'dark');
-            } else {
-                document.documentElement.setAttribute('data-theme', 'light');
-            }
+            try {
+                const savedTheme = localStorage.getItem('theme') || 'auto';
+                const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                const effectiveTheme = (savedTheme === 'dark' || (savedTheme === 'auto' && systemPrefersDark)) ? 'dark' : 'light';
+                document.documentElement.setAttribute('data-theme', effectiveTheme);
+                document.documentElement.setAttribute('data-theme-preference', savedTheme);
+                const meta = document.getElementById('theme-color-meta');
+                if (meta) meta.setAttribute('content', effectiveTheme === 'dark' ? '#161b22' : '#ffffff');
+            } catch (e) {}
         })();
     </script>
     <style>
@@ -567,20 +570,64 @@
     }
 
     function updateThemeIcon() {
+        const pref = localStorage.getItem('theme') || 'auto';
         const currentTheme = document.documentElement.getAttribute('data-theme');
         const icon = document.getElementById('themeIcon');
+        const btn = document.querySelector('.theme-toggle-btn');
         if (icon) {
-            icon.innerText = currentTheme === 'dark' ? '🌙' : '☀️';
+            if (pref === 'auto') {
+                icon.innerText = '🌗';
+                if (btn) {
+                    btn.title = `Theme: Auto (${currentTheme === 'dark' ? 'Dark' : 'Light'}) - Click for Light`;
+                    btn.setAttribute('aria-label', btn.title);
+                }
+            } else if (pref === 'light') {
+                icon.innerText = '☀️';
+                if (btn) {
+                    btn.title = 'Theme: Light - Click for Dark';
+                    btn.setAttribute('aria-label', btn.title);
+                }
+            } else {
+                icon.innerText = '🌙';
+                if (btn) {
+                    btn.title = 'Theme: Dark - Click for Auto (Device)';
+                    btn.setAttribute('aria-label', btn.title);
+                }
+            }
         }
     }
 
     function toggleTheme() {
-        const currentTheme = document.documentElement.getAttribute('data-theme');
-        const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-        document.documentElement.setAttribute('data-theme', newTheme);
-        localStorage.setItem('theme', newTheme);
-        document.getElementById('theme-color-meta').setAttribute('content', newTheme === 'dark' ? '#161b22' : '#ffffff');
+        const pref = localStorage.getItem('theme') || 'auto';
+        let nextPref;
+        if (pref === 'auto') {
+            nextPref = 'light';
+        } else if (pref === 'light') {
+            nextPref = 'dark';
+        } else {
+            nextPref = 'auto';
+        }
+        localStorage.setItem('theme', nextPref);
+        document.documentElement.setAttribute('data-theme-preference', nextPref);
+        const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const effectiveTheme = (nextPref === 'dark' || (nextPref === 'auto' && systemPrefersDark)) ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-theme', effectiveTheme);
+        const meta = document.getElementById('theme-color-meta');
+        if (meta) meta.setAttribute('content', effectiveTheme === 'dark' ? '#161b22' : '#ffffff');
         updateThemeIcon();
+    }
+
+    if (window.matchMedia) {
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+            const pref = localStorage.getItem('theme') || 'auto';
+            if (pref === 'auto') {
+                const effective = e.matches ? 'dark' : 'light';
+                document.documentElement.setAttribute('data-theme', effective);
+                const meta = document.getElementById('theme-color-meta');
+                if (meta) meta.setAttribute('content', effective === 'dark' ? '#161b22' : '#ffffff');
+                updateThemeIcon();
+            }
+        });
     }
 
     // Set initial icon on load

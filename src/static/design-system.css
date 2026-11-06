@@ -1,4 +1,5 @@
 :root {
+    color-scheme: light;
     --bg-primary: #f6f8fa;
     --bg-surface: #ffffff;
     --text-primary: #24292e;
@@ -42,6 +43,65 @@
 
     --danger-color: #cb2431;
     --progress-bg: rgba(0,0,0,0.1);
+}
+
+:root[data-theme="dark"] {
+    color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]):not([data-theme="dark"]) {
+        color-scheme: dark;
+        --bg-primary: #0d1117;
+        --bg-surface: #161b22;
+        --text-primary: #c9d1d9;
+        --text-secondary: #8b949e;
+        --border-color: #30363d;
+
+        --btn-primary-bg: #238636;
+        --btn-primary-text: #ffffff;
+
+        --status-success-bg: #161b22;
+        --status-success-color: #3fb950;
+        --status-success-border: #238636;
+
+        --status-failure-bg: #161b22;
+        --status-failure-color: #f85149;
+        --status-failure-border: #da3633;
+
+        --status-running-bg: #161b22;
+        --status-running-color: #d29922;
+        --status-running-border: #9e6a03;
+
+        --status-error-bg: #161b22;
+        --status-error-color: #8b949e;
+        --status-error-border: #30363d;
+
+        --link-color: #58a6ff;
+        --link-bg: rgba(56, 139, 253, 0.1);
+        --link-bg-hover: rgba(56, 139, 253, 0.2);
+
+        --modal-bg: #161b22;
+        --modal-border: #30363d;
+        --modal-shadow: rgba(0,0,0,0.5);
+        --modal-backdrop: rgba(0,0,0,0.8);
+
+        --log-bg: #0d1117;
+        --log-color: #e6edf3;
+
+        --input-border: #30363d;
+        --input-bg: #0d1117;
+        --input-text: #c9d1d9;
+
+        --danger-color: #f85149;
+        --progress-bg: rgba(255,255,255,0.1);
+    }
+
+    :root:not([data-theme="light"]):not([data-theme="dark"]) .provider-icon.provider-github,
+    :root:not([data-theme="light"]):not([data-theme="dark"]) .provider-icon.provider-forgejo,
+    :root:not([data-theme="light"]):not([data-theme="dark"]) .provider-icon.provider-gitea {
+        filter: brightness(0) invert(1);
+    }
 }
 
 [data-theme="dark"] {

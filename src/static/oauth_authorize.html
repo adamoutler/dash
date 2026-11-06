@@ -5,16 +5,25 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dash OAuth Authorization</title>
     <link rel="icon" type="image/png" href="/oauth/icon.png">
+    <meta name="color-scheme" content="light dark">
     <script>
         (function() {
-            const savedTheme = localStorage.getItem('theme');
-            const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-            if (savedTheme === 'dark' || (!savedTheme && systemPrefersDark)) {
-                document.documentElement.setAttribute('data-theme', 'dark');
-            } else {
-                document.documentElement.setAttribute('data-theme', 'light');
-            }
+            try {
+                const savedTheme = localStorage.getItem('theme') || 'auto';
+                const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                const effectiveTheme = (savedTheme === 'dark' || (savedTheme === 'auto' && systemPrefersDark)) ? 'dark' : 'light';
+                document.documentElement.setAttribute('data-theme', effectiveTheme);
+                document.documentElement.setAttribute('data-theme-preference', savedTheme);
+            } catch (e) {}
         })();
+        if (window.matchMedia) {
+            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+                const pref = localStorage.getItem('theme') || 'auto';
+                if (pref === 'auto') {
+                    document.documentElement.setAttribute('data-theme', e.matches ? 'dark' : 'light');
+                }
+            });
+        }
     </script>
     <style>
         :root {
