@@ -4,7 +4,9 @@ WORKDIR /app
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel jaraco.context && \
-    pip install --no-cache-dir -r requirements.txt
+    pip install --no-cache-dir -r requirements.txt && \
+    pip uninstall -y pre-commit virtualenv pip && \
+    rm -rf /usr/local/lib/python3.11/ensurepip
 
 COPY src/ src/
 
