@@ -9,7 +9,16 @@ from api.providers.base import BaseProvider, ProviderPathNotFoundError
 
 ACCEPT_JSON = "application/json"
 logger = logging.getLogger(__name__)
-PROVIDER_EXC = (httpx.HTTPError, ValueError, KeyError, TypeError, RuntimeError, OSError)
+PROVIDER_EXC = (
+    httpx.HTTPError,
+    httpx.InvalidURL,
+    httpx.StreamError,
+    ValueError,
+    KeyError,
+    TypeError,
+    RuntimeError,
+    OSError,
+)
 
 
 class ForgejoProvider(BaseProvider):

@@ -9,7 +9,16 @@ from api.providers.base import BaseProvider, ProviderPathNotFoundError
 
 ACCEPT_GITHUB_JSON = "application/vnd.github.v3+json"
 logger = logging.getLogger(__name__)
-PROVIDER_EXC = (httpx.HTTPError, ValueError, KeyError, TypeError, RuntimeError, OSError)
+PROVIDER_EXC = (
+    httpx.HTTPError,
+    httpx.InvalidURL,
+    httpx.StreamError,
+    ValueError,
+    KeyError,
+    TypeError,
+    RuntimeError,
+    OSError,
+)
 
 
 NO_COMMIT_MSG = "No commit message"

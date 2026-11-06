@@ -17,16 +17,18 @@ def get_log_filename(
     workflow_id: str | None = None,
     branch: str | None = None,
 ) -> str:
-    safe_provider = "".join(c for c in provider if c.isalnum() or c in "-_")
-    safe_owner = "".join(c for c in owner if c.isalnum() or c in "-_")
-    safe_repo = "".join(c for c in repo if c.isalnum() or c in "-_")
+    safe_provider = "".join(c for c in provider if c.isalnum() or c in "-_")[:32]
+    safe_owner = "".join(c for c in owner if c.isalnum() or c in "-_")[:50]
+    safe_repo = "".join(c for c in repo if c.isalnum() or c in "-_")[:50]
     safe_wf = (
-        ("_" + "".join(c for c in workflow_id if c.isalnum() or c in "-_"))
+        ("_" + "".join(c for c in workflow_id if c.isalnum() or c in "-_")[:50])
         if workflow_id
         else ""
     )
     safe_branch = (
-        ("_" + "".join(c for c in branch if c.isalnum() or c in "-_")) if branch else ""
+        ("_" + "".join(c for c in branch if c.isalnum() or c in "-_")[:50])
+        if branch
+        else ""
     )
     return f"{safe_provider}_{safe_owner}_{safe_repo}{safe_branch}{safe_wf}_latest.log"
 

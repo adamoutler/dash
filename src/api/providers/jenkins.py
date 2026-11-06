@@ -6,6 +6,17 @@ import httpx
 from api.models.domain import Node, NodeType
 from api.providers.base import BaseProvider, ProviderPathNotFoundError
 
+PROVIDER_EXC = (
+    httpx.HTTPError,
+    httpx.InvalidURL,
+    httpx.StreamError,
+    ValueError,
+    KeyError,
+    TypeError,
+    RuntimeError,
+    OSError,
+)
+
 
 class JenkinsProvider(BaseProvider):
     def __init__(self, user: str, token: str, url: str):
@@ -36,14 +47,7 @@ class JenkinsProvider(BaseProvider):
         try:
             async with httpx.AsyncClient(timeout=10.0, auth=auth) as client:
                 return await self._resolve_jenkins_status(client, base_url, owner, repo)
-        except (
-            httpx.HTTPError,
-            ValueError,
-            KeyError,
-            TypeError,
-            RuntimeError,
-            OSError,
-        ):
+        except PROVIDER_EXC:
             return self._error_result("jenkins", owner, repo)
 
     def _extract_jenkins_status(self, status: str, last_build: dict | None) -> str:
@@ -178,14 +182,7 @@ class JenkinsProvider(BaseProvider):
         try:
             async with httpx.AsyncClient(timeout=10.0, auth=auth) as client:
                 return await self._resolve_jenkins_logs(client, base_url, max_depth=3)
-        except (
-            httpx.HTTPError,
-            ValueError,
-            KeyError,
-            TypeError,
-            RuntimeError,
-            OSError,
-        ):
+        except PROVIDER_EXC:
             return "Error fetching Jenkins logs."
 
     async def _resolve_jenkins_logs(self, client, url, max_depth=3):

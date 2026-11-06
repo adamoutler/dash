@@ -151,3 +151,16 @@ def test_log_filename_isolation():
     assert name_with_branch != name_with_other_branch
     assert "_main_" in name_with_branch
     assert "_feature_" in name_with_other_branch
+
+
+def test_invalid_url_handled_gracefully():
+    auth = ("testuser", "testpass")
+    long_segment = "a" * 3000
+    for provider in ("github", "forgejo", "jenkins"):
+        for endpoint in ("/api/artifacts", "/api/branches", "/api/logs", "/api/workflows"):
+            res = client.get(
+                f"{endpoint}?provider={provider}&owner={long_segment}&repo={long_segment}",
+                auth=auth,
+            )
+            assert res.status_code == 200
+
