@@ -45,16 +45,23 @@ def test_token_endpoints():
     data_resp = response.json()
     assert "repos" in data_resp
     assert "tokens" in data_resp
-    assert any(t["token"] == token for t in data_resp["tokens"])
-    token_data = next(t for t in data_resp["tokens"] if t["token"] == token)
-    assert token_data["name"] == "test_token"
+    assert not any(t["token"] == token for t in data_resp["tokens"])
+    token_data = next(t for t in data_resp["tokens"] if t["name"] == "test_token")
+    assert token_data["token"].startswith("tok_")
+    assert token_data["id"] == token_data["token"]
+    opaque_id = token_data["token"]
 
-    # 3. Revoke Token
-    response = client.delete(f"/configure/tokens/{token}", auth=auth)
+    # 3. Revoke Token by opaque ID
+    response = client.delete(f"/configure/tokens/{opaque_id}", auth=auth)
     assert response.status_code == 200
 
     # 4. Verify Revoked
     response = client.get("/configure/data", auth=auth)
     assert response.status_code == 200
     data_resp = response.json()
-    assert token not in data_resp["tokens"]
+    assert not any(t["token"] == opaque_id for t in data_resp["tokens"])
+
+    # 5. Also verify revocation by raw token works
+    response2 = client.post("/configure/tokens", json={"name": "raw_revoke"}, auth=auth)
+    raw_token2 = response2.json()["token"]
+    assert client.delete(f"/configure/tokens/{raw_token2}", auth=auth).status_code == 200

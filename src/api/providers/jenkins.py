@@ -1,5 +1,6 @@
 import datetime
 from typing import Any
+from urllib.parse import quote, urlparse
 
 import httpx
 
@@ -25,6 +26,51 @@ class JenkinsProvider(BaseProvider):
         self.token = token
         self.url = url
 
+    def _build_validated_base_url(self, repo: str) -> str | None:
+        if not self.url or not repo or len(repo) > 512:
+            return None
+        if ".." in repo or "\\" in repo or "?" in repo or "#" in repo or "@" in repo:
+            return None
+        base_parsed = urlparse(self.url.rstrip("/"))
+        if base_parsed.scheme not in ("http", "https") or not base_parsed.netloc:
+            return None
+
+        if repo.startswith(("http://", "https://")) or "://" in repo:
+            repo_parsed = urlparse(repo.rstrip("/"))
+            if (repo_parsed.scheme, repo_parsed.netloc) != (
+                base_parsed.scheme,
+                base_parsed.netloc,
+            ):
+                return None
+            return repo.rstrip("/")
+
+        job_path_parts = [
+            quote(p, safe="") for p in repo.strip("/").split("/") if p and p != "."
+        ]
+        if not job_path_parts:
+            return None
+        job_path = "/".join(f"job/{p}" for p in job_path_parts)
+        return f"{self.url.rstrip('/')}/{job_path}"
+
+    def _is_allowed_jenkins_url(self, target_url: str | None) -> bool:
+        if not target_url or not isinstance(target_url, str):
+            return False
+        if ".." in target_url or "\\" in target_url or "@" in target_url:
+            return False
+        parsed = urlparse(target_url)
+        if parsed.scheme or parsed.netloc or target_url.startswith("//"):
+            if not self.url:
+                return False
+            base_parsed = urlparse(self.url.rstrip("/"))
+            return (
+                parsed.scheme in ("http", "https")
+                and (parsed.scheme, parsed.netloc)
+                == (base_parsed.scheme, base_parsed.netloc)
+                and not parsed.username
+                and not parsed.password
+            )
+        return True
+
     async def fetch_status(
         self,
         owner: str,
@@ -35,12 +81,12 @@ class JenkinsProvider(BaseProvider):
         if workflow_id == "any":
             workflow_id = None
 
-        if self.url and repo and not repo.startswith("http"):
-            job_path_parts = repo.strip("/").split("/")
-            job_path = "/".join(f"job/{p}" for p in job_path_parts if p)
-            base_url = f"{self.url.rstrip('/')}/{job_path}"
-        else:
-            base_url = repo.rstrip("/")
+        if owner and (".." in owner or "\\" in owner):
+            return self._error_result("jenkins", owner, repo)
+
+        base_url = self._build_validated_base_url(repo)
+        if not base_url:
+            return self._error_result("jenkins", owner, repo)
 
         auth = (self.user, self.token) if self.user and self.token else None
 
@@ -133,7 +179,7 @@ class JenkinsProvider(BaseProvider):
     async def _resolve_jenkins_status(
         self, client, url, owner, repo_field, max_depth=3
     ):
-        if max_depth <= 0:
+        if max_depth <= 0 or not self._is_allowed_jenkins_url(url):
             return self._error_result("jenkins", owner, repo_field)
 
         api_url = f"{url.rstrip('/')}/api/json?tree=lastBuild[number,url,result,timestamp,duration,estimatedDuration,changeSets[items[msg]]],inQueue,color,jobs[name,url]"
@@ -154,8 +200,11 @@ class JenkinsProvider(BaseProvider):
             target_job = next(
                 (j for j in jobs if j.get("name") in ["master", "main"]), jobs[0]
             )
+            target_url = target_job.get("url")
+            if not self._is_allowed_jenkins_url(target_url):
+                return self._error_result("jenkins", owner, repo_field)
             return await self._resolve_jenkins_status(
-                client, target_job.get("url"), owner, repo_field, max_depth - 1
+                client, target_url, owner, repo_field, max_depth - 1
             )
 
         return self._error_result("jenkins", owner, repo_field)
@@ -170,12 +219,12 @@ class JenkinsProvider(BaseProvider):
         if workflow_id == "any":
             workflow_id = None
 
-        if self.url and repo and not repo.startswith("http"):
-            job_path_parts = repo.strip("/").split("/")
-            job_path = "/".join(f"job/{p}" for p in job_path_parts if p)
-            base_url = f"{self.url.rstrip('/')}/{job_path}"
-        else:
-            base_url = repo.rstrip("/")
+        if owner and (".." in owner or "\\" in owner):
+            return self._error_result("jenkins", owner, repo)
+
+        base_url = self._build_validated_base_url(repo)
+        if not base_url:
+            return "Error fetching Jenkins logs."
 
         auth = (self.user, self.token) if self.user and self.token else None
 
@@ -186,7 +235,7 @@ class JenkinsProvider(BaseProvider):
             return "Error fetching Jenkins logs."
 
     async def _resolve_jenkins_logs(self, client, url, max_depth=3):
-        if max_depth <= 0:
+        if max_depth <= 0 or not self._is_allowed_jenkins_url(url):
             return "Max depth reached while resolving Jenkins job."
 
         api_url = f"{url.rstrip('/')}/api/json"
@@ -203,6 +252,8 @@ class JenkinsProvider(BaseProvider):
                 return "No builds found."
 
             build_url = last_build.get("url")
+            if not self._is_allowed_jenkins_url(build_url):
+                return "Error fetching Jenkins logs."
             log_url = f"{build_url.rstrip('/')}/consoleText"
             log_resp = await client.get(log_url)
             if log_resp.status_code == 200:
@@ -216,8 +267,11 @@ class JenkinsProvider(BaseProvider):
             target_job = next(
                 (j for j in jobs if j.get("name") in ["master", "main"]), jobs[0]
             )
+            target_url = target_job.get("url")
+            if not self._is_allowed_jenkins_url(target_url):
+                return "Error fetching Jenkins logs."
             return await self._resolve_jenkins_logs(
-                client, target_job.get("url"), max_depth - 1
+                client, target_url, max_depth - 1
             )
 
         return "Unsupported Jenkins object class."

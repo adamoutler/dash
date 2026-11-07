@@ -384,16 +384,32 @@ def test_oauth_deny_flow_and_edge_cases():
         == 404
     )
 
-    # Status check shows denied with error=access_denied
-    st_res = client.get(f"/oauth/authorize/status/{req_id}")
+    # Status check without poll_token returns expired (mandatory poll_token protection)
+    st_no_poll = client.get(f"/oauth/authorize/status/{req_id}")
+    assert st_no_poll.status_code == 200
+    assert st_no_poll.json()["status"] == "expired"
+    assert "redirect_url" not in st_no_poll.json()
+
+    # Status check with valid poll_token shows denied with error=access_denied
+    st_res = client.get(
+        f"/oauth/authorize/status/{req_id}",
+        params={"poll_token": auth_sub.json()["poll_token"]},
+    )
     assert st_res.status_code == 200
     assert st_res.json()["status"] == "denied"
     assert "error=access_denied" in st_res.json()["redirect_url"]
 
-    # Nonexistent status check returns expired
+    # Nonexistent status check without poll_token returns expired, with wrong poll_token returns 403
     exp_res = client.get("/oauth/authorize/status/req_missing")
     assert exp_res.status_code == 200
     assert exp_res.json()["status"] == "expired"
+    assert (
+        client.get(
+            "/oauth/authorize/status/req_missing",
+            params={"poll_token": "wrong_poll_token"},
+        ).status_code
+        == 403
+    )
 
     # Token endpoint error branches
     assert (
@@ -506,9 +522,14 @@ def test_root_mcp_probes_and_session_deletion():
     assert root_post.status_code == 200
     assert root_post.json()["result"] == {}
 
-    # 5. Configure data lists oauth_sessions and allows deletion from /configure
+    # 5. Configure data lists oauth_sessions with opaque IDs and allows deletion
     cfg_data = client.get("/configure/data", auth=admin_auth).json()
-    assert any(s["token"] == access_token for s in cfg_data["oauth_sessions"])
+    assert any(
+        s["username"] == "charlie"
+        and s["token"].startswith("tok_")
+        and s["token"] != access_token
+        for s in cfg_data["oauth_sessions"]
+    )
 
     del_res = client.delete(f"/api/oauth/sessions/{access_token}", auth=admin_auth)
     assert del_res.status_code == 200
@@ -516,3 +537,150 @@ def test_root_mcp_probes_and_session_deletion():
         client.delete(f"/api/oauth/sessions/{access_token}", auth=admin_auth).status_code
         == 404
     )
+
+
+def test_oauth_security_hardening_invariants():
+    from urllib.parse import parse_qs, urlparse
+
+    from api.routers.oauth import MAX_REGISTERED_CLIENTS, _verify_pkce_s256
+
+    admin_auth = ("adminuser", "adminpass")
+    verifier, challenge = _pkce_pair()
+
+    # 1. PKCE RFC 7636 verifier bounds
+    assert _verify_pkce_s256("short", challenge) is False
+    assert _verify_pkce_s256("a" * 129, challenge) is False
+    assert _verify_pkce_s256("invalid$chars!" * 4, challenge) is False
+
+    # 2. Request body size limit (413) and redirect_uris count limit (400)
+    oversized = "x" * 20000
+    assert (
+        client.post(
+            "/oauth/register",
+            content=oversized,
+            headers={"Content-Type": "application/json"},
+        ).status_code
+        == 413
+    )
+    too_many_uris = [f"http://localhost:808{i}/cb" for i in range(12)]
+    assert (
+        client.post(
+            "/oauth/register",
+            json={"client_name": "Many", "redirect_uris": too_many_uris},
+        ).status_code
+        == 400
+    )
+
+    # 3. Registered client redirect_uri exact match enforcement
+    reg = client.post(
+        "/oauth/register",
+        json={
+            "client_name": "BoundClient",
+            "redirect_uris": ["http://localhost:8080/allowed"],
+        },
+    ).json()
+    cid = reg["client_id"]
+
+    # Attempting to authorize with a different localhost redirect_uri must fail with 400
+    bad_redir = client.post(
+        "/oauth/authorize",
+        json={
+            "username": "alice",
+            "client_id": cid,
+            "redirect_uri": "http://localhost:9999/hijack",
+            "state": "st",
+            "code_challenge": challenge,
+            "code_challenge_method": "S256",
+        },
+    )
+    assert bad_redir.status_code == 400
+    assert "does not match registered client" in bad_redir.json()["detail"]
+
+    # Oversized state or invalid code_challenge rejected
+    assert (
+        client.post(
+            "/oauth/authorize",
+            json={
+                "username": "alice",
+                "client_id": cid,
+                "redirect_uri": "http://localhost:8080/allowed",
+                "state": "s" * 600,
+                "code_challenge": challenge,
+                "code_challenge_method": "S256",
+            },
+        ).status_code
+        == 400
+    )
+    assert (
+        client.post(
+            "/oauth/authorize",
+            json={
+                "username": "alice",
+                "client_id": cid,
+                "redirect_uri": "http://localhost:8080/allowed",
+                "state": "ok",
+                "code_challenge": "too_short",
+                "code_challenge_method": "S256",
+            },
+        ).status_code
+        == 400
+    )
+
+    # 4. Authorization code consumption binds redirect_uri and client_id
+    sub = client.post(
+        "/oauth/authorize",
+        json={
+            "username": "alice",
+            "client_id": cid,
+            "redirect_uri": "http://localhost:8080/allowed",
+            "state": "st",
+            "code_challenge": challenge,
+            "code_challenge_method": "S256",
+        },
+    ).json()
+    req_id = sub["request_id"]
+    client.post(f"/api/oauth/pending/{req_id}/approve", auth=admin_auth)
+    poll = client.get(
+        f"/oauth/authorize/status/{req_id}",
+        params={"poll_token": sub["poll_token"]},
+    ).json()
+    code = parse_qs(urlparse(poll["redirect_url"]).query)["code"][0]
+
+    # Missing redirect_uri in /oauth/token must fail with 400
+    assert (
+        client.post(
+            "/oauth/token",
+            json={
+                "grant_type": "authorization_code",
+                "code": code,
+                "client_id": cid,
+                "code_verifier": verifier,
+            },
+        ).status_code
+        == 400
+    )
+
+    # Mismatched client_id in /oauth/token must fail with 400
+    assert (
+        client.post(
+            "/oauth/token",
+            json={
+                "grant_type": "authorization_code",
+                "code": code,
+                "client_id": "other_client",
+                "redirect_uri": "http://localhost:8080/allowed",
+                "code_verifier": verifier,
+            },
+        ).status_code
+        == 400
+    )
+
+    # 5. Client eviction cap
+    from api.routers.oauth import oauth_manager
+
+    for i in range(MAX_REGISTERED_CLIENTS + 5):
+        oauth_manager.register_client(
+            f"Client-{i}", ["http://localhost:8080/cb"], "none"
+        )
+    data = oauth_manager._load_nolock()
+    assert len(data["clients"]) <= MAX_REGISTERED_CLIENTS

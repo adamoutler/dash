@@ -1,7 +1,7 @@
 # Dash Security Model
 
 ## Overview
-The Dash implements a **Two-Tiered Authentication System** designed to accommodate both human administrators and autonomous AI agents safely. By default, the application runs in an **unauthenticated (open) mode** to facilitate easy local testing. It must be explicitly locked down for production use.
+The Dash implements a **Two-Tiered Authentication System** designed to accommodate both human administrators and autonomous AI agents safely. By default, the application **fails closed (`401 Unauthorized`)** unless `DASHBOARD_USER` and `DASHBOARD_PASSWORD` are configured (or `ALLOW_ANONYMOUS_ACCESS=true` is explicitly set for local development).
 
 ## 1. Authentication Tiers
 

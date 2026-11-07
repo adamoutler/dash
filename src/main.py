@@ -95,8 +95,15 @@ async def get_version():
 
 
 # Static Files
+class ProtectedStaticFiles(StaticFiles):
+    async def get_response(self, path: str, scope):
+        if path.strip().lower().endswith((".html", ".htm")):
+            return Response(status_code=404)
+        return await super().get_response(path, scope)
+
+
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
-app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+app.mount("/static", ProtectedStaticFiles(directory=STATIC_DIR), name="static")
 
 
 def _is_mcp_probe_request(request: Request) -> bool:

@@ -56,6 +56,16 @@ class ConfigManager:
         settings = self.get_settings()
         if settings.get(json_key):
             return settings[json_key]
+        if json_key == "forgejo_token" and settings.get("forgejo_url"):
+            env_url = os.environ.get("FORGEJO_URL", "").strip().rstrip("/")
+            if settings["forgejo_url"].strip().rstrip("/") != env_url:
+                return ""
+        if json_key in ("jenkins_token", "jenkins_user") and settings.get(
+            "jenkins_url"
+        ):
+            env_url = os.environ.get("JENKINS_URL", "").strip().rstrip("/")
+            if settings["jenkins_url"].strip().rstrip("/") != env_url:
+                return ""
         if env_key:
             return os.environ.get(env_key, "")
         return ""

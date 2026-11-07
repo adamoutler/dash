@@ -19,6 +19,7 @@ DESC_REPO = (
 )
 DESC_WORKFLOW = "Optional workflow name or ID."
 DESC_BRANCH = "Optional branch name."
+MAX_WAIT_ITERATIONS = 360
 
 
 def format_jenkins_repo(url: str) -> str:
@@ -253,8 +254,10 @@ async def _wait_generator(
 ):
     attempts_when_not_running = 0
     was_running = False
+    iterations = 0
 
     while True:
+        iterations += 1
         result = await workflow_service.get_single_status(
             provider, owner, repo_name, wf_id, target_branch
         )
@@ -269,12 +272,18 @@ async def _wait_generator(
             "pending",
         ]
 
-        if is_running:
+        if is_running and iterations < MAX_WAIT_ITERATIONS:
             was_running = True
             yield " "
             await asyncio.sleep(10)
         else:
-            is_recent_commit = _check_recent_commit() if not was_running else False
+            if is_running and iterations >= MAX_WAIT_ITERATIONS:
+                status = "timeout"
+            is_recent_commit = (
+                _check_recent_commit()
+                if (not was_running and iterations < MAX_WAIT_ITERATIONS)
+                else False
+            )
 
             if not was_running and is_recent_commit and attempts_when_not_running < 6:
                 attempts_when_not_running += 1

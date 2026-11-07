@@ -117,3 +117,52 @@ def test_api_providers_get(client_with_mocked_config, monkeypatch):
     mock_cm.update_settings({"forgejo_token": "sec"})
     response = client.get("/api/providers", headers=headers)
     assert "forgejo" in response.json()["providers"]
+
+
+def test_config_manager_prevents_cross_origin_env_token_exfiltration(
+    config_manager, monkeypatch
+):
+    monkeypatch.setenv("FORGEJO_URL", "https://git.internal.corp")
+    monkeypatch.setenv("FORGEJO_TOKEN", "env_forgejo_secret")
+    monkeypatch.setenv("JENKINS_URL", "https://jenkins.internal.corp")
+    monkeypatch.setenv("JENKINS_USER", "env_j_user")
+    monkeypatch.setenv("JENKINS_TOKEN", "env_j_token")
+
+    # When settings.json has no URL override, env tokens are returned
+    assert config_manager.get_value("forgejo_token", "FORGEJO_TOKEN") == "env_forgejo_secret"
+    assert config_manager.get_value("jenkins_token", "JENKINS_TOKEN") == "env_j_token"
+
+    # When settings.json overrides URL to an external host without providing a new token,
+    # env credentials must NOT be returned
+    config_manager.update_settings(
+        {
+            "forgejo_url": "https://attacker.example.com",
+            "jenkins_url": "https://attacker.example.com",
+        }
+    )
+    assert not config_manager.get_value("forgejo_token", "FORGEJO_TOKEN")
+    assert not config_manager.get_value("jenkins_token", "JENKINS_TOKEN")
+    assert not config_manager.get_value("jenkins_user", "JENKINS_USER")
+
+
+def test_api_settings_rejects_invalid_provider_urls(
+    client_with_mocked_config, monkeypatch
+):
+    client, _ = client_with_mocked_config
+    monkeypatch.setenv("DASHBOARD_USER", "admin")
+    monkeypatch.setenv("DASHBOARD_PASSWORD", "password")
+    auth_str = base64.b64encode(b"admin:password").decode("ascii")
+    headers = {"Authorization": f"Basic {auth_str}"}
+
+    for bad_url in (
+        "ftp://files.example.com",
+        "http://user:pass@example.com",
+        "https://example.com?query=1",
+        "javascript:alert(1)",
+    ):
+        res = client.post(
+            "/api/settings",
+            json={"forgejo_url": bad_url},
+            headers=headers,
+        )
+        assert res.status_code == 400

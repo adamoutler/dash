@@ -1,6 +1,7 @@
 from typing import Annotated
+from urllib.parse import urlparse
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from api.auth import get_current_user, require_basic_auth
@@ -8,6 +9,20 @@ from api.config import ConfigManager
 
 router = APIRouter(prefix="/api", tags=["settings"])
 config_manager = ConfigManager()
+
+
+def _validate_provider_url(url: str) -> None:
+    parsed = urlparse(url.strip())
+    if (
+        parsed.scheme not in ("http", "https")
+        or not parsed.netloc
+        or not parsed.hostname
+        or parsed.username
+        or parsed.password
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise HTTPException(status_code=400, detail="Invalid provider URL")
 
 
 class SettingsUpdate(BaseModel):
@@ -42,6 +57,10 @@ async def update_settings_status(
     settings: SettingsUpdate, user: Annotated[str, Depends(require_basic_auth)]
 ):
     updates = settings.model_dump(exclude_unset=True)
+    for url_field in ("forgejo_url", "jenkins_url"):
+        val = updates.get(url_field)
+        if val:
+            _validate_provider_url(val)
     config_manager.update_settings(updates)
     return {"message": "Settings updated"}
 

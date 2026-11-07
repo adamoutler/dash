@@ -18,14 +18,23 @@ from api.auth import DATA_DIR, get_base_url, require_basic_auth
 router = APIRouter(tags=["oauth"])
 
 USERNAME_RE = re.compile(r"^[a-zA-Z0-9_.@-]{1,64}$")
+PKCE_CHALLENGE_RE = re.compile(r"^[A-Za-z0-9_-]{43,128}$")
+PKCE_VERIFIER_RE = re.compile(r"^[A-Za-z0-9._~-]{43,128}$")
 PENDING_TTL_SECONDS = 300
 AUTH_CODE_TTL_SECONDS = 60
 TOKEN_TTL_SECONDS = 31536000
 MAX_PENDING_REQUESTS = 50
+MAX_OAUTH_BODY_BYTES = 16384
+MAX_REDIRECT_URIS_PER_CLIENT = 10
+MAX_REGISTERED_CLIENTS = 200
+FILE_LOCK_TIMEOUT = 5
 
 
 def _hash_secret(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+DUMMY_POLL_HASH = _hash_secret("dummy_poll_token_for_constant_time")
 
 
 def _append_query_params(url: str, params: dict[str, str]) -> str:
@@ -56,16 +65,30 @@ def _is_valid_redirect_uri(uri: str) -> bool:
 def _verify_pkce_s256(code_verifier: str, code_challenge: str) -> bool:
     if not code_verifier or not code_challenge:
         return False
+    clean_challenge = code_challenge.rstrip("=")
+    if not PKCE_VERIFIER_RE.match(code_verifier) or not PKCE_CHALLENGE_RE.match(
+        clean_challenge
+    ):
+        return False
     try:
         digest = hashlib.sha256(code_verifier.encode("ascii")).digest()
         computed = base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
-        return secrets.compare_digest(computed, code_challenge.rstrip("="))
+        return secrets.compare_digest(computed, clean_challenge)
     except (UnicodeEncodeError, ValueError, TypeError):
         return False
 
 
 async def _parse_request_params(request: Request) -> dict[str, Any]:
+    content_length = request.headers.get("content-length")
+    if (
+        content_length
+        and content_length.isdigit()
+        and int(content_length) > MAX_OAUTH_BODY_BYTES
+    ):
+        raise HTTPException(status_code=413, detail="Request body too large")
     raw_body = await request.body()
+    if len(raw_body) > MAX_OAUTH_BODY_BYTES:
+        raise HTTPException(status_code=413, detail="Request body too large")
     if not raw_body:
         return {}
     content_type = request.headers.get("content-type", "").lower()
@@ -132,6 +155,17 @@ class OAuthManager:
             if now > code_info.get("expires_at", 0):
                 del codes_map[code_hash]
                 changed = True
+
+        clients_map = data.get("clients", {})
+        if len(clients_map) > MAX_REGISTERED_CLIENTS:
+            sorted_ids = sorted(
+                clients_map.keys(),
+                key=lambda cid: clients_map[cid].get("client_id_issued_at", 0),
+            )
+            excess = len(clients_map) - MAX_REGISTERED_CLIENTS
+            for cid in sorted_ids[:excess]:
+                del clients_map[cid]
+            changed = True
         return changed
 
     def register_client(
@@ -142,22 +176,32 @@ class OAuthManager:
         response_types: list[str] | None = None,
         token_endpoint_auth_method: str = "none",
     ) -> dict[str, Any]:
-        with FileLock(self.lockpath):
+        with FileLock(self.lockpath, timeout=FILE_LOCK_TIMEOUT):
             now = int(time.time())
             data = self._load_nolock()
             self._prune_nolock(data, now)
+            clients_map = data["clients"]
+            if len(clients_map) >= MAX_REGISTERED_CLIENTS:
+                sorted_ids = sorted(
+                    clients_map.keys(),
+                    key=lambda cid: clients_map[cid].get("client_id_issued_at", 0),
+                )
+                for cid in sorted_ids[
+                    : len(clients_map) - MAX_REGISTERED_CLIENTS + 1
+                ]:
+                    del clients_map[cid]
             client_id = f"mcp_{secrets.token_hex(16)}"
             client_record = {
                 "client_id": client_id,
                 "client_name": client_name or "MCP OAuth Client",
-                "redirect_uris": redirect_uris,
+                "redirect_uris": redirect_uris[:MAX_REDIRECT_URIS_PER_CLIENT],
                 "grant_types": grant_types or ["authorization_code", "refresh_token"],
                 "response_types": response_types or ["code"],
                 "token_endpoint_auth_method": token_endpoint_auth_method or "none",
                 "client_id_issued_at": now,
                 "client_secret_expires_at": 0,
             }
-            data["clients"][client_id] = client_record
+            clients_map[client_id] = client_record
             self._save_nolock(data)
             return client_record
 
@@ -172,7 +216,7 @@ class OAuthManager:
         scope: str = "mcp:access",
         client_ip: str = "unknown",
     ) -> dict[str, Any]:
-        with FileLock(self.lockpath):
+        with FileLock(self.lockpath, timeout=FILE_LOCK_TIMEOUT):
             now = time.time()
             data = self._load_nolock()
             self._prune_nolock(data, now)
@@ -189,17 +233,25 @@ class OAuthManager:
                 )
 
             client_info = data["clients"].get(client_id)
-            if not client_info:
+            if client_info:
+                registered_uris = client_info.get("redirect_uris") or []
+                if registered_uris and redirect_uri not in registered_uris:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="redirect_uri does not match registered client.",
+                    )
+            else:
                 client_info = {
                     "client_id": client_id,
                     "client_name": client_id,
                     "redirect_uris": [redirect_uri],
                 }
-                data["clients"][client_id] = client_info
 
             req_id = f"req_{secrets.token_hex(16)}"
             poll_token = secrets.token_urlsafe(24)
-            user_code = f"DASH-{secrets.randbelow(9000) + 1000}"
+            user_code = (
+                f"DASH-{secrets.token_hex(2).upper()}-{secrets.token_hex(2).upper()}"
+            )
             expires_at = now + PENDING_TTL_SECONDS
 
             req_record = {
@@ -211,7 +263,7 @@ class OAuthManager:
                 "client_name": client_info.get("client_name") or client_id,
                 "redirect_uri": redirect_uri,
                 "state": state,
-                "code_challenge": code_challenge,
+                "code_challenge": code_challenge.rstrip("="),
                 "code_challenge_method": code_challenge_method,
                 "scope": scope or "mcp:access",
                 "client_ip": client_ip,
@@ -236,7 +288,7 @@ class OAuthManager:
             }
 
     def list_pending_requests(self) -> list[dict[str, Any]]:
-        with FileLock(self.lockpath):
+        with FileLock(self.lockpath, timeout=FILE_LOCK_TIMEOUT):
             now = time.time()
             data = self._load_nolock()
             if self._prune_nolock(data, now):
@@ -264,7 +316,7 @@ class OAuthManager:
             return pending
 
     def approve_request(self, req_id: str) -> dict[str, Any] | None:
-        with FileLock(self.lockpath):
+        with FileLock(self.lockpath, timeout=FILE_LOCK_TIMEOUT):
             now = time.time()
             data = self._load_nolock()
             self._prune_nolock(data, now)
@@ -301,7 +353,7 @@ class OAuthManager:
             }
 
     def deny_request(self, req_id: str) -> dict[str, Any] | None:
-        with FileLock(self.lockpath):
+        with FileLock(self.lockpath, timeout=FILE_LOCK_TIMEOUT):
             now = time.time()
             data = self._load_nolock()
             self._prune_nolock(data, now)
@@ -329,21 +381,22 @@ class OAuthManager:
     def get_request_status(
         self, req_id: str, poll_token: str | None = None
     ) -> dict[str, Any]:
-        with FileLock(self.lockpath):
+        with FileLock(self.lockpath, timeout=FILE_LOCK_TIMEOUT):
             now = time.time()
             data = self._load_nolock()
             if self._prune_nolock(data, now):
                 self._save_nolock(data)
             req = data["requests"].get(req_id)
-            if not req:
+            expected_hash = (
+                req.get("poll_token_hash") if req else None
+            ) or DUMMY_POLL_HASH
+            provided_hash = _hash_secret(poll_token or "")
+            token_matches = secrets.compare_digest(provided_hash, expected_hash)
+
+            if not poll_token:
                 return {"status": "expired"}
 
-            expected_hash = req.get("poll_token_hash")
-            if (
-                expected_hash
-                and poll_token is not None
-                and not secrets.compare_digest(_hash_secret(poll_token), expected_hash)
-            ):
+            if not req or not token_matches:
                 raise HTTPException(status_code=403, detail="Invalid poll token")
 
             status_val = req.get("status", "expired")
@@ -362,7 +415,7 @@ class OAuthManager:
         redirect_uri: str | None = None,
         client_id: str | None = None,
     ) -> dict[str, Any] | None:
-        with FileLock(self.lockpath):
+        with FileLock(self.lockpath, timeout=FILE_LOCK_TIMEOUT):
             now = time.time()
             data = self._load_nolock()
             self._prune_nolock(data, now)
@@ -372,9 +425,11 @@ class OAuthManager:
 
             if not code_info or now > code_info.get("expires_at", 0):
                 return None
-            if redirect_uri and code_info.get("redirect_uri") != redirect_uri:
+            expected_redirect = code_info.get("redirect_uri")
+            if expected_redirect and redirect_uri != expected_redirect:
                 return None
-            if client_id and code_info.get("client_id") != client_id:
+            expected_client = code_info.get("client_id")
+            if expected_client and client_id != expected_client:
                 return None
             if code_info.get("code_challenge_method", "S256") != "S256":
                 return None
@@ -384,9 +439,8 @@ class OAuthManager:
                 return None
             return code_info
 
-
     def get_client_public_info(self, client_id: str) -> dict[str, str]:
-        with FileLock(self.lockpath):
+        with FileLock(self.lockpath, timeout=FILE_LOCK_TIMEOUT):
             data = self._load_nolock()
             client_info = data.get("clients", {}).get(client_id)
             if client_info:
@@ -544,6 +598,8 @@ async def register_oauth_client(request: Request):
     raw_uris = body.get("redirect_uris") or []
     if isinstance(raw_uris, str):
         raw_uris = [raw_uris]
+    if not isinstance(raw_uris, list) or len(raw_uris) > MAX_REDIRECT_URIS_PER_CLIENT:
+        raise HTTPException(status_code=400, detail="Invalid or too many redirect_uris")
     valid_uris = [
         u for u in raw_uris if isinstance(u, str) and _is_valid_redirect_uri(u)
     ]
@@ -551,7 +607,7 @@ async def register_oauth_client(request: Request):
         raise HTTPException(status_code=400, detail="Invalid redirect_uris")
 
     client_name = str(body.get("client_name") or "Google Gemini MCP")[:120]
-    auth_method = str(body.get("token_endpoint_auth_method") or "none")
+    auth_method = str(body.get("token_endpoint_auth_method") or "none")[:64]
     record = oauth_manager.register_client(
         client_name=client_name,
         redirect_uris=valid_uris,
@@ -588,20 +644,32 @@ async def oauth_authorize_submit(request: Request):
 
     client_id = str(params.get("client_id") or "").strip()
     redirect_uri = str(params.get("redirect_uri") or "").strip()
-    if not client_id or not _is_valid_redirect_uri(redirect_uri):
+    if (
+        not client_id
+        or len(client_id) > 128
+        or not _is_valid_redirect_uri(redirect_uri)
+    ):
         raise HTTPException(
             status_code=400, detail="Valid client_id and redirect_uri are required."
         )
 
     code_challenge = str(params.get("code_challenge") or "").strip()
     code_challenge_method = str(params.get("code_challenge_method") or "S256").strip()
-    if not code_challenge or code_challenge_method != "S256":
+    if (
+        not code_challenge
+        or code_challenge_method != "S256"
+        or not PKCE_CHALLENGE_RE.match(code_challenge.rstrip("="))
+    ):
         raise HTTPException(
             status_code=400, detail="PKCE S256 code_challenge is required."
         )
 
     state = str(params.get("state") or "")
     scope = str(params.get("scope") or "mcp:access")
+    if len(state) > 512 or len(scope) > 256:
+        raise HTTPException(
+            status_code=400, detail="state or scope exceeds maximum allowed length."
+        )
     client_ip = request.headers.get("x-forwarded-for", "").split(",")[0].strip() or (
         request.client.host if request.client else "unknown"
     )

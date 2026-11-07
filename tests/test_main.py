@@ -38,6 +38,17 @@ def test_status_indicator_sizing_css():
     sw_res = client.get("/sw.js")
     assert sw_res.status_code == 200
     assert "ci-dashboard-v8" in sw_res.text
+    assert "/static/index.html" not in sw_res.text
+
+
+def test_static_html_templates_blocked_unauthenticated():
+    for html_path in (
+        "/static/index.html",
+        "/static/configure.html",
+        "/static/oauth_authorize.html",
+    ):
+        res = client.get(html_path)
+        assert res.status_code == 404
 
 
 def test_automatic_light_dark_theme_support():

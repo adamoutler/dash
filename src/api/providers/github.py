@@ -1,6 +1,8 @@
 import datetime
 import logging
+import re
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 
@@ -8,7 +10,20 @@ from api.models.domain import Node, NodeType
 from api.providers.base import BaseProvider, ProviderPathNotFoundError
 
 ACCEPT_GITHUB_JSON = "application/vnd.github.v3+json"
+SAFE_SLUG_RE = re.compile(r"^[A-Za-z0-9_.-]{1,100}$")
 logger = logging.getLogger(__name__)
+
+
+def _is_valid_slug(val: str) -> bool:
+    return bool(val and val not in (".", "..") and SAFE_SLUG_RE.match(val))
+
+
+def _is_valid_workflow_id(val: str | None) -> bool:
+    if not val or val == "any":
+        return True
+    if len(val) > 200 or ".." in val:
+        return False
+    return not any(c in val for c in ("/", "\\", "?", "#", "%", "\r", "\n"))
 PROVIDER_EXC = (
     httpx.HTTPError,
     httpx.InvalidURL,
@@ -90,7 +105,19 @@ class GitHubProvider(BaseProvider):
         workflow_id: str | None = None,
         branch: str | None = None,
     ) -> dict[str, Any]:
+        if (
+            not _is_valid_slug(owner)
+            or not _is_valid_slug(repo)
+            or not _is_valid_workflow_id(workflow_id)
+        ):
+            err = self._error_result("github", owner, repo)
+            err["commit_message"] = "Invalid owner, repo, or workflow."
+            return err
         workflow_id = await self._resolve_workflow_id(owner, repo, workflow_id)
+        if not _is_valid_workflow_id(workflow_id):
+            err = self._error_result("github", owner, repo)
+            err["commit_message"] = "Invalid workflow."
+            return err
         headers = (
             {
                 "Authorization": f"Bearer {self.token}",
@@ -100,14 +127,20 @@ class GitHubProvider(BaseProvider):
             else {}
         )
         base_url = f"https://api.github.com/repos/{owner}/{repo}"
+        safe_wf = quote(str(workflow_id), safe="") if workflow_id else None
 
         runs_url = (
-            f"{base_url}/actions/workflows/{workflow_id}/runs?per_page=10"
-            if workflow_id
+            f"{base_url}/actions/workflows/{safe_wf}/runs?per_page=10"
+            if safe_wf
             else f"{base_url}/actions/runs?per_page=10"
         )
         if branch:
-            runs_url += f"&branch={branch}" if "?" in runs_url else f"?branch={branch}"
+            safe_branch = quote(str(branch), safe="")
+            runs_url += (
+                f"&branch={safe_branch}"
+                if "?" in runs_url
+                else f"?branch={safe_branch}"
+            )
 
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
@@ -179,7 +212,15 @@ class GitHubProvider(BaseProvider):
         workflow_id: str | None = None,
         branch: str | None = None,
     ) -> str:
+        if (
+            not _is_valid_slug(owner)
+            or not _is_valid_slug(repo)
+            or not _is_valid_workflow_id(workflow_id)
+        ):
+            return "Error fetching GitHub logs."
         workflow_id = await self._resolve_workflow_id(owner, repo, workflow_id)
+        if not _is_valid_workflow_id(workflow_id):
+            return "Error fetching GitHub logs."
         headers = (
             {
                 "Authorization": f"Bearer {self.token}",
@@ -189,13 +230,19 @@ class GitHubProvider(BaseProvider):
             else {}
         )
         base_url = f"https://api.github.com/repos/{owner}/{repo}"
+        safe_wf = quote(str(workflow_id), safe="") if workflow_id else None
         runs_url = (
-            f"{base_url}/actions/workflows/{workflow_id}/runs?per_page=1"
-            if workflow_id
+            f"{base_url}/actions/workflows/{safe_wf}/runs?per_page=1"
+            if safe_wf
             else f"{base_url}/actions/runs?per_page=1"
         )
         if branch:
-            runs_url += f"&branch={branch}" if "?" in runs_url else f"?branch={branch}"
+            safe_branch = quote(str(branch), safe="")
+            runs_url += (
+                f"&branch={safe_branch}"
+                if "?" in runs_url
+                else f"?branch={safe_branch}"
+            )
         try:
             async with httpx.AsyncClient(timeout=15.0) as client:
                 runs_resp = await client.get(runs_url, headers=headers)
@@ -221,8 +268,23 @@ class GitHubProvider(BaseProvider):
                     logs_resp = await client.get(
                         f"{base_url}/actions/jobs/{j['id']}/logs",
                         headers=headers,
-                        follow_redirects=True,
+                        follow_redirects=False,
                     )
+                    if logs_resp.status_code in (301, 302, 303, 307, 308):
+                        redirect_url = (
+                            (
+                                logs_resp.headers.get("location")
+                                or logs_resp.headers.get("Location")
+                            )
+                            if hasattr(logs_resp, "headers") and logs_resp.headers
+                            else None
+                        )
+                        if redirect_url and redirect_url.startswith(
+                            ("https://", "http://")
+                        ):
+                            logs_resp = await client.get(
+                                redirect_url, headers={}, follow_redirects=False
+                            )
                     if logs_resp.status_code == 200:
                         # Append job name as a header to separate logs visually
                         all_logs.append(
@@ -243,7 +305,15 @@ class GitHubProvider(BaseProvider):
         workflow_id: str | None = None,
         branch: str | None = None,
     ) -> dict[str, Any]:
+        if (
+            not _is_valid_slug(owner)
+            or not _is_valid_slug(repo)
+            or not _is_valid_workflow_id(workflow_id)
+        ):
+            return {"error": "Error fetching GitHub artifacts."}
         workflow_id = await self._resolve_workflow_id(owner, repo, workflow_id)
+        if not _is_valid_workflow_id(workflow_id):
+            return {"error": "Error fetching GitHub artifacts."}
         headers = (
             {
                 "Authorization": f"Bearer {self.token}",
@@ -253,13 +323,19 @@ class GitHubProvider(BaseProvider):
             else {}
         )
         base_url = f"https://api.github.com/repos/{owner}/{repo}"
+        safe_wf = quote(str(workflow_id), safe="") if workflow_id else None
         runs_url = (
-            f"{base_url}/actions/workflows/{workflow_id}/runs?per_page=1"
-            if workflow_id
+            f"{base_url}/actions/workflows/{safe_wf}/runs?per_page=1"
+            if safe_wf
             else f"{base_url}/actions/runs?per_page=1"
         )
         if branch:
-            runs_url += f"&branch={branch}" if "?" in runs_url else f"?branch={branch}"
+            safe_branch = quote(str(branch), safe="")
+            runs_url += (
+                f"&branch={safe_branch}"
+                if "?" in runs_url
+                else f"?branch={safe_branch}"
+            )
         try:
             async with httpx.AsyncClient(timeout=15.0) as client:
                 runs_resp = await client.get(runs_url, headers=headers)
@@ -284,6 +360,8 @@ class GitHubProvider(BaseProvider):
             return {"error": "Error fetching GitHub artifacts."}
 
     async def fetch_branches(self, owner: str, repo: str) -> list[str]:
+        if not _is_valid_slug(owner) or not _is_valid_slug(repo):
+            return []
         headers = (
             {
                 "Authorization": f"Bearer {self.token}",
@@ -305,6 +383,8 @@ class GitHubProvider(BaseProvider):
     async def get_workflows(
         self, owner: str, repo: str, branch: str | None = None
     ) -> list[dict[str, str]]:
+        if not _is_valid_slug(owner) or not _is_valid_slug(repo):
+            return []
         headers = (
             {
                 "Authorization": f"Bearer {self.token}",

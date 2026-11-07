@@ -158,3 +158,105 @@ async def test_require_basic_auth_no_creds():
     with pytest.raises(HTTPException) as exc:
         require_basic_auth(None)
     assert exc.value.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_fail_closed_when_credentials_unset_or_whitespace(monkeypatch):
+    from api.auth import get_mcp_user
+
+    request = MagicMock()
+    request.headers.get.return_value = None
+
+    for user_val, pass_val in [("", ""), ("   ", "   "), ("admin", ""), ("", "secret")]:
+        monkeypatch.setenv("DASHBOARD_USER", user_val)
+        monkeypatch.setenv("DASHBOARD_PASSWORD", pass_val)
+        monkeypatch.delenv("ALLOW_ANONYMOUS_ACCESS", raising=False)
+
+        with pytest.raises(HTTPException) as exc1:
+            await get_current_user(request)
+        assert exc1.value.status_code == 401
+
+        with pytest.raises(HTTPException) as exc2:
+            require_basic_auth(None)
+        assert exc2.value.status_code == 401
+
+        with pytest.raises(HTTPException) as exc3:
+            await get_mcp_user(request)
+        assert exc3.value.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_explicit_anonymous_access_opt_in(monkeypatch):
+    from api.auth import get_mcp_user
+
+    monkeypatch.delenv("DASHBOARD_USER", raising=False)
+    monkeypatch.delenv("DASHBOARD_PASSWORD", raising=False)
+    monkeypatch.setenv("ALLOW_ANONYMOUS_ACCESS", "true")
+
+    request = MagicMock()
+    request.headers.get.return_value = None
+
+    assert await get_current_user(request) == "anonymous_user"
+    assert require_basic_auth(None) == "anonymous_user"
+    assert await get_mcp_user(request) == "anonymous_user"
+
+
+def test_tokens_hashed_at_rest(test_tm):
+    import json
+
+    raw_token = test_tm.create_token("sec-agent", 3600)
+    raw_refresh = "refresh_secret_value_12345"
+    raw_access = test_tm.create_token(
+        "oauth-agent",
+        3600,
+        client_id="cid",
+        username="alice",
+        refresh_token=raw_refresh,
+    )
+
+    with open(test_tm.filepath, "r") as f:
+        raw_disk = f.read()
+        disk_data = json.loads(raw_disk)
+
+    # Neither raw access tokens nor raw refresh tokens may appear in plaintext on disk
+    assert raw_token not in raw_disk
+    assert raw_access not in raw_disk
+    assert raw_refresh not in raw_disk
+
+    for key, val in disk_data.items():
+        assert len(key) == 64  # SHA-256 hex digest
+        assert val["id"].startswith("tok_")
+        assert "refresh_token" not in val
+
+    # Rotation works with hashed refresh token and invalidates old refresh token
+    rotated = test_tm.rotate_refresh_token(raw_refresh)
+    assert rotated is not None
+    new_access = rotated["access_token"]
+    assert test_tm.validate_token(raw_access) is False
+    assert test_tm.validate_token(new_access) is True
+    assert test_tm.rotate_refresh_token(raw_refresh) is None
+
+
+def test_get_base_url_host_validation():
+    from api.auth import get_base_url
+
+    req = MagicMock()
+    req.url.scheme = "https"
+
+    # Valid host
+    req.headers = {"host": "dash.hackedyour.info:8443", "x-forwarded-proto": "https"}
+    assert get_base_url(req) == "https://dash.hackedyour.info:8443"
+
+    # Malicious Host header with path/query injection falls back to http://localhost
+    req.headers = {
+        "x-forwarded-host": "evil.example.com/inject?x=1",
+        "x-forwarded-proto": "https",
+    }
+    assert get_base_url(req) == "http://localhost"
+
+    # Malicious scheme falls back to http://localhost
+    req.headers = {
+        "x-forwarded-host": "dash.hackedyour.info",
+        "x-forwarded-proto": "javascript",
+    }
+    assert get_base_url(req) == "http://localhost"

@@ -1,6 +1,8 @@
 import datetime
 import logging
+import re
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 
@@ -8,7 +10,20 @@ from api.models.domain import Node, NodeType
 from api.providers.base import BaseProvider, ProviderPathNotFoundError
 
 ACCEPT_JSON = "application/json"
+SAFE_SLUG_RE = re.compile(r"^[A-Za-z0-9_.-]{1,100}$")
 logger = logging.getLogger(__name__)
+
+
+def _is_valid_slug(val: str) -> bool:
+    return bool(val and val not in (".", "..") and SAFE_SLUG_RE.match(val))
+
+
+def _is_valid_workflow_id(val: str | None) -> bool:
+    if not val or val == "any":
+        return True
+    if len(val) > 200 or ".." in val:
+        return False
+    return not any(c in val for c in ("/", "\\", "?", "#", "%", "\r", "\n"))
 PROVIDER_EXC = (
     httpx.HTTPError,
     httpx.InvalidURL,
@@ -101,7 +116,12 @@ class ForgejoProvider(BaseProvider):
     ) -> dict[str, Any]:
         if workflow_id == "any":
             workflow_id = None
-        if not self.url:
+        if (
+            not self.url
+            or not _is_valid_slug(owner)
+            or not _is_valid_slug(repo)
+            or not _is_valid_workflow_id(workflow_id)
+        ):
             return self._error_result("forgejo", owner, repo)
 
         headers = (
@@ -110,17 +130,18 @@ class ForgejoProvider(BaseProvider):
             else {}
         )
         base_url = f"{self.url.rstrip('/')}/api/v1/repos/{owner}/{repo}"
+        safe_branch = quote(str(branch), safe="") if branch else None
 
         runs_url = f"{base_url}/actions/runs?limit=30"
-        if branch:
-            runs_url += f"&branch={branch}"
+        if safe_branch:
+            runs_url += f"&branch={safe_branch}"
 
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 runs_resp = await client.get(runs_url, headers=headers)
                 commits_resp = await client.get(
                     f"{base_url}/commits?limit=1"
-                    + (f"&sha={branch}" if branch else ""),
+                    + (f"&sha={safe_branch}" if safe_branch else ""),
                     headers=headers,
                 )
 
@@ -202,6 +223,12 @@ Recommendations:
             workflow_id = None
         if not self.url:
             return {"error": "Forgejo URL not configured."}
+        if (
+            not _is_valid_slug(owner)
+            or not _is_valid_slug(repo)
+            or not _is_valid_workflow_id(workflow_id)
+        ):
+            return {"error": "Error fetching Forgejo artifacts."}
         base_url = f"{self.url.rstrip('/')}/api/v1/repos/{owner}/{repo}"
         headers = (
             {"Authorization": f"token {self.token}", "Accept": ACCEPT_JSON}
@@ -211,7 +238,7 @@ Recommendations:
 
         runs_url = f"{base_url}/actions/runs?limit=30"
         if branch:
-            runs_url += f"&branch={branch}"
+            runs_url += f"&branch={quote(str(branch), safe='')}"
 
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
@@ -243,7 +270,7 @@ Recommendations:
             return {"error": "Error fetching Forgejo artifacts."}
 
     async def fetch_branches(self, owner: str, repo: str) -> list[str]:
-        if not self.url:
+        if not self.url or not _is_valid_slug(owner) or not _is_valid_slug(repo):
             return []
         headers = (
             {"Authorization": f"token {self.token}", "Accept": ACCEPT_JSON}
@@ -263,7 +290,7 @@ Recommendations:
     async def get_workflows(
         self, owner: str, repo: str, branch: str | None = None
     ) -> list[dict[str, str]]:
-        if not self.url:
+        if not self.url or not _is_valid_slug(owner) or not _is_valid_slug(repo):
             return []
         headers = (
             {"Authorization": f"token {self.token}", "Accept": ACCEPT_JSON}
@@ -273,7 +300,7 @@ Recommendations:
         base_url = f"{self.url.rstrip('/')}/api/v1/repos/{owner}/{repo}"
         runs_url = f"{base_url}/actions/runs?limit=50"
         if branch:
-            runs_url += f"&branch={branch}"
+            runs_url += f"&branch={quote(str(branch), safe='')}"
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 resp = await client.get(runs_url, headers=headers)

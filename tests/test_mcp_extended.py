@@ -243,3 +243,37 @@ async def test_wait_generator_recent_commit(mock_sleep):
     data = json.loads(res2)
     assert data["result"]["status"] == "success"
     assert "api/logs" in data["result"]["log_url"]
+
+
+@pytest.mark.asyncio
+@patch("api.routers.mcp.asyncio.sleep", new_callable=AsyncMock)
+async def test_wait_generator_max_iterations_timeout(mock_sleep, monkeypatch):
+    import json
+
+    import api.routers.mcp as mcp_mod
+
+    monkeypatch.setattr(mcp_mod, "MAX_WAIT_ITERATIONS", 3)
+
+    class MockRequest:
+        base_url = "http://testserver/"
+
+    class MockWorkflowService:
+        async def get_single_status(self, *args, **kwargs):
+            return {"status": "running", "url": "http://real"}
+
+    gen = mcp_mod._wait_generator(
+        MockWorkflowService(),
+        MockRequest(),
+        "github",
+        "own",
+        "rep",
+        "wf1",
+        "main",
+        1,
+        False,
+    )
+    outputs = [item async for item in gen]
+    # 2 keep-alive spaces followed by a final timeout JSON payload on iteration 3
+    assert outputs[:2] == [" ", " "]
+    final_payload = json.loads(outputs[-1])
+    assert final_payload["result"]["status"] == "timeout"

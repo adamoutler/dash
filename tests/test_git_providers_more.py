@@ -223,3 +223,85 @@ async def test_fetch_jenkins_artifacts():
     provider = JenkinsProvider("o", "r", "http://jenkins")
     res = await provider.fetch_artifacts("o", "r")
     assert "error" in res
+
+
+@pytest.mark.asyncio
+@patch("api.providers.jenkins.httpx.AsyncClient.get")
+async def test_jenkins_ssrf_and_traversal_blocked(mock_get):
+    provider = JenkinsProvider("user", "secret_token", "http://jenkins.internal:8080")
+
+    # 1. External URL passed as repo must be rejected without making HTTP request
+    res = await provider.fetch_status("owner", "http://attacker.example.com/steal")
+    assert res["status"] == "error"
+    assert mock_get.call_count == 0
+
+    # 2. Path traversal in owner/repo must be rejected without making HTTP request
+    res_trav = await provider.fetch_status("../admin", "job")
+    assert res_trav["status"] == "error"
+    assert mock_get.call_count == 0
+
+    # 3. Cross-origin nested job URL in folder response must be blocked
+    mock_folder = MagicMock()
+    mock_folder.status_code = 200
+    mock_folder.json.return_value = {
+        "_class": "OrganizationFolder",
+        "jobs": [{"name": "main", "url": "http://attacker.example.com/job/main"}],
+    }
+    mock_get.return_value = mock_folder
+    client = httpx.AsyncClient()
+    res_nested = await provider._resolve_jenkins_status(
+        client, "http://jenkins.internal:8080/job/org", "org", "repo"
+    )
+    assert res_nested["status"] == "error"
+    assert mock_get.call_count == 1
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+@patch("api.providers.github.httpx.AsyncClient.get")
+async def test_github_redirect_strips_authorization_and_validates_slugs(mock_get):
+    provider = GitHubProvider("gh_secret_token")
+
+    # Path traversal in owner/repo/workflow_id rejected before network call
+    res_bad = await provider.fetch_status("../evil", "repo")
+    assert res_bad["status"] == "error"
+    assert mock_get.call_count == 0
+
+    res_bad_wf = await provider.fetch_status("owner", "repo", workflow_id="../../etc")
+    assert res_bad_wf["status"] == "error"
+    assert mock_get.call_count == 0
+
+    # Verify 302 redirect on job logs strips Authorization header
+    mock_runs = MagicMock()
+    mock_runs.status_code = 200
+    mock_runs.json.return_value = {"workflow_runs": [{"id": 10}]}
+
+    mock_jobs = MagicMock()
+    mock_jobs.status_code = 200
+    mock_jobs.json.return_value = {
+        "jobs": [{"id": 99, "name": "build", "conclusion": "failure"}]
+    }
+
+    mock_redirect = MagicMock()
+    mock_redirect.status_code = 302
+    mock_redirect.headers = {"Location": "https://results-receiver.actions.githubusercontent.com/logs.txt"}
+
+    mock_storage = MagicMock()
+    mock_storage.status_code = 200
+    mock_storage.text = "redirected log content"
+
+    mock_get.side_effect = [mock_runs, mock_jobs, mock_redirect, mock_storage]
+    logs = await provider.fetch_logs("owner", "repo")
+    assert "redirected log content" in logs
+    # 4th call is to external storage and must not include Authorization header
+    storage_call_kwargs = mock_get.call_args_list[3][1]
+    assert "Authorization" not in storage_call_kwargs.get("headers", {})
+
+
+@pytest.mark.asyncio
+@patch("api.providers.forgejo.httpx.AsyncClient.get")
+async def test_forgejo_validates_slugs(mock_get):
+    provider = ForgejoProvider("fg_secret", "http://forgejo.internal")
+    res = await provider.fetch_status("../evil", "repo")
+    assert res["status"] == "error"
+    assert mock_get.call_count == 0
