@@ -273,6 +273,32 @@
             const submitBtn = document.getElementById('submit-btn');
             const cancelBtn = document.getElementById('cancel-btn');
 
+            window.autoApproveOAuth = false;
+            window.csrfToken = null;
+
+            fetch('/api/auth/status', {
+                cache: 'no-store',
+                credentials: 'same-origin',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            })
+                .then(r => r.ok ? r.json() : null)
+                .then(data => {
+                    if (data && data.authenticated) {
+                        window.csrfToken = data.csrf_token || null;
+                        window.autoApproveOAuth = true;
+                        const userInp = document.getElementById('username-input');
+                        if (userInp && data.username) {
+                            userInp.value = data.username;
+                        }
+                        if (submitBtn) {
+                            submitBtn.textContent = data.username
+                                ? `✔ Approve & Connect as ${data.username}`
+                                : '✔ Approve & Connect';
+                        }
+                    }
+                })
+                .catch(() => {});
+
             function showError(msg) {
                 errorBox.textContent = msg;
                 errorBox.style.display = 'block';
@@ -359,9 +385,17 @@
                 submitBtn.textContent = 'Submitting...';
 
                 try {
+                    const reqHeaders = {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    };
+                    if (window.csrfToken) {
+                        reqHeaders['X-CSRF-Token'] = window.csrfToken;
+                    }
                     const res = await fetch('/oauth/authorize', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'same-origin',
+                        headers: reqHeaders,
                         body: JSON.stringify({
                             username: username,
                             client_id: clientId,
@@ -370,14 +404,20 @@
                             state: state,
                             code_challenge: codeChallenge,
                             code_challenge_method: codeChallengeMethod,
-                            scope: scope
+                            scope: scope,
+                            auto_approve: Boolean(window.autoApproveOAuth)
                         })
                     });
                     const data = await res.json();
                     if (!res.ok) {
                         showError(data.detail || 'Failed to submit authorization request.');
                         submitBtn.disabled = false;
-                        submitBtn.textContent = 'Request Access';
+                        submitBtn.textContent = window.autoApproveOAuth ? '✔ Approve & Connect' : 'Request Access';
+                        return;
+                    }
+
+                    if (data.status === 'approved' && data.redirect_url) {
+                        window.location.replace(data.redirect_url);
                         return;
                     }
 
@@ -389,7 +429,7 @@
                 } catch (err) {
                     showError('Network error submitting authorization request.');
                     submitBtn.disabled = false;
-                    submitBtn.textContent = 'Request Access';
+                    submitBtn.textContent = window.autoApproveOAuth ? '✔ Approve & Connect' : 'Request Access';
                 }
             });
         })();

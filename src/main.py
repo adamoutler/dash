@@ -8,10 +8,9 @@ from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from api.auth import (
-    get_current_user,
-    get_mcp_user,
-    require_basic_auth,
-    security_basic,
+    optional_web_login,
+    require_mcp_oauth,
+    require_web_login,
 )
 from api.explore import router as explore_router
 from api.routers.config_ui import router as config_ui_router
@@ -20,6 +19,7 @@ from api.routers.mcp import router as mcp_router
 from api.routers.oauth import router as oauth_router
 from api.routers.repos import router as repos_router
 from api.routers.settings import router as settings_router
+from api.routers.web_auth import router as web_auth_router
 from api.routers.workflows import router as workflows_router
 
 
@@ -87,6 +87,7 @@ app.include_router(workflows_router)
 app.include_router(mcp_router)
 app.include_router(config_ui_router)
 app.include_router(oauth_router)
+app.include_router(web_auth_router)
 
 
 @app.get("/api/version", summary="Get App Version")
@@ -124,15 +125,14 @@ def _is_mcp_probe_request(request: Request) -> bool:
 @app.api_route("/", methods=["GET", "HEAD"], include_in_schema=False)
 async def read_index(request: Request):
     if _is_mcp_probe_request(request):
-        mcp_user = await get_mcp_user(request)
+        mcp_user = await require_mcp_oauth(request)
         return await mcp_discovery_probe(request, mcp_user)
-    credentials = await security_basic(request)
-    require_basic_auth(credentials)
+    await optional_web_login(request)
     return FileResponse(os.path.join(STATIC_DIR, "index.html"))
 
 
 @app.get("/configure", include_in_schema=False)
-async def read_configure(user: Annotated[str, Depends(require_basic_auth)]):
+async def read_configure(user: Annotated[str, Depends(require_web_login)]):
     return FileResponse(os.path.join(STATIC_DIR, "configure.html"))
 
 
@@ -187,5 +187,5 @@ async def read_gemini_kanban():
 
 
 @app.get("/api", include_in_schema=False)
-async def redirect_to_docs(user: Annotated[str, Depends(get_current_user)]):
+async def redirect_to_docs(user: Annotated[str | None, Depends(optional_web_login)]):
     return RedirectResponse(url="/docs")

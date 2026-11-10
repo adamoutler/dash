@@ -1,10 +1,12 @@
+import base64
 import hashlib
+import hmac
 import json
 import os
 import re
 import secrets
 import time
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
@@ -16,10 +18,28 @@ security_basic = HTTPBasic(auto_error=False)
 
 DATA_DIR = os.getenv("DATA_DIR", "data")
 DEFAULT_TOKENS_PATH = os.path.join(DATA_DIR, "tokens.json")
+SESSION_SECRET_PATH = os.path.join(DATA_DIR, "session_secret.key")
 FILE_LOCK_TIMEOUT = 5
 SAFE_HOST_RE = re.compile(
     r"^[a-zA-Z0-9.-]+(?::[0-9]{1,5})?$|^\[[a-fA-F0-9:]+\](?::[0-9]{1,5})?$"
 )
+
+config_manager = None
+
+
+def _get_config_manager():
+    if config_manager is not None:
+        return config_manager
+    try:
+        from api.routers import settings as settings_router
+
+        if getattr(settings_router, "config_manager", None) is not None:
+            return settings_router.config_manager
+    except ImportError:
+        pass
+    from api.config import ConfigManager
+
+    return ConfigManager()
 
 
 def _hash_token(value: str) -> str:
@@ -39,7 +59,7 @@ class TokenManager:
             with open(self.filepath, "w") as f:
                 json.dump({}, f)
 
-    def _load_nolock(self):
+    def _load_nolock(self) -> dict[str, Any]:
         try:
             with open(self.filepath, "r") as f:
                 data = json.load(f)
@@ -47,13 +67,13 @@ class TokenManager:
         except (json.JSONDecodeError, FileNotFoundError):
             return {}
 
-    def _save_nolock(self, data):
+    def _save_nolock(self, data: dict[str, Any]) -> None:
         tmp_path = f"{self.filepath}.tmp"
         with open(tmp_path, "w") as f:
             json.dump(data, f)
         os.replace(tmp_path, self.filepath)
 
-    def _prune_nolock(self, data: dict, now: float) -> bool:
+    def _prune_nolock(self, data: dict[str, Any], now: float) -> bool:
         changed = False
         for k, v in list(data.items()):
             if not isinstance(v, dict) or now > v.get("expires_at", 0):
@@ -61,7 +81,7 @@ class TokenManager:
                 changed = True
         return changed
 
-    def create_token(self, name: str, expires_in_sec: int, **extra):
+    def create_token(self, name: str, expires_in_sec: int, **extra) -> str:
         with FileLock(self.lockpath, timeout=FILE_LOCK_TIMEOUT):
             now = time.time()
             data = self._load_nolock()
@@ -69,39 +89,70 @@ class TokenManager:
             token = secrets.token_hex(32)
             token_hash = _hash_token(token)
             token_id = f"tok_{secrets.token_hex(8)}"
-            entry = {
+            is_oauth = bool(extra.get("oauth"))
+            entry: dict[str, Any] = {
                 "id": token_id,
                 "name": name,
                 "expires_at": now + expires_in_sec,
+                "oauth": is_oauth,
+                "domain": "mcp_oauth" if is_oauth else "api_token",
             }
             for k, v in extra.items():
                 if v is not None:
                     if k == "refresh_token":
                         entry["refresh_token_hash"] = _hash_token(str(v))
+                    elif k == "oauth":
+                        entry["oauth"] = bool(v)
                     else:
                         entry[k] = v
+            entry["oauth"] = is_oauth
+            entry["domain"] = "mcp_oauth" if is_oauth else "api_token"
             data[token_hash] = entry
             self._save_nolock(data)
             return token
 
-    def validate_token(self, token: str):
+    def get_token_record(self, token: str) -> dict[str, Any] | None:
         if not token:
-            return False
+            return None
         target_hash = _hash_token(token)
         with FileLock(self.lockpath, timeout=FILE_LOCK_TIMEOUT):
             now = time.time()
             data = self._load_nolock()
             if self._prune_nolock(data, now):
                 self._save_nolock(data)
-            matched = False
-            for k in data:
-                if secrets.compare_digest(k, target_hash) or secrets.compare_digest(
-                    k, token
-                ):
-                    matched = True
+            matched: dict[str, Any] | None = None
+            for k, v in data.items():
+                if secrets.compare_digest(k, target_hash):
+                    matched = dict(v) if isinstance(v, dict) else None
             return matched
 
-    def rotate_refresh_token(self, refresh_token: str, expires_in_sec: int = 31536000):
+    def validate_token(self, token: str) -> bool:
+        return self.get_token_record(token) is not None
+
+    def validate_api_token(self, token: str) -> dict[str, Any] | None:
+        rec = self.get_token_record(token)
+        if (
+            rec is not None
+            and not rec.get("oauth")
+            and rec.get("domain", "api_token") != "mcp_oauth"
+        ):
+            return rec
+        return None
+
+    def validate_oauth_token(self, token: str) -> dict[str, Any] | None:
+        rec = self.get_token_record(token)
+        if rec is not None and (
+            rec.get("oauth") is True or rec.get("domain") == "mcp_oauth"
+        ):
+            return rec
+        return None
+
+    def rotate_refresh_token(
+        self,
+        refresh_token: str,
+        expires_in_sec: int = 31536000,
+        client_id: str | None = None,
+    ) -> dict[str, Any] | None:
         if not refresh_token:
             return None
         target_rt_hash = _hash_token(refresh_token)
@@ -113,18 +164,24 @@ class TokenManager:
             matched_info = None
             for old_key, info in list(data.items()):
                 stored_rt_hash = info.get("refresh_token_hash", "")
-                legacy_rt = info.get("refresh_token", "")
-                if (
-                    stored_rt_hash
-                    and secrets.compare_digest(stored_rt_hash, target_rt_hash)
-                ) or (
-                    legacy_rt and secrets.compare_digest(legacy_rt, refresh_token)
+                if stored_rt_hash and secrets.compare_digest(
+                    stored_rt_hash, target_rt_hash
                 ):
                     matched_key = old_key
                     matched_info = info
                     break
 
             if matched_key is None or matched_info is None:
+                if pruned:
+                    self._save_nolock(data)
+                return None
+
+            expected_cid = matched_info.get("client_id")
+            if (
+                client_id is not None
+                and expected_cid
+                and not secrets.compare_digest(str(expected_cid), str(client_id))
+            ):
                 if pruned:
                     self._save_nolock(data)
                 return None
@@ -137,6 +194,10 @@ class TokenManager:
             new_entry["id"] = f"tok_{secrets.token_hex(8)}"
             new_entry["expires_at"] = now + expires_in_sec
             new_entry["refresh_token_hash"] = _hash_token(new_refresh)
+            new_entry["oauth"] = bool(matched_info.get("oauth", True))
+            new_entry["domain"] = matched_info.get(
+                "domain", "mcp_oauth" if new_entry["oauth"] else "api_token"
+            )
             data[_hash_token(new_token)] = new_entry
             self._save_nolock(data)
             return {
@@ -146,7 +207,7 @@ class TokenManager:
                 "expires_in": expires_in_sec,
             }
 
-    def revoke_token(self, token: str):
+    def revoke_token(self, token: str) -> bool:
         if not token:
             return False
         target_hash = _hash_token(token)
@@ -157,16 +218,13 @@ class TokenManager:
             for k, v in list(data.items()):
                 stored_id = v.get("id", "")
                 stored_rt_hash = v.get("refresh_token_hash", "")
-                legacy_rt = v.get("refresh_token", "")
                 if (
                     secrets.compare_digest(k, target_hash)
-                    or secrets.compare_digest(k, token)
                     or (stored_id and secrets.compare_digest(stored_id, token))
                     or (
                         stored_rt_hash
                         and secrets.compare_digest(stored_rt_hash, target_hash)
                     )
-                    or (legacy_rt and secrets.compare_digest(legacy_rt, token))
                 ):
                     del data[k]
                     self._save_nolock(data)
@@ -175,7 +233,7 @@ class TokenManager:
                 self._save_nolock(data)
             return False
 
-    def list_tokens(self):
+    def list_tokens(self) -> list[dict[str, Any]]:
         with FileLock(self.lockpath, timeout=FILE_LOCK_TIMEOUT):
             now = time.time()
             data = self._load_nolock()
@@ -184,18 +242,19 @@ class TokenManager:
             result = []
             for k, v in data.items():
                 opaque_id = v.get("id") or f"tok_{k[:16]}"
-                item = {
+                is_oauth = bool(v.get("oauth"))
+                item: dict[str, Any] = {
                     "id": opaque_id,
                     "token": opaque_id,
                     "name": v["name"],
                     "expires_at": v["expires_at"],
+                    "oauth": is_oauth,
+                    "domain": v.get("domain", "mcp_oauth" if is_oauth else "api_token"),
                 }
                 if v.get("username"):
                     item["username"] = v["username"]
                 if v.get("client_id"):
                     item["client_id"] = v["client_id"]
-                if v.get("oauth"):
-                    item["oauth"] = True
                 result.append(item)
             return result
 
@@ -203,11 +262,135 @@ class TokenManager:
 token_manager = TokenManager()
 
 
-def verify_basic(credentials: HTTPBasicCredentials):
+def get_web_login_credentials() -> tuple[str, str]:
+    cm = _get_config_manager()
+    settings = cm.get_settings()
+    user = str(
+        settings.get("dashboard_user") or os.environ.get("DASHBOARD_USER", "")
+    ).strip()
+    password = str(
+        settings.get("dashboard_password") or os.environ.get("DASHBOARD_PASSWORD", "")
+    ).strip()
+    if not user or not password:
+        return "", ""
+    return user, password
+
+
+def is_web_login_configured() -> bool:
+    user, password = get_web_login_credentials()
+    return bool(user and password)
+
+
+def is_web_oauth_configured() -> bool:
+    cm = _get_config_manager()
+    client_id = str(
+        cm.get_value("web_oauth_client_id", "GOOGLE_CLIENT_ID") or ""
+    ).strip()
+    client_secret = str(
+        cm.get_value("web_oauth_client_secret", "GOOGLE_CLIENT_SECRET") or ""
+    ).strip()
+    allowed_emails = str(
+        cm.get_value("web_oauth_allowed_emails", "GOOGLE_ALLOWED_EMAILS") or ""
+    ).strip()
+    return bool(client_id and client_secret and allowed_emails)
+
+
+def _get_session_secret() -> bytes:
+    env_key = os.environ.get("DASHBOARD_SECRET_KEY", "").strip()
+    if env_key:
+        return hashlib.sha256(env_key.encode("utf-8")).digest()
+    os.makedirs(os.path.dirname(SESSION_SECRET_PATH) or ".", exist_ok=True)
+    with FileLock(f"{SESSION_SECRET_PATH}.lock", timeout=FILE_LOCK_TIMEOUT):
+        if os.path.exists(SESSION_SECRET_PATH):
+            try:
+                with open(SESSION_SECRET_PATH, "r", encoding="utf-8") as f:
+                    raw = f.read().strip()
+                if len(raw) >= 32:
+                    return hashlib.sha256(raw.encode("utf-8")).digest()
+            except OSError:
+                pass
+        raw = secrets.token_hex(32)
+        with open(SESSION_SECRET_PATH, "w", encoding="utf-8") as f:
+            f.write(raw)
+        try:
+            os.chmod(SESSION_SECRET_PATH, 0o600)
+        except OSError:
+            pass
+        return hashlib.sha256(raw.encode("utf-8")).digest()
+
+
+def create_signed_payload(payload: dict[str, Any]) -> str:
+    payload_bytes = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+    payload_b64 = base64.urlsafe_b64encode(payload_bytes).decode("ascii").rstrip("=")
+    sig = hmac.new(
+        _get_session_secret(), payload_b64.encode("ascii"), hashlib.sha256
+    ).hexdigest()
+    return f"{payload_b64}.{sig}"
+
+
+def verify_signed_payload(cookie_val: str | None) -> dict[str, Any] | None:
+    if not cookie_val or not isinstance(cookie_val, str) or "." not in cookie_val:
+        return None
+    payload_b64, _, sig = cookie_val.rpartition(".")
+    if not payload_b64 or not sig:
+        return None
+    expected_sig = hmac.new(
+        _get_session_secret(), payload_b64.encode("ascii"), hashlib.sha256
+    ).hexdigest()
+    if not hmac.compare_digest(sig, expected_sig):
+        return None
+    try:
+        padding = "=" * (-len(payload_b64) % 4)
+        raw = base64.urlsafe_b64decode(payload_b64 + padding).decode("utf-8")
+        data = json.loads(raw)
+        if not isinstance(data, dict):
+            return None
+        if float(data.get("exp", 0)) <= time.time():
+            return None
+        return data
+    except (ValueError, TypeError, json.JSONDecodeError, UnicodeDecodeError):
+        return None
+
+
+def create_session_cookie(
+    username: str, domain: str = "web_login", ttl_sec: int = 86400
+) -> tuple[str, str]:
+    csrf_token = secrets.token_hex(16)
+    payload = {
+        "sub": username,
+        "domain": domain,
+        "csrf": csrf_token,
+        "exp": time.time() + ttl_sec,
+    }
+    return create_signed_payload(payload), csrf_token
+
+
+def verify_session_cookie(cookie_val: str | None) -> dict[str, Any] | None:
+    data = verify_signed_payload(cookie_val)
+    if not data:
+        return None
+    if data.get("domain") not in ("web_login", "web_oauth"):
+        return None
+    if not str(data.get("sub") or "").strip():
+        return None
+    return data
+
+
+def _web_auth_headers(request: Request | None = None) -> dict[str, str]:
+    if request is not None and hasattr(request, "headers"):
+        xrw = request.headers.get("x-requested-with")
+        if isinstance(xrw, str) and xrw.lower() == "xmlhttprequest":
+            return {"WWW-Authenticate": "Session"}
+        accept = request.headers.get("accept")
+        if isinstance(accept, str) and "application/json" in accept.lower():
+            return {"WWW-Authenticate": "Session"}
+    return {"WWW-Authenticate": "Basic"}
+
+
+def verify_basic(credentials: HTTPBasicCredentials | None) -> bool:
     if not credentials:
         return False
-    correct_user = os.environ.get("DASHBOARD_USER", "").strip()
-    correct_pass = os.environ.get("DASHBOARD_PASSWORD", "").strip()
+    correct_user, correct_pass = get_web_login_credentials()
     if not correct_user or not correct_pass:
         return False
     return secrets.compare_digest(
@@ -215,13 +398,14 @@ def verify_basic(credentials: HTTPBasicCredentials):
     ) and secrets.compare_digest(credentials.password, correct_pass)
 
 
-async def get_current_user(request: Request):
-    correct_user = os.environ.get("DASHBOARD_USER", "").strip()
-    correct_pass = os.environ.get("DASHBOARD_PASSWORD", "").strip()
-    if (not correct_user or not correct_pass) and _is_anonymous_allowed():
+async def get_current_user(request: Request) -> str:
+    has_creds = is_web_login_configured() or is_web_oauth_configured()
+    authorization = (
+        request.headers.get("Authorization") if hasattr(request, "headers") else None
+    )
+    if not has_creds and _is_anonymous_allowed() and not authorization:
         return "anonymous_user"
 
-    authorization = request.headers.get("Authorization")
     if not authorization:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -234,7 +418,7 @@ async def get_current_user(request: Request):
     credentials = await security_basic(request) if scheme.lower() == "basic" else None
     if scheme.lower() == "basic" and credentials and verify_basic(credentials):
         return "basic_user"
-    elif scheme.lower() == "bearer" and token_manager.validate_token(param):
+    elif scheme.lower() == "bearer" and token_manager.validate_api_token(param):
         return "bearer_user"
 
     raise HTTPException(
@@ -244,27 +428,125 @@ async def get_current_user(request: Request):
     )
 
 
+async def require_api_token(request: Request) -> str:
+    has_creds = is_web_login_configured() or is_web_oauth_configured()
+    authorization = (
+        request.headers.get("Authorization") if hasattr(request, "headers") else None
+    )
+    if not has_creds and _is_anonymous_allowed() and not authorization:
+        return "anonymous_user"
+
+    if not authorization:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="API Bearer token required",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    scheme, param = get_authorization_scheme_param(authorization)
+    if scheme.lower() == "bearer":
+        rec = token_manager.validate_api_token(param)
+        if rec is not None:
+            return str(rec.get("name") or "bearer_user")
+
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid or non-API Bearer token",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+
 def require_basic_auth(
-    credentials: Annotated[HTTPBasicCredentials, Depends(security_basic)],
-):
-    correct_user = os.environ.get("DASHBOARD_USER", "").strip()
-    correct_pass = os.environ.get("DASHBOARD_PASSWORD", "").strip()
-    if not correct_user or not correct_pass:
+    credentials: Annotated[HTTPBasicCredentials | None, Depends(security_basic)] = None,
+    request: Request = None,  # type: ignore[assignment]
+) -> str:
+    if (
+        request is not None
+        and hasattr(request, "cookies")
+        and isinstance(getattr(request, "cookies", None), dict)
+    ):
+        cookie_val = request.cookies.get("dash_session")
+        session = verify_session_cookie(cookie_val)
+        if session:
+            method = str(getattr(request, "method", "GET")).upper()
+            if method in ("POST", "PUT", "DELETE", "PATCH"):
+                csrf_hdr = (
+                    request.headers.get("x-csrf-token", "")
+                    if hasattr(request, "headers")
+                    else ""
+                )
+                if not csrf_hdr or not secrets.compare_digest(
+                    str(csrf_hdr), str(session.get("csrf", ""))
+                ):
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="CSRF token missing or invalid",
+                    )
+            return str(session["sub"])
+
+    has_creds = is_web_login_configured() or is_web_oauth_configured()
+    if not has_creds:
         if _is_anonymous_allowed():
             return "anonymous_user"
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentication credentials not configured",
-            headers={"WWW-Authenticate": "Basic"},
+            headers=_web_auth_headers(request),
         )
 
     if not credentials or not verify_basic(credentials):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
-            headers={"WWW-Authenticate": "Basic"},
+            headers=_web_auth_headers(request),
         )
     return credentials.username
+
+
+require_web_login = require_basic_auth
+
+
+async def optional_web_login(request: Request) -> str | None:
+    if hasattr(request, "cookies") and isinstance(
+        getattr(request, "cookies", None), dict
+    ):
+        cookie_val = request.cookies.get("dash_session")
+        session = verify_session_cookie(cookie_val)
+        if session:
+            return str(session["sub"])
+
+    authorization = (
+        request.headers.get("Authorization") if hasattr(request, "headers") else None
+    )
+    if not authorization:
+        return None
+
+    scheme, param = get_authorization_scheme_param(authorization)
+    if scheme.lower() == "basic":
+        credentials = await security_basic(request)
+        if credentials and verify_basic(credentials):
+            return credentials.username
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid Basic authentication credentials",
+            headers=_web_auth_headers(request),
+        )
+
+    if scheme.lower() == "bearer":
+        rec = token_manager.validate_api_token(param)
+        if rec is not None:
+            return str(rec.get("name") or "bearer_user")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid API Bearer token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid authentication credentials",
+        headers=_web_auth_headers(request),
+    )
 
 
 def get_base_url(request: Request) -> str:
@@ -286,16 +568,9 @@ def get_base_url(request: Request) -> str:
             or "localhost"
         )
         host = str(host).split(",")[0].strip()
-        if (
-            not host
-            or len(host) > 255
-            or ".." in host
-            or not SAFE_HOST_RE.match(host)
-        ):
+        if not host or len(host) > 255 or ".." in host or not SAFE_HOST_RE.match(host):
             return "http://localhost"
-        if not host.startswith(
-            ("localhost", "127.0.0.1", "0.0.0.0", "[::1]", "test")
-        ):
+        if not host.startswith(("localhost", "127.0.0.1", "0.0.0.0", "[::1]", "test")):
             proto = "https"
         return f"{proto}://{host}".rstrip("/")
     except (AttributeError, TypeError, ValueError):
@@ -315,13 +590,14 @@ def build_mcp_oauth_headers(request: Request) -> dict[str, str]:
     }
 
 
-async def get_mcp_user(request: Request) -> str:
-    correct_user = os.environ.get("DASHBOARD_USER", "").strip()
-    correct_pass = os.environ.get("DASHBOARD_PASSWORD", "").strip()
-    if (not correct_user or not correct_pass) and _is_anonymous_allowed():
+async def require_mcp_oauth(request: Request) -> str:
+    has_creds = is_web_login_configured() or is_web_oauth_configured()
+    authorization = (
+        request.headers.get("Authorization") if hasattr(request, "headers") else None
+    )
+    if not has_creds and _is_anonymous_allowed() and not authorization:
         return "anonymous_user"
 
-    authorization = request.headers.get("Authorization")
     if not authorization:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -330,14 +606,16 @@ async def get_mcp_user(request: Request) -> str:
         )
 
     scheme, param = get_authorization_scheme_param(authorization)
-    credentials = await security_basic(request) if scheme.lower() == "basic" else None
-    if scheme.lower() == "basic" and credentials and verify_basic(credentials):
-        return "basic_user"
-    if scheme.lower() == "bearer" and token_manager.validate_token(param):
-        return "bearer_user"
+    if scheme.lower() == "bearer":
+        rec = token_manager.validate_oauth_token(param)
+        if rec is not None:
+            return str(rec.get("username") or "oauth_user")
 
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Invalid authentication credentials",
         headers=build_mcp_oauth_headers(request),
     )
+
+
+get_mcp_user = require_mcp_oauth

@@ -48,11 +48,11 @@
 
     <div class="section" id="oauth-section">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
-            <h2 style="margin: 0;">OAuth Connection Requests</h2>
+            <h2 style="margin: 0;">API / MCP OAuth 2.0 Connections</h2>
             <span id="oauth-pending-badge" class="oauth-badge" style="display: none;">0 Pending</span>
         </div>
         <p style="margin-top: 0; color: var(--text-secondary); font-size: 0.9rem;">
-            Approve or disapprove incoming OAuth 2.0 connection requests (such as Google Gemini App), and manage or delete connected OAuth accounts.
+            Approve or disapprove incoming OAuth 2.0 connection requests for MCP clients (such as Google Gemini App), and manage or revoke connected OAuth accounts.
         </p>
         <div id="oauth-pending-list">
             <div class="oauth-empty">No pending connection requests.</div>
@@ -66,16 +66,53 @@
     </div>
 
     <div class="section" id="tokens-section">
-        <h2>Tokens</h2>
+        <h2 style="margin-top: 0;">API Bearer Tokens</h2>
+        <p style="margin-top: 0; color: var(--text-secondary); font-size: 0.9rem;">
+            Create and manage static API Bearer Tokens for programmatic <code>/api/*</code> endpoints (e.g., <code>Authorization: Bearer &lt;TOKEN&gt;</code> for scripts, CI hooks, and CLI tools).
+        </p>
         <div>
             <input type="text" id="token-name" placeholder="Token Name">
             <button onclick="createToken()">Create Token</button>
         </div>
         <div id="new-token-container" style="display:none; margin-top:1rem;">
             <strong>New Token (Save this now!):</strong>
-            <code id="new-token-value" style="background:#eee; padding:2px 4px;"></code>
+            <code id="new-token-value" style="background: var(--log-bg); color: var(--log-color); padding: 4px 8px; border-radius: 4px;"></code>
+            <button type="button" onclick="copyNewToken()" id="copy-token-btn" style="margin-left: 8px; padding: 4px 10px; font-size: 12px;">Copy</button>
         </div>
         <ul id="tokens-list"></ul>
+    </div>
+
+    <div class="section" id="website-auth-section">
+        <h2 style="margin-top: 0;">Website Authentication</h2>
+        <p style="margin-top: 0; color: var(--text-secondary); font-size: 0.9rem;">
+            Configure how administrators sign in to the Dash web interface to add/edit repositories and manage configuration.
+        </p>
+        <div style="margin-bottom: 1.25rem;">
+            <h3 style="margin-bottom: 0.5rem;">
+                Website Login (Local Admin Credentials) <span id="website-login-status" style="font-size: 0.9em; font-weight: normal;"></span>
+            </h3>
+            <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                <input type="text" id="dashboard-user" placeholder="Admin Username (e.g. Admin)" autocomplete="username">
+                <input type="password" id="dashboard-password" placeholder="Admin Password" autocomplete="new-password">
+            </div>
+        </div>
+        <div style="margin-bottom: 1.25rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+            <h3 style="margin-bottom: 0.5rem;">
+                Website OAuth (Google Account) <span id="website-oauth-status" style="font-size: 0.9em; font-weight: normal;"></span>
+            </h3>
+            <p style="margin-top: 0; margin-bottom: 0.5rem; color: var(--text-secondary); font-size: 0.85rem;">
+                Authorized Redirect URI: <code id="google-redirect-uri"></code>
+            </p>
+            <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px;">
+                <input type="text" id="web-oauth-client-id" placeholder="Google OAuth Client ID" style="flex: 1; min-width: 220px;">
+                <input type="password" id="web-oauth-client-secret" placeholder="Google OAuth Client Secret" style="flex: 1; min-width: 220px;">
+            </div>
+            <div>
+                <input type="text" id="web-oauth-allowed-emails" placeholder="Allowed Google Emails (comma-separated)" style="width: 100%; box-sizing: border-box;">
+            </div>
+        </div>
+        <button onclick="saveWebsiteAuth()">Save Website Auth</button>
+        <span id="save-web-auth-msg" style="margin-left: 10px; color: green; display: none;">Saved successfully!</span>
     </div>
 
     <div class="section" id="provider-keys-section">
@@ -143,13 +180,40 @@
 
     <div class="section" id="mcp-section">
         <h2>MCP Server Connection</h2>
-        <p>Use these details to connect an MCP client:</p>
-        <div><strong>URL:</strong> <span id="mcp-url"></span></div>
-        <div style="margin-top: 6px;"><strong>OAuth 2.0 (Gemini App):</strong> Enter the URL above directly, provide your username, and approve the incoming request on this page.</div>
-        <div style="margin-top: 6px;"><strong>Auth Header:</strong> Bearer &lt;YOUR_TOKEN&gt;</div>
+        <p>Use these details to connect an MCP client or programmatic API consumer:</p>
+        <div><strong>MCP URL:</strong> <span id="mcp-url"></span></div>
+        <div style="margin-top: 6px;"><strong>MCP Authentication (OAuth 2.0 Required):</strong> MCP (<code>/mcp</code>) requires OAuth 2.0. Enter the URL above directly in your MCP client (such as Google Gemini App), provide your username, and approve the incoming request under <em>API / MCP OAuth 2.0 Connections</em>.</div>
+        <div style="margin-top: 6px;"><strong>Programmatic API Authentication (Bearer Token Required):</strong> REST API endpoints (<code>/api/*</code>) require an API Bearer Token via header: <code>Authorization: Bearer &lt;YOUR_TOKEN&gt;</code></div>
     </div>
 
     <script>
+        window.csrfToken = null;
+
+        function getAuthHeaders(extra = {}) {
+            const headers = Object.assign({ 'X-Requested-With': 'XMLHttpRequest' }, extra);
+            if (window.csrfToken) {
+                headers['X-CSRF-Token'] = window.csrfToken;
+            }
+            return headers;
+        }
+
+        async function fetchAuthStatus() {
+            try {
+                const res = await fetch('/api/auth/status', {
+                    cache: 'no-store',
+                    credentials: 'same-origin',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    window.csrfToken = data.csrf_token || null;
+                    document.body.setAttribute('data-authenticated', data.authenticated ? 'true' : 'false');
+                }
+            } catch (e) {
+                console.error('Error fetching auth status:', e);
+            }
+        }
+
         function updateThemeIcon() {
             const pref = localStorage.getItem('theme') || 'auto';
             const currentTheme = document.documentElement.getAttribute('data-theme');
@@ -214,6 +278,25 @@
         updateThemeIcon();
 
         document.getElementById('mcp-url').textContent = window.location.origin + '/mcp';
+        const googleRedirectEl = document.getElementById('google-redirect-uri');
+        if (googleRedirectEl) {
+            googleRedirectEl.textContent = window.location.origin + '/api/auth/oauth/callback';
+        }
+
+        function copyNewToken() {
+            const valEl = document.getElementById('new-token-value');
+            const btn = document.getElementById('copy-token-btn');
+            if (!valEl || !valEl.textContent) return;
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(valEl.textContent).then(() => {
+                    if (btn) {
+                        const prev = btn.textContent;
+                        btn.textContent = 'Copied!';
+                        setTimeout(() => { btn.textContent = prev; }, 2000);
+                    }
+                }).catch(() => {});
+            }
+        }
 
         function getProviderIconElement(provider) {
             const p = String(provider || '').toLowerCase();
@@ -237,7 +320,14 @@
         }
 
         async function loadData() {
-            const res = await fetch('/configure/data', { cache: 'no-store', credentials: 'same-origin' });
+            if (!window.csrfToken) {
+                await fetchAuthStatus();
+            }
+            const res = await fetch('/configure/data', {
+                cache: 'no-store',
+                credentials: 'same-origin',
+                headers: getAuthHeaders()
+            });
             if (res.ok) {
                 const data = await res.json();
 
@@ -260,15 +350,17 @@
 
                 const tokensList = document.getElementById('tokens-list');
                 tokensList.innerHTML = '';
-                data.tokens.forEach((info) => {
-                    const li = document.createElement('li');
-                    li.textContent = `${info.name} `;
-                    const btn = document.createElement('button');
-                    btn.textContent = 'Revoke';
-                    btn.onclick = () => revokeToken(info.token);
-                    li.appendChild(btn);
-                    tokensList.appendChild(li);
-                });
+                (data.tokens || [])
+                    .filter(info => !info.oauth && !String(info.name || '').startsWith('OAuth:'))
+                    .forEach((info) => {
+                        const li = document.createElement('li');
+                        li.textContent = `${info.name} `;
+                        const btn = document.createElement('button');
+                        btn.textContent = 'Revoke';
+                        btn.onclick = () => revokeToken(info.token);
+                        li.appendChild(btn);
+                        tokensList.appendChild(li);
+                    });
 
                 renderPendingOAuth(data.pending_oauth || []);
                 renderOAuthSessions(data.oauth_sessions || (data.tokens || []).filter(t => t.oauth || String(t.name || '').startsWith('OAuth:')));
@@ -316,7 +408,11 @@
         }
 
         async function deleteOAuthSession(token) {
-            const res = await fetch(`/api/oauth/sessions/${encodeURIComponent(token)}`, { method: 'DELETE' });
+            const res = await fetch(`/api/oauth/sessions/${encodeURIComponent(token)}`, {
+                method: 'DELETE',
+                credentials: 'same-origin',
+                headers: getAuthHeaders()
+            });
             if (res.ok) {
                 loadData();
             }
@@ -408,7 +504,8 @@
             if (!name) return;
             const res = await fetch('/configure/tokens', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
                 body: JSON.stringify({ name: name })
             });
             if (res.ok) {
@@ -421,19 +518,89 @@
         }
 
         async function revokeToken(token) {
-            const res = await fetch(`/configure/tokens/${token}`, { method: 'DELETE' });
+            const res = await fetch(`/configure/tokens/${token}`, {
+                method: 'DELETE',
+                credentials: 'same-origin',
+                headers: getAuthHeaders()
+            });
             if (res.ok) {
                 loadData();
             }
         }
 
         async function loadProviderStatus() {
-            const res = await fetch('/api/settings');
+            const res = await fetch('/api/settings', {
+                cache: 'no-store',
+                credentials: 'same-origin',
+                headers: getAuthHeaders()
+            });
             if (res.ok) {
                 const data = await res.json();
                 document.getElementById('github-status').innerHTML = data.github_configured ? '✅ Configured' : '❌ Not Set';
                 document.getElementById('forgejo-status').innerHTML = data.forgejo_configured ? '✅ Configured' : '❌ Not Set';
                 document.getElementById('jenkins-status').innerHTML = data.jenkins_configured ? '✅ Configured' : '❌ Not Set';
+
+                const webLoginStatus = document.getElementById('website-login-status');
+                if (webLoginStatus) {
+                    webLoginStatus.innerHTML = data.website_login_configured ? '✅ Configured' : '❌ Not Set';
+                }
+                const dashUserEl = document.getElementById('dashboard-user');
+                if (dashUserEl && data.dashboard_user && !dashUserEl.value) {
+                    dashUserEl.value = data.dashboard_user;
+                }
+
+                const webOauthStatus = document.getElementById('website-oauth-status');
+                if (webOauthStatus) {
+                    webOauthStatus.innerHTML = data.website_oauth_configured ? '✅ Configured' : '❌ Not Set';
+                }
+                const clientIdEl = document.getElementById('web-oauth-client-id');
+                if (clientIdEl && data.web_oauth_client_id && !clientIdEl.value) {
+                    clientIdEl.value = data.web_oauth_client_id;
+                }
+                const allowedEmailsEl = document.getElementById('web-oauth-allowed-emails');
+                if (allowedEmailsEl && data.web_oauth_allowed_emails && !allowedEmailsEl.value) {
+                    allowedEmailsEl.value = Array.isArray(data.web_oauth_allowed_emails)
+                        ? data.web_oauth_allowed_emails.join(', ')
+                        : data.web_oauth_allowed_emails;
+                }
+            }
+        }
+
+        async function saveWebsiteAuth() {
+            const payload = {};
+            const dashUser = document.getElementById('dashboard-user').value.trim();
+            if (dashUser) payload.dashboard_user = dashUser;
+            const dashPass = document.getElementById('dashboard-password').value;
+            if (dashPass) payload.dashboard_password = dashPass;
+
+            const clientId = document.getElementById('web-oauth-client-id').value.trim();
+            if (clientId) payload.web_oauth_client_id = clientId;
+            const clientSecret = document.getElementById('web-oauth-client-secret').value;
+            if (clientSecret) payload.web_oauth_client_secret = clientSecret;
+            const allowedEmails = document.getElementById('web-oauth-allowed-emails').value.trim();
+            if (allowedEmails) payload.web_oauth_allowed_emails = allowedEmails;
+
+            if (Object.keys(payload).length === 0) return;
+
+            const res = await fetch('/api/settings', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+                body: JSON.stringify(payload)
+            });
+
+            if (res.ok) {
+                document.getElementById('dashboard-password').value = '';
+                document.getElementById('web-oauth-client-secret').value = '';
+
+                const msg = document.getElementById('save-web-auth-msg');
+                if (msg) {
+                    msg.style.display = 'inline';
+                    setTimeout(() => { msg.style.display = 'none'; }, 3000);
+                }
+                loadProviderStatus();
+            } else {
+                alert('Failed to save website authentication settings');
             }
         }
 
@@ -458,7 +625,8 @@
 
             const res = await fetch('/api/settings', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
                 body: JSON.stringify(payload)
             });
 
@@ -480,8 +648,11 @@
             }
         }
 
-        loadData();
-        loadProviderStatus();
+        (async function initConfigure() {
+            await fetchAuthStatus();
+            loadData();
+            loadProviderStatus();
+        })();
 
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {

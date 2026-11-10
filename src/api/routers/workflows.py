@@ -6,7 +6,7 @@ import anyio
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
-from api.auth import get_current_user
+from api.auth import optional_web_login, require_api_token
 from api.config import LOGS_DIR, ConfigManager
 from api.models.domain import ProviderType
 from api.services.workflow_service import WorkflowService, get_log_filename
@@ -22,7 +22,7 @@ MAX_LOG_SIZE = 2 * 1024 * 1024  # 2MB
 
 @router.get("/workflows", summary="List Available Workflows")
 async def get_workflows(
-    user: Annotated[str, Depends(get_current_user)],
+    user: Annotated[str, Depends(require_api_token)],
     provider: ProviderType,
     owner: str,
     repo: str,
@@ -36,7 +36,7 @@ async def get_artifacts(
     provider: ProviderType,
     owner: str,
     repo: str,
-    user: Annotated[str, Depends(get_current_user)],
+    user: Annotated[str, Depends(require_api_token)],
     workflow_id: str | None = None,
     branch: str | None = None,
 ):
@@ -51,7 +51,7 @@ async def get_artifacts(
     responses={400: {"description": "Invalid provider, owner, repo, or log path"}},
 )
 async def post_logs(
-    user: Annotated[str, Depends(get_current_user)],
+    user: Annotated[str, Depends(require_api_token)],
     provider: ProviderType,
     owner: str,
     repo: str,
@@ -98,7 +98,7 @@ async def get_logs(
     provider: ProviderType,
     owner: str,
     repo: str,
-    user: Annotated[str, Depends(get_current_user)],
+    user: Annotated[str | None, Depends(optional_web_login)],
     workflow_id: str | None = None,
     branch: str | None = None,
 ):
@@ -119,7 +119,7 @@ async def get_logs(
 
 @router.get("/branches", summary="List Available Branches")
 async def get_branches(
-    user: Annotated[str, Depends(get_current_user)],
+    user: Annotated[str, Depends(require_api_token)],
     provider: ProviderType,
     owner: str,
     repo: str,
@@ -204,7 +204,7 @@ def _enhance_results(repos: list, results: list, base_url: str):
 @router.get("/status", summary="Retrieve all build statuses.")
 async def get_status(
     request: Request,
-    user: Annotated[str, Depends(get_current_user)],
+    user: Annotated[str | None, Depends(optional_web_login)],
     query: str | None = None,
 ):
     repos = storage.get_repos()
@@ -262,7 +262,7 @@ def _process_wait_iteration(
 @router.get("/wait", summary="Stream Execution Status")
 async def wait_status(
     request: Request,
-    user: Annotated[str, Depends(get_current_user)],
+    user: Annotated[str, Depends(require_api_token)],
     provider: ProviderType,
     owner: str,
     repo: str,

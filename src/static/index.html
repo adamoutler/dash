@@ -47,7 +47,7 @@
         }
     </style>
 </head>
-<body>
+<body data-authenticated="false">
 <div id="offline-banner" style="display:none; background-color: #ffcc00; color: #333; text-align: center; padding: 10px; font-weight: bold; width: 100%;">⚠️ You are offline...</div>
 <div id="logModal" class="modal">
   <div class="modal-content">
@@ -56,8 +56,43 @@
     <div id="logContent" class="log-container">Loading...</div>
   </div>
 </div>
+<div id="loginModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="loginModalTitle">
+  <div class="modal-content login-modal-card">
+    <span class="close-modal" tabindex="0" onclick="closeLoginModal()" onkeydown="if(event.key==='Enter') this.click()">&times;</span>
+    <h2 id="loginModalTitle" style="margin-top: 0; margin-bottom: 12px;">Sign in to Dash</h2>
+    <p style="color: var(--text-secondary); font-size: 13px; margin-top: 0; margin-bottom: 16px;">
+      Sign in to add or edit repositories and configure Dash settings.
+    </p>
+    <div id="loginError" class="oauth-error" role="alert"></div>
+    <form id="websiteLoginForm" onsubmit="submitWebsiteLogin(event)">
+      <div class="login-field">
+        <label for="loginUsername">Username</label>
+        <input type="text" id="loginUsername" name="username" placeholder="Admin" autocomplete="username" required>
+      </div>
+      <div class="login-field">
+        <label for="loginPassword">Password</label>
+        <input type="password" id="loginPassword" name="password" placeholder="Password" autocomplete="current-password" required>
+      </div>
+      <button type="submit" class="add-btn" id="loginSubmitBtn" style="width: 100%; margin-top: 6px;">Sign In</button>
+    </form>
+    <div id="loginOAuthDivider" class="login-divider" style="display: none;">
+      <span>OR</span>
+    </div>
+    <div id="websiteOAuthContainer" style="display: none;">
+      <a href="/api/auth/oauth/login" id="googleLoginBtn" class="google-oauth-btn">
+        <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
+          <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+          <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+          <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+          <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+        </svg>
+        Sign in with Google
+      </a>
+    </div>
+  </div>
+</div>
 <div class="container">
-    <div id="no-providers-banner" style="display:none; background-color: var(--bg-surface); border: 2px dashed #cb2431; padding: 20px; text-align: center; margin-bottom: 20px; border-radius: 8px;">
+    <div id="no-providers-banner" class="write-only" style="display:none; background-color: var(--bg-surface); border: 2px dashed #cb2431; padding: 20px; text-align: center; margin-bottom: 20px; border-radius: 8px;">
         <h2 style="margin-top: 0; color: #cb2431;">No CI Providers Configured</h2>
         <p style="color: var(--text-primary);">You haven't configured any CI providers yet. Please configure at least one provider to start adding repositories.</p>
         <a href="/configure" style="display: inline-block; padding: 10px 20px; background-color: #0366d6; color: white; text-decoration: none; border-radius: 4px; font-weight: bold; margin-top: 10px;">Go to Configuration</a>
@@ -69,11 +104,15 @@
             <button class="theme-toggle-btn" onclick="toggleTheme()" title="Toggle Dark Mode">
                 <span id="themeIcon">☀️</span>
             </button>
-            <button class="add-btn" onclick="toggleForm()" id="addRepoBtn">+ Add Repository</button>
+            <button class="add-btn write-only" onclick="toggleForm()" id="addRepoBtn">+ Add Repository</button>
+            <a href="/configure" class="nav-btn write-only" id="configBtn" style="display:none;">⚙️ Configure</a>
+            <span id="userBadge" class="user-badge write-only" style="display:none;"></span>
+            <button class="login-btn" id="loginBtn" onclick="openLoginModal()">🔒 Login</button>
+            <button class="logout-btn write-only" id="logoutBtn" style="display:none;" onclick="logoutWebsite()">Logout</button>
         </div>
     </div>
 
-    <div class="add-form" id="addForm">
+    <div class="add-form write-only" id="addForm">
         <div style="display: flex; gap: 10px; margin-bottom: 10px;">
             <select id="provider" style="flex: 1; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; background-color: var(--bg-surface); color: var(--text-primary);">
                 <option value="github">GitHub</option>
@@ -103,7 +142,7 @@
     </div>
 
     <footer style="margin-top: 40px; margin-bottom: 20px; text-align: center; font-size: 12px;">
-        <a href="/configure" aria-label="Dashboard configuration" style="color: #bbb; text-decoration: none; transition: color 0.2s; margin-right: 15px;" onmouseover="this.style.color='#666'" onmouseout="this.style.color='#bbb'" onfocus="this.style.color='#666'" onblur="this.style.color='#bbb'">⚙️ Configure Dashboard</a>
+        <a href="/configure" id="footerConfigLink" onclick="handleConfigLinkClick(event)" aria-label="Dashboard configuration" style="color: #bbb; text-decoration: none; transition: color 0.2s; margin-right: 15px;" onmouseover="this.style.color='#666'" onmouseout="this.style.color='#bbb'" onfocus="this.style.color='#666'" onblur="this.style.color='#bbb'">⚙️ Configure Dashboard</a>
         <a href="/api" aria-label="API Documentation" style="color: #bbb; text-decoration: none; transition: color 0.2s; margin-right: 15px;" onmouseover="this.style.color='#666'" onmouseout="this.style.color='#bbb'" onfocus="this.style.color='#666'" onblur="this.style.color='#bbb'">📚 API Docs</a>
         <a href="/llms.txt" aria-label="API automation instructions for AI and LLM agents" style="color: #bbb; text-decoration: none; transition: color 0.2s; margin-right: 15px;" onmouseover="this.style.color='#666'" onmouseout="this.style.color='#bbb'" onfocus="this.style.color='#666'" onblur="this.style.color='#bbb'">🤖 LLM API Instructions</a>
     </footer>
@@ -112,6 +151,164 @@
 <div id="appVersionDisplay" class="version-display">v0.0.0</div>
 
 <script>
+    window.isAuthenticated = false;
+    window.csrfToken = null;
+    window.pendingRedirectUrl = null;
+
+    function getAuthHeaders(extra = {}) {
+        const headers = Object.assign({ 'X-Requested-With': 'XMLHttpRequest' }, extra);
+        if (window.csrfToken) {
+            headers['X-CSRF-Token'] = window.csrfToken;
+        }
+        return headers;
+    }
+
+    async function checkAuthStatus() {
+        try {
+            const res = await fetch('/api/auth/status', {
+                cache: 'no-store',
+                credentials: 'same-origin',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                window.isAuthenticated = Boolean(data.authenticated);
+                window.csrfToken = data.csrf_token || null;
+                document.body.setAttribute('data-authenticated', window.isAuthenticated ? 'true' : 'false');
+
+                const loginBtn = document.getElementById('loginBtn');
+                const logoutBtn = document.getElementById('logoutBtn');
+                const configBtn = document.getElementById('configBtn');
+                const userBadge = document.getElementById('userBadge');
+                const oauthDivider = document.getElementById('loginOAuthDivider');
+                const oauthContainer = document.getElementById('websiteOAuthContainer');
+
+                if (window.isAuthenticated) {
+                    if (loginBtn) loginBtn.style.display = 'none';
+                    if (logoutBtn) logoutBtn.style.display = 'inline-block';
+                    if (configBtn) configBtn.style.display = 'inline-block';
+                    if (userBadge) {
+                        userBadge.textContent = data.username ? `👤 ${data.username}` : '👤 Admin';
+                        userBadge.style.display = 'inline-block';
+                    }
+                    if (window.checkPendingOAuth) {
+                        window.checkPendingOAuth();
+                    }
+                } else {
+                    if (loginBtn) loginBtn.style.display = 'inline-block';
+                    if (logoutBtn) logoutBtn.style.display = 'none';
+                    if (configBtn) configBtn.style.display = 'none';
+                    if (userBadge) userBadge.style.display = 'none';
+                    const addForm = document.getElementById('addForm');
+                    if (addForm) addForm.style.display = 'none';
+                }
+
+                if (data.website_oauth_enabled) {
+                    if (oauthDivider) oauthDivider.style.display = 'flex';
+                    if (oauthContainer) oauthContainer.style.display = 'block';
+                } else {
+                    if (oauthDivider) oauthDivider.style.display = 'none';
+                    if (oauthContainer) oauthContainer.style.display = 'none';
+                }
+            }
+        } catch (e) {
+            console.error('Error checking auth status:', e);
+        }
+    }
+
+    function openLoginModal(redirectUrl = null) {
+        window.pendingRedirectUrl = redirectUrl;
+        const errBox = document.getElementById('loginError');
+        if (errBox) {
+            errBox.style.display = 'none';
+            errBox.textContent = '';
+        }
+        const modal = document.getElementById('loginModal');
+        if (modal) {
+            modal.style.display = 'block';
+            const userInp = document.getElementById('loginUsername');
+            if (userInp) setTimeout(() => userInp.focus(), 50);
+        }
+    }
+
+    function closeLoginModal() {
+        const modal = document.getElementById('loginModal');
+        if (modal) modal.style.display = 'none';
+        window.pendingRedirectUrl = null;
+    }
+
+    function handleConfigLinkClick(event) {
+        if (!window.isAuthenticated) {
+            event.preventDefault();
+            openLoginModal('/configure');
+        }
+    }
+
+    async function submitWebsiteLogin(event) {
+        event.preventDefault();
+        const errBox = document.getElementById('loginError');
+        const submitBtn = document.getElementById('loginSubmitBtn');
+        const username = document.getElementById('loginUsername').value.trim();
+        const password = document.getElementById('loginPassword').value;
+
+        if (errBox) errBox.style.display = 'none';
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Signing in...';
+        }
+
+        try {
+            const res = await fetch('/api/auth/login', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+                body: JSON.stringify({ username, password })
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                if (errBox) {
+                    errBox.textContent = data.detail || 'Invalid username or password.';
+                    errBox.style.display = 'block';
+                }
+            } else {
+                document.getElementById('loginPassword').value = '';
+                const redirectTarget = window.pendingRedirectUrl;
+                closeLoginModal();
+                await checkAuthStatus();
+                await fetchProviders();
+                await fetchStatuses();
+                if (redirectTarget) {
+                    window.location.href = redirectTarget;
+                }
+            }
+        } catch (err) {
+            if (errBox) {
+                errBox.textContent = 'Network error signing in.';
+                errBox.style.display = 'block';
+            }
+        } finally {
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Sign In';
+            }
+        }
+    }
+
+    async function logoutWebsite() {
+        try {
+            await fetch('/api/auth/logout', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: getAuthHeaders({ 'Content-Type': 'application/json' })
+            });
+        } catch (e) {
+            console.error('Error logging out:', e);
+        }
+        await checkAuthStatus();
+        await fetchProviders();
+        await fetchStatuses();
+    }
+
     class CascadingPathBrowser {
         constructor(containerId, providerSelectId) {
             this.container = document.getElementById(containerId);
@@ -140,7 +337,13 @@
             this.levels.push(select);
 
             try {
-                const res = await fetch(`/api/explore/${provider}/nodes?path=${encodeURIComponent(path)}`);
+                const res = await fetch(`/api/explore/${provider}/nodes?path=${encodeURIComponent(path)}`, {
+                    headers: getAuthHeaders()
+                });
+                if (res.status === 401 || res.status === 403) {
+                    openLoginModal();
+                    throw new Error('Authentication required');
+                }
                 if (!res.ok) {
                     let errMsg = 'Failed to fetch';
                     try {
@@ -363,11 +566,16 @@
         if (!repo) return;
         if (provider !== 'jenkins' && !owner) return;
 
-        await fetch('/api/repos', {
+        const res = await fetch('/api/repos', {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
+            credentials: 'same-origin',
+            headers: getAuthHeaders({'Content-Type': 'application/json'}),
             body: JSON.stringify({provider, owner, repo, custom_links, workflow_id, workflow_name, branch: branch || null})
         });
+        if (res.status === 401 || res.status === 403) {
+            openLoginModal();
+            return;
+        }
 
         document.getElementById('submitBtn').innerText = 'Add';
         document.getElementById('provider').disabled = false;
@@ -384,11 +592,16 @@
     }
 
     async function removeRepo(provider, owner, repo, workflowId, branch) {
-        await fetch('/api/repos', {
+        const res = await fetch('/api/repos', {
             method: 'DELETE',
-            headers: {'Content-Type': 'application/json'},
+            credentials: 'same-origin',
+            headers: getAuthHeaders({'Content-Type': 'application/json'}),
             body: JSON.stringify({provider, owner, repo, workflow_id: workflowId || null, branch: branch || null})
         });
+        if (res.status === 401 || res.status === 403) {
+            openLoginModal();
+            return;
+        }
         fetchStatuses();
     }
 
@@ -551,8 +764,8 @@
                         </div>
                         <div class="actions-container">
                             <button class="icon-btn" style="color: #6a737d;" onclick="fetchLogs('${item.provider}', '${item.owner}', '${item.repo}', '${item.workflow_id || ''}')" title="View Logs">📄</button>
-                            <button class="icon-btn edit-btn" onclick="toggleForm(true, '${item.provider}', '${item.owner}', '${item.repo}', '${customLinksEncoded}', '${item.workflow_id || ''}', '${item.workflow_name || ''}', '${item.branch || ''}')" title="Edit">✎</button>
-                            <button class="icon-btn delete-btn" onclick="removeRepo('${item.provider}', '${item.owner}', '${item.repo}', '${item.workflow_id || ''}', '${item.branch || ''}')" title="Remove">✕</button>
+                            <button class="icon-btn edit-btn write-only" onclick="toggleForm(true, '${item.provider}', '${item.owner}', '${item.repo}', '${customLinksEncoded}', '${item.workflow_id || ''}', '${item.workflow_name || ''}', '${item.branch || ''}')" title="Edit">✎</button>
+                            <button class="icon-btn delete-btn write-only" onclick="removeRepo('${item.provider}', '${item.owner}', '${item.repo}', '${item.workflow_id || ''}', '${item.branch || ''}')" title="Remove">✕</button>
                         </div>
                     </div>
                     <a href="${item.repo_url}" target="_blank" style="text-decoration: none; color: inherit; display: block; min-width: 0; max-width: 100%;">
@@ -683,11 +896,14 @@
         }
     }
 
-    fetchProviders();
-    fetchVersion();
+    (async function initDashboard() {
+        await checkAuthStatus();
+        fetchProviders();
+        fetchVersion();
+        fetchStatuses();
+    })();
 
-    // Initial fetch and poll every 15s
-    fetchStatuses();
+    // Poll every 15s
     setInterval(fetchStatuses, 15000);
     setInterval(updateProgress, 1000);
 
@@ -722,9 +938,13 @@
 
     // Close modal when clicking outside of it
     window.onclick = function(event) {
-        const modal = document.getElementById('logModal');
-        if (event.target == modal) {
-            modal.style.display = "none";
+        const logModal = document.getElementById('logModal');
+        const loginModal = document.getElementById('loginModal');
+        if (event.target == logModal) {
+            logModal.style.display = "none";
+        }
+        if (event.target == loginModal) {
+            closeLoginModal();
         }
     }
 

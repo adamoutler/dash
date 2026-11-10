@@ -64,4 +64,6 @@ def test_token_endpoints():
     # 5. Also verify revocation by raw token works
     response2 = client.post("/configure/tokens", json={"name": "raw_revoke"}, auth=auth)
     raw_token2 = response2.json()["token"]
-    assert client.delete(f"/configure/tokens/{raw_token2}", auth=auth).status_code == 200
+    assert (
+        client.delete(f"/configure/tokens/{raw_token2}", auth=auth).status_code == 200
+    )

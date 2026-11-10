@@ -6,7 +6,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel
 
-from api.auth import get_mcp_user
+from api.auth import require_mcp_oauth
 from api.services.workflow_service import WorkflowService
 from api.storage import RepoStorage
 
@@ -774,7 +774,7 @@ def _build_server_info(request: Request) -> dict[str, Any]:
 @router.delete("/", include_in_schema=False)
 async def mcp_discovery_probe(
     request: Request,
-    user: Annotated[str, Depends(get_mcp_user)],
+    user: Annotated[str, Depends(require_mcp_oauth)],
 ):
     if request.method == "HEAD":
         return Response(status_code=200)
@@ -828,7 +828,7 @@ def _build_initialize_response(req: JsonRpcRequest, request: Request) -> dict[st
 async def mcp_endpoint(
     req: JsonRpcRequest,
     request: Request,
-    user: Annotated[str, Depends(get_mcp_user)],
+    user: Annotated[str, Depends(require_mcp_oauth)],
 ):
     from api.config import ConfigManager
 

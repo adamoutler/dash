@@ -129,7 +129,10 @@ def test_config_manager_prevents_cross_origin_env_token_exfiltration(
     monkeypatch.setenv("JENKINS_TOKEN", "env_j_token")
 
     # When settings.json has no URL override, env tokens are returned
-    assert config_manager.get_value("forgejo_token", "FORGEJO_TOKEN") == "env_forgejo_secret"
+    assert (
+        config_manager.get_value("forgejo_token", "FORGEJO_TOKEN")
+        == "env_forgejo_secret"
+    )
     assert config_manager.get_value("jenkins_token", "JENKINS_TOKEN") == "env_j_token"
 
     # When settings.json overrides URL to an external host without providing a new token,

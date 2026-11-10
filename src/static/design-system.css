@@ -373,3 +373,159 @@ h1 { margin: 0; }
     animation: oauth-spin 0.9s linear infinite;
     margin: 0 auto 16px auto;
 }
+
+/* 4-Domain Authentication & Access Control UI Styles */
+body:not([data-authenticated="true"]) .write-only {
+    display: none !important;
+}
+
+.login-btn {
+    background: var(--bg-surface);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    padding: 7px 14px;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.login-btn:hover {
+    background: var(--link-bg);
+    border-color: var(--link-color);
+}
+
+.logout-btn {
+    background: transparent;
+    color: var(--danger-color);
+    border: 1px solid var(--danger-color);
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 13px;
+    transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.logout-btn:hover {
+    background: var(--danger-color);
+    color: #ffffff;
+}
+
+.nav-btn {
+    background: var(--bg-surface);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    padding: 7px 12px;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 14px;
+    text-decoration: none;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.nav-btn:hover {
+    background: var(--link-bg);
+    border-color: var(--link-color);
+}
+
+.user-badge {
+    font-size: 13px;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 12px;
+    background: var(--link-bg);
+    color: var(--link-color);
+    border: 1px solid var(--border-color);
+}
+
+.login-modal-card {
+    max-width: 400px;
+    width: 90%;
+    margin: 8% auto;
+    padding: 24px;
+    background-color: var(--modal-bg);
+    border: 1px solid var(--modal-border);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px var(--modal-shadow);
+}
+
+.login-field {
+    margin-bottom: 14px;
+}
+
+.login-field label {
+    display: block;
+    font-weight: 600;
+    font-size: 13px;
+    margin-bottom: 6px;
+    color: var(--text-primary);
+}
+
+.login-field input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--input-border);
+    border-radius: 6px;
+    background: var(--input-bg);
+    color: var(--input-text);
+    font-size: 14px;
+    box-sizing: border-box;
+}
+
+.login-divider {
+    display: flex;
+    align-items: center;
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 12px;
+    margin: 18px 0;
+}
+
+.login-divider::before,
+.login-divider::after {
+    content: '';
+    flex: 1;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.login-divider span {
+    padding: 0 10px;
+    font-weight: 600;
+}
+
+.google-oauth-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    padding: 10px 14px;
+    background: var(--bg-surface);
+    color: var(--text-primary);
+    border: 1px solid var(--input-border);
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 14px;
+    text-decoration: none;
+    cursor: pointer;
+    box-sizing: border-box;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.google-oauth-btn:hover {
+    background: var(--bg-primary);
+    border-color: var(--link-color);
+}
+
+.oauth-error {
+    display: none;
+    background: var(--status-failure-bg);
+    color: var(--status-failure-color);
+    border: 1px solid var(--status-failure-border);
+    padding: 10px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    margin-bottom: 16px;
+}

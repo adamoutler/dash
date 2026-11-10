@@ -3,54 +3,59 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
+from api.auth import TokenManager
 from main import app
 
 client = TestClient(app)
 
 
 @pytest.fixture(autouse=True)
-def setup_env(monkeypatch):
+def setup_env(monkeypatch, tmp_path):
     monkeypatch.setenv("DASHBOARD_USER", "testuser")
     monkeypatch.setenv("DASHBOARD_PASSWORD", "testpass")
+    tm = TokenManager(str(tmp_path / "tokens.json"))
+    monkeypatch.setattr("api.auth.token_manager", tm)
+    api_token = tm.create_token("workflow-test", 3600)
+    yield {"Authorization": f"Bearer {api_token}"}
 
 
 @pytest.mark.asyncio
-async def test_get_workflows():
+async def test_get_workflows(setup_env):
     with patch(
         "api.routers.workflows.workflow_service.get_workflows", new_callable=AsyncMock
     ) as mock_get:
         mock_get.return_value = [{"id": "123", "name": "test_wf"}]
         response = client.get(
             "/api/workflows?provider=github&owner=test&repo=repo",
-            auth=("testuser", "testpass"),
+            headers=setup_env,
         )
         assert response.status_code == 200
         assert response.json() == [{"id": "123", "name": "test_wf"}]
 
 
 @pytest.mark.asyncio
-async def test_get_artifacts():
+async def test_get_artifacts(setup_env):
     with patch(
         "api.routers.workflows.workflow_service.get_artifacts", new_callable=AsyncMock
     ) as mock_get:
         mock_get.return_value = [{"name": "artifact1"}]
         response = client.get(
             "/api/artifacts?provider=github&owner=test&repo=repo",
-            auth=("testuser", "testpass"),
+            headers=setup_env,
         )
         assert response.status_code == 200
         assert response.json() == [{"name": "artifact1"}]
 
 
 @pytest.mark.asyncio
-async def test_get_branches_extended():
+async def test_get_branches_extended(setup_env):
     with patch(
         "api.routers.workflows.workflow_service.get_branches", new_callable=AsyncMock
     ) as mock_get:
         mock_get.return_value = ["main", "dev"]
         response = client.get(
             "/api/branches?provider=github&owner=test&repo=repo",
-            auth=("testuser", "testpass"),
+            headers=setup_env,
         )
         assert response.status_code == 200
         assert response.json() == ["main", "dev"]
@@ -167,7 +172,7 @@ def test_process_wait_iteration():
 
 @pytest.mark.asyncio
 @patch("api.routers.workflows.asyncio.sleep", new_callable=AsyncMock)
-async def test_wait_status(mock_sleep):
+async def test_wait_status(mock_sleep, setup_env):
     with patch(
         "api.routers.workflows.workflow_service.get_single_status",
         new_callable=AsyncMock,
@@ -176,7 +181,7 @@ async def test_wait_status(mock_sleep):
         with client.stream(
             "GET",
             "/api/wait?provider=github&owner=test&repo=repo",
-            auth=("testuser", "testpass"),
+            headers=setup_env,
         ) as response:
             assert response.status_code == 200
             text = "".join(list(response.iter_text()))
@@ -189,7 +194,7 @@ async def test_wait_status(mock_sleep):
         with client.stream(
             "GET",
             "/api/wait?provider=github&owner=test&repo=repo",
-            auth=("testuser", "testpass"),
+            headers=setup_env,
         ) as response:
             assert response.status_code == 200
             text = "".join(list(response.iter_text()))

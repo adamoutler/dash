@@ -3,15 +3,20 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
+from api.auth import TokenManager
 from main import app
 
 client = TestClient(app)
 
 
 @pytest.fixture(autouse=True)
-def setup_env(monkeypatch):
+def setup_env(monkeypatch, tmp_path):
     monkeypatch.setenv("DASHBOARD_USER", "testuser")
     monkeypatch.setenv("DASHBOARD_PASSWORD", "testpass")
+    tm = TokenManager(str(tmp_path / "tokens.json"))
+    monkeypatch.setattr("api.auth.token_manager", tm)
+    api_token = tm.create_token("test-api", 3600)
+    yield {"Authorization": f"Bearer {api_token}"}, tm
 
 
 def test_read_index():
@@ -125,33 +130,34 @@ def test_add_and_get_repos():
     assert response.status_code == 200
 
 
-def test_post_and_get_logs(tmp_path, monkeypatch):
+def test_post_and_get_logs(tmp_path, monkeypatch, setup_env):
     monkeypatch.setenv("LOGS_DIR", str(tmp_path))
-    auth = ("testuser", "testpass")
+    api_headers, _ = setup_env
 
     log_content = b"This is a test log.\nLine 2.\n"
     response = client.post(
         "/api/logs?provider=github&owner=testowner&repo=testrepo",
         content=log_content,
-        auth=auth,
+        headers=api_headers,
     )
     assert response.status_code == 200
     assert response.json()["message"] == "Log saved successfully"
 
     response = client.get(
-        "/api/logs?provider=github&owner=testowner&repo=testrepo", auth=auth
+        "/api/logs?provider=github&owner=testowner&repo=testrepo",
+        headers=api_headers,
     )
     assert response.status_code == 200
     assert response.json()["log"] == "This is a test log.\nLine 2.\n"
 
 
-def test_post_logs_invalid_params():
-    auth = ("testuser", "testpass")
+def test_post_logs_invalid_params(setup_env):
+    api_headers, _ = setup_env
     # provider with only invalid characters will become empty string after sanitization
     response = client.post(
         "/api/logs?provider=///&owner=testowner&repo=testrepo",
         content=b"test",
-        auth=auth,
+        headers=api_headers,
     )
     assert response.status_code in [400, 422]
     if response.status_code == 422:
@@ -160,9 +166,9 @@ def test_post_logs_invalid_params():
         assert "Invalid provider" in response.json()["detail"]
 
 
-def test_post_logs_truncation(tmp_path, monkeypatch):
+def test_post_logs_truncation(tmp_path, monkeypatch, setup_env):
     monkeypatch.setenv("LOGS_DIR", str(tmp_path))
-    auth = ("testuser", "testpass")
+    api_headers, _ = setup_env
 
     import api.routers.workflows
 
@@ -172,12 +178,13 @@ def test_post_logs_truncation(tmp_path, monkeypatch):
     response = client.post(
         "/api/logs?provider=github&owner=testowner&repo=testrepo",
         content=large_log,
-        auth=auth,
+        headers=api_headers,
     )
     assert response.status_code == 200
 
     response = client.get(
-        "/api/logs?provider=github&owner=testowner&repo=testrepo", auth=auth
+        "/api/logs?provider=github&owner=testowner&repo=testrepo",
+        headers=api_headers,
     )
     assert response.status_code == 200
     returned_log = response.json()["log"]
@@ -186,10 +193,11 @@ def test_post_logs_truncation(tmp_path, monkeypatch):
     assert len(returned_log) == 100 + len("[TRUNCATED...]\n")
 
 
-def test_get_branches():
-    auth = ("testuser", "testpass")
+def test_get_branches(setup_env):
+    api_headers, _ = setup_env
     response = client.get(
-        "/api/branches?provider=github&owner=test&repo=testrepo", auth=auth
+        "/api/branches?provider=github&owner=test&repo=testrepo",
+        headers=api_headers,
     )
     assert response.status_code == 200
     assert "branches" in response.json() or isinstance(response.json(), list)
@@ -209,8 +217,8 @@ def test_log_filename_isolation():
     assert "_feature_" in name_with_other_branch
 
 
-def test_invalid_url_handled_gracefully():
-    auth = ("testuser", "testpass")
+def test_invalid_url_handled_gracefully(setup_env):
+    api_headers, _ = setup_env
     long_segment = "a" * 3000
     for provider in ("github", "forgejo", "jenkins"):
         for endpoint in (
@@ -221,6 +229,91 @@ def test_invalid_url_handled_gracefully():
         ):
             res = client.get(
                 f"{endpoint}?provider={provider}&owner={long_segment}&repo={long_segment}",
-                auth=auth,
+                headers=api_headers,
             )
             assert res.status_code == 200
+
+
+def test_api_token_endpoints_reject_basic_oauth_and_unauthenticated(setup_env):
+    _, tm = setup_env
+    oauth_token = tm.create_token("mcp-client", 3600, oauth=True, username="alice")
+    oauth_headers = {"Authorization": f"Bearer {oauth_token}"}
+    basic_auth = ("testuser", "testpass")
+
+    # POST /api/logs rejects unauthenticated, Basic Auth, and mcp_oauth tokens
+    assert (
+        client.post(
+            "/api/logs?provider=github&owner=test&repo=testrepo", content=b"log"
+        ).status_code
+        == 401
+    )
+    assert (
+        client.post(
+            "/api/logs?provider=github&owner=test&repo=testrepo",
+            content=b"log",
+            auth=basic_auth,
+        ).status_code
+        == 401
+    )
+    assert (
+        client.post(
+            "/api/logs?provider=github&owner=test&repo=testrepo",
+            content=b"log",
+            headers=oauth_headers,
+        ).status_code
+        == 401
+    )
+
+    # GET /api/branches rejects unauthenticated, Basic Auth, and mcp_oauth tokens
+    assert (
+        client.get("/api/branches?provider=github&owner=test&repo=testrepo").status_code
+        == 401
+    )
+    assert (
+        client.get(
+            "/api/branches?provider=github&owner=test&repo=testrepo",
+            auth=basic_auth,
+        ).status_code
+        == 401
+    )
+    assert (
+        client.get(
+            "/api/branches?provider=github&owner=test&repo=testrepo",
+            headers=oauth_headers,
+        ).status_code
+        == 401
+    )
+
+
+def test_public_read_optional_login_vs_write_requires_login():
+    # Read endpoints allow unauthenticated access (200 OK)
+    assert client.get("/", headers={"Accept": "text/html"}).status_code == 200
+    with patch("api.providers.github.GitHubProvider.fetch_status") as mock_fetch:
+        mock_fetch.return_value = {"status": "success"}
+        assert client.get("/api/status").status_code == 200
+    assert (
+        client.get(
+            "/api/logs?provider=github&owner=testowner&repo=testrepo"
+        ).status_code
+        == 200
+    )
+    assert client.get("/api/providers").status_code == 200
+    assert client.get("/api/version").status_code == 200
+
+    # Write and explore endpoints require website login (401 Unauthorized)
+    assert (
+        client.post(
+            "/api/repos",
+            json={"provider": "github", "owner": "test", "repo": "testrepo"},
+        ).status_code
+        == 401
+    )
+    assert (
+        client.request(
+            "DELETE",
+            "/api/repos",
+            json={"provider": "github", "owner": "test", "repo": "testrepo"},
+        ).status_code
+        == 401
+    )
+    assert client.get("/api/explore/github/nodes").status_code == 401

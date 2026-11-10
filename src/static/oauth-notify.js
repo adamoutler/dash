@@ -32,9 +32,17 @@
         }
 
         try {
+            const headers = {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            };
+            if (window.csrfToken) {
+                headers['X-CSRF-Token'] = window.csrfToken;
+            }
             const res = await fetch(`/api/oauth/pending/${encodeURIComponent(requestId)}/${action}`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
+                credentials: 'same-origin',
+                headers: headers
             });
             if (res.ok) {
                 await checkPendingOAuth();
@@ -140,8 +148,18 @@
     }
 
     async function checkPendingOAuth() {
+        const isConfigPage = window.location.pathname.startsWith('/configure');
+        const isAuthed = document.body && document.body.getAttribute('data-authenticated') === 'true';
+        if (!isConfigPage && !isAuthed) {
+            if (containerEl) containerEl.style.display = 'none';
+            return;
+        }
         try {
-            const res = await fetch('/api/oauth/pending', { cache: 'no-store', credentials: 'same-origin' });
+            const res = await fetch('/api/oauth/pending', {
+                cache: 'no-store',
+                credentials: 'same-origin',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            });
             if (!res.ok) return;
             const data = await res.json();
             const pending = data.pending || [];

@@ -4,7 +4,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 
-from api.auth import get_current_user
+from api.auth import require_web_login
 from api.config import ConfigManager
 from api.models.domain import Node, NodeList, ProviderType
 from api.providers.base import ProviderNotImplementedError, ProviderPathNotFoundError
@@ -86,7 +86,7 @@ async def fetch_provider_nodes(provider: ProviderType, path: str) -> list[Node]:
     },
 )
 async def get_nodes(
-    user: Annotated[str, Depends(get_current_user)],
+    user: Annotated[str, Depends(require_web_login)],
     provider: Annotated[ProviderType, Path(..., description="The provider name")],
     path: Annotated[
         str,

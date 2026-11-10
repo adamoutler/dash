@@ -13,7 +13,14 @@ from fastapi.responses import FileResponse, JSONResponse
 from filelock import FileLock
 from pydantic import BaseModel
 
-from api.auth import DATA_DIR, get_base_url, require_basic_auth
+from api.auth import (
+    DATA_DIR,
+    get_base_url,
+    require_web_login,
+    security_basic,
+    verify_basic,
+    verify_session_cookie,
+)
 
 router = APIRouter(tags=["oauth"])
 
@@ -57,8 +64,7 @@ def _is_valid_redirect_uri(uri: str) -> bool:
     if parsed.scheme == "https" and bool(parsed.netloc):
         return True
     return bool(
-        parsed.scheme == "http"
-        and parsed.hostname in ("localhost", "127.0.0.1", "::1")
+        parsed.scheme == "http" and parsed.hostname in ("localhost", "127.0.0.1", "::1")
     )
 
 
@@ -186,9 +192,7 @@ class OAuthManager:
                     clients_map.keys(),
                     key=lambda cid: clients_map[cid].get("client_id_issued_at", 0),
                 )
-                for cid in sorted_ids[
-                    : len(clients_map) - MAX_REGISTERED_CLIENTS + 1
-                ]:
+                for cid in sorted_ids[: len(clients_map) - MAX_REGISTERED_CLIENTS + 1]:
                     del clients_map[cid]
             client_id = f"mcp_{secrets.token_hex(16)}"
             client_record = {
@@ -684,6 +688,26 @@ async def oauth_authorize_submit(request: Request):
         scope=scope,
         client_ip=client_ip,
     )
+    if params.get("auto_approve"):
+        is_admin = False
+        session = verify_session_cookie(request.cookies.get("dash_session"))
+        if session:
+            csrf_hdr = request.headers.get("x-csrf-token", "")
+            if csrf_hdr and secrets.compare_digest(
+                str(csrf_hdr), str(session.get("csrf", ""))
+            ):
+                is_admin = True
+        else:
+            creds = await security_basic(request)
+            if creds and verify_basic(creds):
+                is_admin = True
+        if is_admin:
+            oauth_manager.approve_request(created["request_id"])
+            status_data = oauth_manager.get_request_status(
+                created["request_id"], created["poll_token"]
+            )
+            created.update(status_data)
+
     return JSONResponse(
         status_code=200,
         content=created,
@@ -766,6 +790,7 @@ def _handle_refresh_token_grant(params: dict[str, Any]) -> JSONResponse:
     from api.auth import token_manager
 
     refresh_token = str(params.get("refresh_token") or "").strip()
+    client_id = str(params.get("client_id") or "").strip() or None
     if not refresh_token:
         return JSONResponse(
             status_code=400,
@@ -774,7 +799,9 @@ def _handle_refresh_token_grant(params: dict[str, Any]) -> JSONResponse:
                 "error_description": "refresh_token is required",
             },
         )
-    rotated = token_manager.rotate_refresh_token(refresh_token, TOKEN_TTL_SECONDS)
+    rotated = token_manager.rotate_refresh_token(
+        refresh_token, TOKEN_TTL_SECONDS, client_id=client_id
+    )
     if not rotated:
         return JSONResponse(
             status_code=400,
@@ -851,7 +878,7 @@ async def get_oauth_client_info(client_id: str):
     include_in_schema=False,
 )
 async def delete_oauth_session(
-    token: str, user: Annotated[str, Depends(require_basic_auth)]
+    token: str, user: Annotated[str, Depends(require_web_login)]
 ):
     from api.auth import token_manager
 
@@ -877,7 +904,7 @@ async def oauth_token_revoke(request: Request):
     summary="List Pending OAuth Connection Requests",
 )
 @router.get("/configure/oauth/pending", include_in_schema=False)
-async def list_pending_oauth(user: Annotated[str, Depends(require_basic_auth)]):
+async def list_pending_oauth(user: Annotated[str, Depends(require_web_login)]):
     from api.auth import token_manager
 
     pending = oauth_manager.list_pending_requests()
@@ -899,7 +926,7 @@ async def list_pending_oauth(user: Annotated[str, Depends(require_basic_auth)]):
     include_in_schema=False,
 )
 async def approve_pending_oauth(
-    request_id: str, user: Annotated[str, Depends(require_basic_auth)]
+    request_id: str, user: Annotated[str, Depends(require_web_login)]
 ):
     result = oauth_manager.approve_request(request_id)
     if not result:
@@ -919,7 +946,7 @@ async def approve_pending_oauth(
     include_in_schema=False,
 )
 async def deny_pending_oauth(
-    request_id: str, user: Annotated[str, Depends(require_basic_auth)]
+    request_id: str, user: Annotated[str, Depends(require_web_login)]
 ):
     result = oauth_manager.deny_request(request_id)
     if not result:

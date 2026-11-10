@@ -534,7 +534,9 @@ def test_root_mcp_probes_and_session_deletion():
     del_res = client.delete(f"/api/oauth/sessions/{access_token}", auth=admin_auth)
     assert del_res.status_code == 200
     assert (
-        client.delete(f"/api/oauth/sessions/{access_token}", auth=admin_auth).status_code
+        client.delete(
+            f"/api/oauth/sessions/{access_token}", auth=admin_auth
+        ).status_code
         == 404
     )
 

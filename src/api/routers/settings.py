@@ -4,7 +4,12 @@ from urllib.parse import urlparse
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from api.auth import get_current_user, require_basic_auth
+from api.auth import (
+    is_web_login_configured,
+    is_web_oauth_configured,
+    optional_web_login,
+    require_web_login,
+)
 from api.config import ConfigManager
 
 router = APIRouter(prefix="/api", tags=["settings"])
@@ -32,10 +37,15 @@ class SettingsUpdate(BaseModel):
     jenkins_user: str | None = None
     jenkins_token: str | None = None
     jenkins_url: str | None = None
+    dashboard_user: str | None = None
+    dashboard_password: str | None = None
+    web_oauth_client_id: str | None = None
+    web_oauth_client_secret: str | None = None
+    web_oauth_allowed_emails: str | None = None
 
 
 @router.get("/settings", summary="Get Configured Providers")
-async def get_settings_status(user: Annotated[str, Depends(require_basic_auth)]):
+async def get_settings_status(user: Annotated[str, Depends(require_web_login)]):
     return {
         "github_configured": bool(
             config_manager.get_value("github_token", "GITHUB_TOKEN")
@@ -49,12 +59,20 @@ async def get_settings_status(user: Annotated[str, Depends(require_basic_auth)])
             and config_manager.get_value("jenkins_token", "JENKINS_TOKEN")
             and config_manager.get_value("jenkins_url", "JENKINS_URL")
         ),
+        "website_login_configured": is_web_login_configured(),
+        "website_oauth_configured": is_web_oauth_configured(),
+        "web_oauth_client_id": config_manager.get_value(
+            "web_oauth_client_id", "GOOGLE_CLIENT_ID"
+        ),
+        "web_oauth_allowed_emails": config_manager.get_value(
+            "web_oauth_allowed_emails", "GOOGLE_ALLOWED_EMAILS"
+        ),
     }
 
 
 @router.post("/settings", summary="Update Settings")
 async def update_settings_status(
-    settings: SettingsUpdate, user: Annotated[str, Depends(require_basic_auth)]
+    settings: SettingsUpdate, user: Annotated[str, Depends(require_web_login)]
 ):
     updates = settings.model_dump(exclude_unset=True)
     for url_field in ("forgejo_url", "jenkins_url"):
@@ -66,7 +84,9 @@ async def update_settings_status(
 
 
 @router.get("/providers", summary="Get Fully Enabled Providers")
-async def get_enabled_providers(user: Annotated[str, Depends(get_current_user)]):
+async def get_enabled_providers(
+    user: Annotated[str | None, Depends(optional_web_login)],
+):
     providers = []
     if config_manager.get_value("github_token", "GITHUB_TOKEN"):
         providers.append("github")
