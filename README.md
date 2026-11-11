@@ -118,4 +118,39 @@ Just point your agent to `<your-dashboard-url>/llms.txt` and tell it to read the
 *(Note: Keep it safe! Run locally or on an internal network, not the public internet).*
 
 ---
+
+## 📸 Contextual Screenshots & Visual Tour
+
+Dash enforces a **4-Domain Authentication Architecture** that keeps build statuses and logs effortlessly viewable while locking down all write operations, configuration settings, REST API tokens, and MCP OAuth agent sessions behind dedicated security boundaries.
+
+### 1. Public Read-Only Dashboard (`dash-public.png`)
+Unauthenticated visitors get an immediate, zero-popup read-only view of all tracked repositories across GitHub, Gitea/Forgejo, and Jenkins. Team members can inspect `Pass`, `Fail`, and `Run` cards (complete with live ETA progress bars), follow custom quick-action links, and open build logs (`📄`) while all administrative write controls (`✎ Edit`, `✕ Remove`, `+ Add Repository`, and `⚙️ Configure`) remain strictly hidden until sign-in.
+
+![Public Read-Only Dashboard](docs/img/dash-public.png)
+
+### 2. Website Login & Google OAuth (`dash-login.png`)
+Clicking **🔒 Login** opens the authentication modal supporting two independent human authentication domains: **Domain 3 (Website Login)** via local administrator username/password (`POST /api/auth/login` with `HttpOnly` signed session cookies and CSRF protection) and **Domain 4 (Website OAuth)** via **Sign in with Google** (OpenID Connect Relying Party restricted to an explicit allowlist of verified email addresses).
+
+![Website Login & Google OAuth Modal](docs/img/dash-login.png)
+
+### 3. Authenticated Admin Dashboard (`dash-home.png`)
+Once signed in, the dashboard unlocks full administrative controls in-place: the header displays the active administrator badge (`👤 admin`), `+ Add Repository`, `⚙️ Configure`, and `Logout`, while each repository card reveals `✎ Edit` and `✕ Remove` actions.
+
+![Authenticated Admin Dashboard](docs/img/dash-home.png)
+
+### 4. Adding & Editing Repositories (`dash-add-repo.png`)
+Clicking **+ Add Repository** opens the interactive cascading path browser. Administrators can select **GitHub**, **Gitea/Forgejo**, or **Jenkins**, drill down through organizations, repositories, folders, and workflows, filter by branch, and attach custom quick-action links (such as production deployments, issue trackers, or coverage reports).
+
+![Adding & Editing Repositories](docs/img/dash-add-repo.png)
+
+### 5. 4-Domain Security & Configuration Console (`dash-configure.png`)
+The **⚙️ Configure** console (`/configure`) provides centralized management across all four security domains and CI providers:
+- **Domain 2 — API / MCP OAuth 2.0 Connections**: Real-time approval queue (`✔ Approve` / `✘ Disapprove`) with verification codes (`DASH-XXXX-XXXX`) for incoming AI agent connections (such as Google Gemini App, Gemini CLI, and Claude via RFC 9728 / RFC 8414 / RFC 7591 + PKCE `S256`) and active session revocation.
+- **Domain 1 — API Bearer Tokens**: Generation and revocation of SHA-256 hashed Bearer tokens (`tok_...`) scoped exclusively to programmatic REST `/api/*` endpoints and CI hooks.
+- **Domains 3 & 4 — Website Authentication**: Configuration for Local Admin credentials and Website OAuth (Google Client ID, Client Secret, and comma-separated Allowed Emails).
+- **Provider API Keys**: Credential management for **GitHub**, **Gitea/Forgejo**, and **Jenkins**.
+
+![4-Domain Security & Configuration Console](docs/img/dash-configure.png)
+
+---
 **💡 Loving the seamless workflow? Drop a ⭐ on the repo and share your favorite AI automated workflows in the issues!**
