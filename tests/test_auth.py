@@ -537,7 +537,7 @@ def test_website_oauth_google_flow(monkeypatch):
             == 401
         )
 
-    # 8. Unconfigured OAuth login returns 400; Basic Auth on /api/auth/status works
+    # 8. Unconfigured OAuth login returns 400; stale Basic Auth on /api/auth/status is ignored without dash_session
     monkeypatch.delenv("GOOGLE_CLIENT_ID", raising=False)
     assert client.get("/api/auth/oauth/login").status_code == 400
     assert (
@@ -549,8 +549,8 @@ def test_website_oauth_google_flow(monkeypatch):
     client.cookies.clear()
     st_basic = client.get("/api/auth/status", auth=("webadmin", "websecret"))
     assert st_basic.status_code == 200
-    assert st_basic.json()["authenticated"] is True
-    assert st_basic.json()["domain"] == "web_login"
+    assert st_basic.json()["authenticated"] is False
+    assert st_basic.json()["domain"] is None
 
     # Unconfigured web login returns 401
     monkeypatch.delenv("DASHBOARD_USER", raising=False)

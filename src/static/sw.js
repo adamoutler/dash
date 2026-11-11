@@ -61,14 +61,19 @@ self.addEventListener('fetch', event => {
             })
         );
     } else {
-        // Cache First for static assets, with valid Response fallback
+        // Network First with Cache Update and Fallback for static assets
         event.respondWith(
-            self['caches']['match'](event.request).then(response => {
-                if (response) {
-                    return response;
+            self['fetch'](event.request).then(response => {
+                if (response && response.status === 200 && event.request.method === 'GET') {
+                    const responseClone = response.clone();
+                    self['caches']['open'](CACHE_NAME).then(cache => {
+                        cache.put(event.request, responseClone);
+                    });
                 }
-                return self['fetch'](event.request).catch(() => {
-                    return new Response('Offline or asset unavailable', {
+                return response;
+            }).catch(() => {
+                return self['caches']['match'](event.request).then(cached => {
+                    return cached || new Response('Offline or asset unavailable', {
                         status: 503,
                         statusText: 'Service Unavailable',
                         headers: { 'Content-Type': 'text/plain' }

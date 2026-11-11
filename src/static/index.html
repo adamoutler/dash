@@ -45,6 +45,11 @@
             border-color: #0366d6;
             box-shadow: 0 0 0 3px rgba(3, 102, 214, 0.3);
         }
+        body:not([data-authenticated="true"]) .write-only,
+        body:not([data-authenticated="true"]) .edit-btn,
+        body:not([data-authenticated="true"]) .delete-btn {
+            display: none !important;
+        }
     </style>
 </head>
 <body data-authenticated="false">
@@ -104,7 +109,7 @@
             <button class="theme-toggle-btn" onclick="toggleTheme()" title="Toggle Dark Mode">
                 <span id="themeIcon">☀️</span>
             </button>
-            <button class="add-btn write-only" onclick="toggleForm()" id="addRepoBtn">+ Add Repository</button>
+            <button class="add-btn write-only" onclick="toggleForm()" id="addRepoBtn" style="display:none;">+ Add Repository</button>
             <a href="/configure" class="nav-btn write-only" id="configBtn" style="display:none;">⚙️ Configure</a>
             <span id="userBadge" class="user-badge write-only" style="display:none;"></span>
             <button class="login-btn" id="loginBtn" onclick="openLoginModal()">🔒 Login</button>
@@ -191,6 +196,9 @@
                         userBadge.textContent = data.username ? `👤 ${data.username}` : '👤 Admin';
                         userBadge.style.display = 'inline-block';
                     }
+                    document.querySelectorAll('.edit-btn, .delete-btn').forEach(el => {
+                        el.style.display = '';
+                    });
                     if (window.checkPendingOAuth) {
                         window.checkPendingOAuth();
                     }
@@ -199,8 +207,15 @@
                     if (logoutBtn) logoutBtn.style.display = 'none';
                     if (configBtn) configBtn.style.display = 'none';
                     if (userBadge) userBadge.style.display = 'none';
+                    const addBtn = document.getElementById('addRepoBtn');
+                    if (addBtn) addBtn.style.display = 'none';
+                    const noProvidersBanner = document.getElementById('no-providers-banner');
+                    if (noProvidersBanner) noProvidersBanner.style.display = 'none';
                     const addForm = document.getElementById('addForm');
                     if (addForm) addForm.style.display = 'none';
+                    document.querySelectorAll('.edit-btn, .delete-btn').forEach(el => {
+                        el.style.display = 'none';
+                    });
                 }
 
                 if (data.website_oauth_enabled) {
@@ -495,6 +510,10 @@
     }
 
     function toggleForm(isEdit = false, provider = 'github', owner = '', repo = '', customLinksRaw = '', workflowId = '', workflowName = '', branch = '') {
+        if (!window.isAuthenticated) {
+            openLoginModal();
+            return;
+        }
         const form = document.getElementById('addForm');
         const addBtn = document.getElementById('addRepoBtn');
         document.getElementById('linksContainer').innerHTML = ''; // clear links
@@ -764,8 +783,8 @@
                         </div>
                         <div class="actions-container">
                             <button class="icon-btn" style="color: #6a737d;" onclick="fetchLogs('${item.provider}', '${item.owner}', '${item.repo}', '${item.workflow_id || ''}')" title="View Logs">📄</button>
-                            <button class="icon-btn edit-btn write-only" onclick="toggleForm(true, '${item.provider}', '${item.owner}', '${item.repo}', '${customLinksEncoded}', '${item.workflow_id || ''}', '${item.workflow_name || ''}', '${item.branch || ''}')" title="Edit">✎</button>
-                            <button class="icon-btn delete-btn write-only" onclick="removeRepo('${item.provider}', '${item.owner}', '${item.repo}', '${item.workflow_id || ''}', '${item.branch || ''}')" title="Remove">✕</button>
+                            ${window.isAuthenticated ? `<button class="icon-btn edit-btn write-only" onclick="toggleForm(true, '${item.provider}', '${item.owner}', '${item.repo}', '${customLinksEncoded}', '${item.workflow_id || ''}', '${item.workflow_name || ''}', '${item.branch || ''}')" title="Edit">✎</button>
+                            <button class="icon-btn delete-btn write-only" onclick="removeRepo('${item.provider}', '${item.owner}', '${item.repo}', '${item.workflow_id || ''}', '${item.branch || ''}')" title="Remove">✕</button>` : ''}
                         </div>
                     </div>
                     <a href="${item.repo_url}" target="_blank" style="text-decoration: none; color: inherit; display: block; min-width: 0; max-width: 100%;">
@@ -870,12 +889,12 @@
                 }
 
                 if (availableProviders.length === 0) {
-                    document.getElementById('no-providers-banner').style.display = 'block';
+                    document.getElementById('no-providers-banner').style.display = window.isAuthenticated ? 'block' : 'none';
                     document.getElementById('addRepoBtn').style.display = 'none';
                     document.getElementById('addForm').style.display = 'none';
                 } else {
                     document.getElementById('no-providers-banner').style.display = 'none';
-                    document.getElementById('addRepoBtn').style.display = 'inline-block';
+                    document.getElementById('addRepoBtn').style.display = window.isAuthenticated ? 'inline-block' : 'none';
                 }
             }
         } catch (e) {

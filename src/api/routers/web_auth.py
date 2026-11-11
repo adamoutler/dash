@@ -17,8 +17,6 @@ from api.auth import (
     get_web_login_credentials,
     is_web_login_configured,
     is_web_oauth_configured,
-    security_basic,
-    verify_basic,
     verify_session_cookie,
     verify_signed_payload,
 )
@@ -67,19 +65,6 @@ async def get_auth_status(request: Request):
             "user": username,
             "domain": str(session.get("domain", "web_login")),
             "csrf_token": str(session.get("csrf", "")),
-            "website_login_enabled": web_login_enabled,
-            "website_oauth_enabled": web_oauth_enabled,
-            "website_oauth_provider": "google" if web_oauth_enabled else None,
-        }
-
-    credentials = await security_basic(request)
-    if credentials and verify_basic(credentials):
-        return {
-            "authenticated": True,
-            "username": credentials.username,
-            "user": credentials.username,
-            "domain": "web_login",
-            "csrf_token": None,
             "website_login_enabled": web_login_enabled,
             "website_oauth_enabled": web_oauth_enabled,
             "website_oauth_provider": "google" if web_oauth_enabled else None,

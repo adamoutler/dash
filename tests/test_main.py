@@ -27,6 +27,12 @@ def test_read_index():
         "white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis;"
         in response.text
     )
+    assert '<body data-authenticated="false">' in response.text
+    assert 'body:not([data-authenticated="true"]) .edit-btn' in response.text
+    assert (
+        'window.isAuthenticated ? `<button class="icon-btn edit-btn write-only"'
+        in response.text
+    )
 
 
 def test_status_indicator_sizing_css():
