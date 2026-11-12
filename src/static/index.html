@@ -754,12 +754,14 @@
                 baseUrl = 'https://github.com';
             }
 
-            let iconPath = '/favicon.ico';
+            let iconSrc = `${baseUrl}/favicon.ico`;
             if (item.provider === 'forgejo') {
-                iconPath = '/assets/img/favicon.svg';
+                iconSrc = `${baseUrl}/assets/img/favicon.svg`;
+            } else if (item.provider === 'jenkins') {
+                iconSrc = '/img/jenkins.svg';
             }
 
-            const faviconHtml = `<img src="${baseUrl}${iconPath}" class="provider-icon provider-${item.provider}" style="width: 18px; height: 18px; margin-right: 8px; vertical-align: middle; flex-shrink: 0;" onerror="this.style.display='none'">`;
+            const faviconHtml = `<img src="${iconSrc}" class="provider-icon provider-${item.provider}" style="width: 18px; height: 18px; margin-right: 8px; vertical-align: middle; flex-shrink: 0;" onerror="if(this.src!=='/img/jenkins.svg'&&'${item.provider}'==='jenkins'){this.src='/img/jenkins.svg';}else{this.style.display='none';}">`;
             const rawCommitMsg = item.commit_message || 'No commit info';
             const safeCommitMsg = String(rawCommitMsg)
                 .replace(/&/g, '&amp;')
