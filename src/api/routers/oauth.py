@@ -31,10 +31,14 @@ PENDING_TTL_SECONDS = 300
 AUTH_CODE_TTL_SECONDS = 60
 TOKEN_TTL_SECONDS = 31536000
 MAX_PENDING_REQUESTS = 50
-MAX_OAUTH_BODY_BYTES = 16384
+MAX_OAUTH_BODY_BYTES = 32768
 MAX_REDIRECT_URIS_PER_CLIENT = 10
 MAX_REGISTERED_CLIENTS = 200
 FILE_LOCK_TIMEOUT = 5
+MAX_STATE_LENGTH = 4096
+MAX_SCOPE_LENGTH = 1024
+MAX_CLIENT_ID_LENGTH = 256
+MAX_REDIRECT_URI_LENGTH = 2048
 
 
 def _hash_secret(value: str) -> str:
@@ -53,7 +57,7 @@ def _append_query_params(url: str, params: dict[str, str]) -> str:
 
 
 def _is_valid_redirect_uri(uri: str) -> bool:
-    if not uri or len(uri) > 1024:
+    if not uri or len(uri) > MAX_REDIRECT_URI_LENGTH:
         return False
     try:
         parsed = urlparse(uri)
@@ -650,7 +654,7 @@ async def oauth_authorize_submit(request: Request):
     redirect_uri = str(params.get("redirect_uri") or "").strip()
     if (
         not client_id
-        or len(client_id) > 128
+        or len(client_id) > MAX_CLIENT_ID_LENGTH
         or not _is_valid_redirect_uri(redirect_uri)
     ):
         raise HTTPException(
@@ -670,7 +674,7 @@ async def oauth_authorize_submit(request: Request):
 
     state = str(params.get("state") or "")
     scope = str(params.get("scope") or "mcp:access")
-    if len(state) > 512 or len(scope) > 256:
+    if len(state) > MAX_STATE_LENGTH or len(scope) > MAX_SCOPE_LENGTH:
         raise HTTPException(
             status_code=400, detail="state or scope exceeds maximum allowed length."
         )

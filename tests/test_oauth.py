@@ -555,7 +555,7 @@ def test_oauth_security_hardening_invariants():
     assert _verify_pkce_s256("invalid$chars!" * 4, challenge) is False
 
     # 2. Request body size limit (413) and redirect_uris count limit (400)
-    oversized = "x" * 20000
+    oversized = "x" * 40000
     assert (
         client.post(
             "/oauth/register",
@@ -606,7 +606,7 @@ def test_oauth_security_hardening_invariants():
                 "username": "alice",
                 "client_id": cid,
                 "redirect_uri": "http://localhost:8080/allowed",
-                "state": "s" * 600,
+                "state": "s" * 5000,
                 "code_challenge": challenge,
                 "code_challenge_method": "S256",
             },
@@ -686,3 +686,163 @@ def test_oauth_security_hardening_invariants():
         )
     data = oauth_manager._load_nolock()
     assert len(data["clients"]) <= MAX_REGISTERED_CLIENTS
+
+
+def test_oauth_parameter_bounds():
+    admin_auth = ("adminuser", "adminpass")
+    _, challenge = _pkce_pair()
+
+    # 1. State parameter: up to 4096 chars accepted, > 4096 rejected
+    max_state = "s" * 4096
+    res_valid_state = client.post(
+        "/oauth/authorize",
+        json={
+            "username": "tester",
+            "client_id": "google_app_client",
+            "redirect_uri": "https://vertexaisearch.cloud.google.com/oauth-redirect",
+            "state": max_state,
+            "code_challenge": challenge,
+            "code_challenge_method": "S256",
+        },
+    )
+    assert res_valid_state.status_code == 200
+    req_id = res_valid_state.json()["request_id"]
+    poll_token = res_valid_state.json()["poll_token"]
+
+    # Verify admin approval preserves the full 4096-char state in redirect_url
+    client.post(f"/api/oauth/pending/{req_id}/approve", auth=admin_auth)
+    status_res = client.get(
+        f"/oauth/authorize/status/{req_id}", params={"poll_token": poll_token}
+    )
+    assert status_res.status_code == 200
+    redirect_url = status_res.json()["redirect_url"]
+    from urllib.parse import parse_qs, urlparse
+
+    parsed_query = parse_qs(urlparse(redirect_url).query)
+    assert parsed_query["state"][0] == max_state
+    assert len(parsed_query["state"][0]) == 4096
+
+    # State > 4096 rejected
+    res_too_long_state = client.post(
+        "/oauth/authorize",
+        json={
+            "username": "tester",
+            "client_id": "google_app_client",
+            "redirect_uri": "https://vertexaisearch.cloud.google.com/oauth-redirect",
+            "state": "s" * 4097,
+            "code_challenge": challenge,
+            "code_challenge_method": "S256",
+        },
+    )
+    assert res_too_long_state.status_code == 400
+    assert (
+        "state or scope exceeds maximum allowed length"
+        in res_too_long_state.json()["detail"]
+    )
+
+    # 2. Scope parameter: up to 1024 chars accepted, > 1024 rejected
+    max_scope = "mcp:scope_" + ("x" * (1024 - len("mcp:scope_")))
+    assert len(max_scope) == 1024
+    res_valid_scope = client.post(
+        "/oauth/authorize",
+        json={
+            "username": "tester",
+            "client_id": "google_app_client",
+            "redirect_uri": "https://vertexaisearch.cloud.google.com/oauth-redirect",
+            "scope": max_scope,
+            "code_challenge": challenge,
+            "code_challenge_method": "S256",
+        },
+    )
+    assert res_valid_scope.status_code == 200
+
+    # Scope > 1024 rejected
+    res_too_long_scope = client.post(
+        "/oauth/authorize",
+        json={
+            "username": "tester",
+            "client_id": "google_app_client",
+            "redirect_uri": "https://vertexaisearch.cloud.google.com/oauth-redirect",
+            "scope": "s" * 1025,
+            "code_challenge": challenge,
+            "code_challenge_method": "S256",
+        },
+    )
+    assert res_too_long_scope.status_code == 400
+    assert (
+        "state or scope exceeds maximum allowed length"
+        in res_too_long_scope.json()["detail"]
+    )
+
+    # 3. Client ID: up to 256 chars accepted, > 256 rejected
+    max_cid = "client_" + ("c" * (256 - len("client_")))
+    assert len(max_cid) == 256
+    res_valid_cid = client.post(
+        "/oauth/authorize",
+        json={
+            "username": "tester",
+            "client_id": max_cid,
+            "redirect_uri": "https://vertexaisearch.cloud.google.com/oauth-redirect",
+            "code_challenge": challenge,
+            "code_challenge_method": "S256",
+        },
+    )
+    assert res_valid_cid.status_code == 200
+
+    res_too_long_cid = client.post(
+        "/oauth/authorize",
+        json={
+            "username": "tester",
+            "client_id": "c" * 257,
+            "redirect_uri": "https://vertexaisearch.cloud.google.com/oauth-redirect",
+            "code_challenge": challenge,
+            "code_challenge_method": "S256",
+        },
+    )
+    assert res_too_long_cid.status_code == 400
+
+    # 4. Redirect URI: up to 2048 chars accepted, > 2048 rejected
+    base_prefix = "https://vertexaisearch.cloud.google.com/oauth-redirect?param="
+    max_uri = base_prefix + ("p" * (2048 - len(base_prefix)))
+    assert len(max_uri) == 2048
+    res_valid_uri = client.post(
+        "/oauth/authorize",
+        json={
+            "username": "tester",
+            "client_id": "google_app_client",
+            "redirect_uri": max_uri,
+            "code_challenge": challenge,
+            "code_challenge_method": "S256",
+        },
+    )
+    assert res_valid_uri.status_code == 200
+
+    too_long_uri = base_prefix + ("p" * (2049 - len(base_prefix)))
+    assert len(too_long_uri) == 2049
+    res_too_long_uri = client.post(
+        "/oauth/authorize",
+        json={
+            "username": "tester",
+            "client_id": "google_app_client",
+            "redirect_uri": too_long_uri,
+            "code_challenge": challenge,
+            "code_challenge_method": "S256",
+        },
+    )
+    assert res_too_long_uri.status_code == 400
+
+    # 5. Simultaneous maximal parameters succeed under 32KB payload limit
+    res_simultaneous = client.post(
+        "/oauth/authorize",
+        json={
+            "username": "tester",
+            "client_id": max_cid,
+            "redirect_uri": max_uri,
+            "state": max_state,
+            "scope": max_scope,
+            "code_challenge": challenge,
+            "code_challenge_method": "S256",
+        },
+    )
+    assert res_simultaneous.status_code == 200
+    assert res_simultaneous.json()["status"] == "pending"
