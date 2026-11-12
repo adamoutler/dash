@@ -24,6 +24,8 @@ def _is_valid_workflow_id(val: str | None) -> bool:
     if len(val) > 200 or ".." in val:
         return False
     return not any(c in val for c in ("/", "\\", "?", "#", "%", "\r", "\n"))
+
+
 PROVIDER_EXC = (
     httpx.HTTPError,
     httpx.InvalidURL,
@@ -193,7 +195,7 @@ class ForgejoProvider(BaseProvider):
             if workflow_id and workflow_id != "any"
             else ""
         )
-        branch_param = f"&branch={branch}" if branch else ""
+        branch_param = f"&branch={branch}" if branch and branch != "any" else ""
 
         return f"""Forgejo/Gitea logs are not natively available via API in this version.
 

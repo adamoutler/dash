@@ -3,7 +3,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from api.config import ConfigManager
-from api.services.workflow_service import WorkflowService, get_log_filename
+from api.services.workflow_service import (
+    WorkflowService,
+    get_candidate_log_filenames,
+    get_log_filename,
+    normalize_selector,
+)
 
 
 @pytest.fixture
@@ -18,6 +23,21 @@ def workflow_service(config_manager):
     return WorkflowService(config_manager)
 
 
+def test_normalize_selector():
+    assert normalize_selector(None) is None
+    assert normalize_selector("") is None
+    assert normalize_selector("   ") is None
+    assert normalize_selector("any") is None
+    assert normalize_selector("ANY") is None
+    assert normalize_selector("all") is None
+    assert normalize_selector("none") is None
+    assert normalize_selector("null") is None
+    assert normalize_selector("undefined") is None
+    assert normalize_selector("main") == "main"
+    assert normalize_selector("ci.yml") == "ci.yml"
+    assert normalize_selector(" feature/test ") == "feature/test"
+
+
 def test_get_log_filename():
     name1 = get_log_filename("github", "owner", "repo")
     assert name1 == "github_owner_repo_latest.log"
@@ -29,6 +49,26 @@ def test_get_log_filename():
         "github", "owner@#!", "repo^&*", workflow_id=None, branch=None
     )
     assert name3 == "github_owner_repo_latest.log"
+
+    # 'any' is normalized to base
+    name4 = get_log_filename("forgejo", "AI", "thumbs-up-kanban", "any", "any")
+    assert name4 == "forgejo_AI_thumbs-up-kanban_latest.log"
+
+
+def test_get_candidate_log_filenames():
+    candidates = get_candidate_log_filenames("github", "owner", "repo", "build", "main")
+    assert candidates == [
+        "github_owner_repo_main_build_latest.log",
+        "github_owner_repo_main_latest.log",
+        "github_owner_repo_build_latest.log",
+        "github_owner_repo_latest.log",
+    ]
+
+    # Unconstrained
+    c_any = get_candidate_log_filenames(
+        "forgejo", "AI", "thumbs-up-kanban", "any", "any"
+    )
+    assert c_any == ["forgejo_AI_thumbs-up-kanban_latest.log"]
 
 
 @pytest.mark.asyncio

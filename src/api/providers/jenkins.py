@@ -270,9 +270,7 @@ class JenkinsProvider(BaseProvider):
             target_url = target_job.get("url")
             if not self._is_allowed_jenkins_url(target_url):
                 return "Error fetching Jenkins logs."
-            return await self._resolve_jenkins_logs(
-                client, target_url, max_depth - 1
-            )
+            return await self._resolve_jenkins_logs(client, target_url, max_depth - 1)
 
         return "Unsupported Jenkins object class."
 

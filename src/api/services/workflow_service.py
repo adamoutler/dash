@@ -10,6 +10,16 @@ logger = logging.getLogger(__name__)
 UNKNOWN_PROVIDER = "Unknown provider"
 
 
+def normalize_selector(value: str | None) -> str | None:
+    """Normalize workflow or branch selectors to None if empty, unconstrained, or wildcard."""
+    if not value:
+        return None
+    val = value.strip()
+    if val.lower() in ("", "any", "all", "none", "null", "undefined"):
+        return None
+    return val
+
+
 def get_log_filename(
     provider: str,
     owner: str,
@@ -20,17 +30,70 @@ def get_log_filename(
     safe_provider = "".join(c for c in provider if c.isalnum() or c in "-_")[:32]
     safe_owner = "".join(c for c in owner if c.isalnum() or c in "-_")[:50]
     safe_repo = "".join(c for c in repo if c.isalnum() or c in "-_")[:50]
-    safe_wf = (
-        ("_" + "".join(c for c in workflow_id if c.isalnum() or c in "-_")[:50])
-        if workflow_id
+
+    norm_wf = normalize_selector(workflow_id)
+    norm_br = normalize_selector(branch)
+
+    safe_branch = (
+        ("_" + "".join(c for c in norm_br if c.isalnum() or c in "-_")[:50])
+        if norm_br
         else ""
     )
-    safe_branch = (
-        ("_" + "".join(c for c in branch if c.isalnum() or c in "-_")[:50])
-        if branch
+    safe_wf = (
+        ("_" + "".join(c for c in norm_wf if c.isalnum() or c in "-_")[:50])
+        if norm_wf
         else ""
     )
     return f"{safe_provider}_{safe_owner}_{safe_repo}{safe_branch}{safe_wf}_latest.log"
+
+
+def get_candidate_log_filenames(
+    provider: str,
+    owner: str,
+    repo: str,
+    workflow_id: str | None = None,
+    branch: str | None = None,
+) -> list[str]:
+    """Generates ordered candidate filenames from most specific to base unconstrained."""
+    safe_provider = "".join(c for c in provider if c.isalnum() or c in "-_")[:32]
+    safe_owner = "".join(c for c in owner if c.isalnum() or c in "-_")[:50]
+    safe_repo = "".join(c for c in repo if c.isalnum() or c in "-_")[:50]
+    prefix = f"{safe_provider}_{safe_owner}_{safe_repo}"
+
+    norm_wf = normalize_selector(workflow_id)
+    norm_br = normalize_selector(branch)
+
+    safe_branch = (
+        ("_" + "".join(c for c in norm_br if c.isalnum() or c in "-_")[:50])
+        if norm_br
+        else ""
+    )
+    safe_wf = (
+        ("_" + "".join(c for c in norm_wf if c.isalnum() or c in "-_")[:50])
+        if norm_wf
+        else ""
+    )
+
+    candidates: list[str] = []
+    # 1. Exact match (e.g. repo_branch_wf_latest.log or repo_latest.log)
+    exact_file = f"{prefix}{safe_branch}{safe_wf}_latest.log"
+    candidates.append(exact_file)
+
+    # 2. Specific partials if both branch and wf were specified
+    if safe_branch and safe_wf:
+        branch_file = f"{prefix}{safe_branch}_latest.log"
+        if branch_file not in candidates:
+            candidates.append(branch_file)
+        wf_file = f"{prefix}{safe_wf}_latest.log"
+        if wf_file not in candidates:
+            candidates.append(wf_file)
+
+    # 3. Base unconstrained match (repo_latest.log)
+    base_file = f"{prefix}_latest.log"
+    if base_file not in candidates:
+        candidates.append(base_file)
+
+    return candidates
 
 
 class WorkflowService:

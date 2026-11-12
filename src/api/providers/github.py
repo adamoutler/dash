@@ -24,6 +24,8 @@ def _is_valid_workflow_id(val: str | None) -> bool:
     if len(val) > 200 or ".." in val:
         return False
     return not any(c in val for c in ("/", "\\", "?", "#", "%", "\r", "\n"))
+
+
 PROVIDER_EXC = (
     httpx.HTTPError,
     httpx.InvalidURL,

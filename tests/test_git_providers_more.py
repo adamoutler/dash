@@ -284,7 +284,9 @@ async def test_github_redirect_strips_authorization_and_validates_slugs(mock_get
 
     mock_redirect = MagicMock()
     mock_redirect.status_code = 302
-    mock_redirect.headers = {"Location": "https://results-receiver.actions.githubusercontent.com/logs.txt"}
+    mock_redirect.headers = {
+        "Location": "https://results-receiver.actions.githubusercontent.com/logs.txt"
+    }
 
     mock_storage = MagicMock()
     mock_storage.status_code = 200

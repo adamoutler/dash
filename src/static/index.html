@@ -782,7 +782,7 @@
                             <span class="time-text">${formatTime(item.updated_at)}</span>
                         </div>
                         <div class="actions-container">
-                            <button class="icon-btn" style="color: #6a737d;" onclick="fetchLogs('${item.provider}', '${item.owner}', '${item.repo}', '${item.workflow_id || ''}')" title="View Logs">📄</button>
+                            <button class="icon-btn" style="color: #6a737d;" onclick="fetchLogs('${item.provider}', '${item.owner}', '${item.repo}', '${item.workflow_id || ''}', '${item.branch || ''}')" title="View Logs">📄</button>
                             ${window.isAuthenticated ? `<button class="icon-btn edit-btn write-only" onclick="toggleForm(true, '${item.provider}', '${item.owner}', '${item.repo}', '${customLinksEncoded}', '${item.workflow_id || ''}', '${item.workflow_name || ''}', '${item.branch || ''}')" title="Edit">✎</button>
                             <button class="icon-btn delete-btn write-only" onclick="removeRepo('${item.provider}', '${item.owner}', '${item.repo}', '${item.workflow_id || ''}', '${item.branch || ''}')" title="Remove">✕</button>` : ''}
                         </div>
@@ -926,15 +926,24 @@
     setInterval(fetchStatuses, 15000);
     setInterval(updateProgress, 1000);
 
-    async function fetchLogs(provider, owner, repo, workflowId) {
-        document.getElementById('modalTitle').innerText = `Logs: ${owner}/${repo}${workflowId ? ' (' + workflowId + ')' : ''}`;
+    async function fetchLogs(provider, owner, repo, workflowId, branch) {
+        const isClean = val => val && typeof val === 'string' && !['any', 'all', 'none', 'null', 'undefined'].includes(val.trim().toLowerCase());
+
+        let title = `Logs: ${owner}/${repo}`;
+        if (isClean(branch)) title += ` [${branch.trim()}]`;
+        if (isClean(workflowId)) title += ` (${workflowId.trim()})`;
+        document.getElementById('modalTitle').innerText = title;
+
         const logContent = document.getElementById('logContent');
         logContent.innerHTML = 'Loading logs...';
         document.getElementById('logModal').style.display = 'block';
 
         let url = `/api/logs?provider=${encodeURIComponent(provider)}&owner=${encodeURIComponent(owner)}&repo=${encodeURIComponent(repo)}`;
-        if (workflowId) {
-            url += `&workflow_id=${encodeURIComponent(workflowId)}`;
+        if (isClean(workflowId)) {
+            url += `&workflow_id=${encodeURIComponent(workflowId.trim())}`;
+        }
+        if (isClean(branch)) {
+            url += `&branch=${encodeURIComponent(branch.trim())}`;
         }
 
         try {
