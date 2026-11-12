@@ -1,4 +1,3 @@
-import os
 import pytest
 from fastapi.testclient import TestClient
 
@@ -38,7 +37,9 @@ def test_post_logs_auth_enforcement(setup_logs_test_env):
     """POST /api/logs must reject anonymous, Basic Auth, and MCP OAuth tokens."""
     env = setup_logs_test_env
     # Anonymous -> 401
-    res = client.post("/api/logs?provider=forgejo&owner=adam&repo=myrepo", content=b"log")
+    res = client.post(
+        "/api/logs?provider=forgejo&owner=adam&repo=myrepo", content=b"log"
+    )
     assert res.status_code == 401
 
     # Basic Auth -> 401
