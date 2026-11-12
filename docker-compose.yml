@@ -10,8 +10,8 @@ services:
       JENKINS_USER: "adamoutler@gmail.com"
       JENKINS_TOKEN: "${JENKINS_TOKEN}"
       JENKINS_URL: "${JENKINS_URL}"
-      DASHBOARD_USER: "${DASHBOARD_USER}"
-      DASHBOARD_PASSWORD: "${DASHBOARD_PASSWORD}"
+      DASHBOARD_USER: "${DASHBOARD_USER:-${DASHBOARD_CREDS_USR}}"
+      DASHBOARD_PASSWORD: "${DASHBOARD_PASSWORD:-${DASHBOARD_CREDS_PSW}}"
       LOGS_DIR: "/app/logs"
       DATA_DIR: "/app/data"
     volumes:
