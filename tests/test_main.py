@@ -16,7 +16,7 @@ def setup_env(monkeypatch, tmp_path):
     tm = TokenManager(str(tmp_path / "tokens.json"))
     monkeypatch.setattr("api.auth.token_manager", tm)
     api_token = tm.create_token("test-api", 3600)
-    yield {"Authorization": f"Bearer {api_token}"}, tm
+    return {"Authorization": f"Bearer {api_token}"}, tm
 
 
 def test_read_index():

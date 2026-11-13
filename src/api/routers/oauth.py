@@ -524,12 +524,9 @@ def _build_protected_resource_metadata(
     clean_sub = subpath.strip("/")
     resource_url = f"{base_url}/{clean_sub}" if clean_sub else f"{base_url}/mcp"
     safe_ip = str(getattr(getattr(request, "client", None), "host", "unknown")).replace("\r", "").replace("\n", "")[:64]
-    safe_sub = str(subpath).replace("\r", "").replace("\n", "")[:64]
     logger.info(
-        "[OAuth-Discovery] Protected resource metadata request from %s (subpath='%s') -> resource='%s'",
+        "[OAuth-Discovery] Protected resource metadata request from %s",
         safe_ip,
-        safe_sub,
-        resource_url,
     )
     return {
         "resource": resource_url,

@@ -27,7 +27,7 @@ def isolated_oauth_env(tmp_path, monkeypatch):
     om = OAuthManager(str(tmp_path / "oauth.json"))
     monkeypatch.setattr("api.auth.token_manager", tm)
     monkeypatch.setattr("api.routers.oauth.oauth_manager", om)
-    yield tm, om
+    return tm, om
 
 
 def test_mcp_unauthenticated_returns_rfc9728_headers():

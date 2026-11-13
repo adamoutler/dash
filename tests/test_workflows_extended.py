@@ -16,7 +16,7 @@ def setup_env(monkeypatch, tmp_path):
     tm = TokenManager(str(tmp_path / "tokens.json"))
     monkeypatch.setattr("api.auth.token_manager", tm)
     api_token = tm.create_token("workflow-test", 3600)
-    yield {"Authorization": f"Bearer {api_token}"}
+    return {"Authorization": f"Bearer {api_token}"}
 
 
 @pytest.mark.asyncio
