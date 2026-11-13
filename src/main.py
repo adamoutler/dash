@@ -1,3 +1,4 @@
+import logging
 import os
 import subprocess
 from typing import Annotated
@@ -21,6 +22,8 @@ from api.routers.repos import router as repos_router
 from api.routers.settings import router as settings_router
 from api.routers.web_auth import router as web_auth_router
 from api.routers.workflows import router as workflows_router
+
+logger = logging.getLogger("main")
 
 
 def _get_app_version():
@@ -126,7 +129,12 @@ def _is_mcp_probe_request(request: Request) -> bool:
 
 @app.api_route("/", methods=["GET", "HEAD"], include_in_schema=False)
 async def read_index(request: Request):
+    client_ip = getattr(getattr(request, "client", None), "host", "unknown")
+    ua = request.headers.get("user-agent", "-") if hasattr(request, "headers") else "-"
     if _is_mcp_probe_request(request):
+        logger.info(
+            f"[MCP-Probe] Intercepted root / request from {client_ip} as MCP probe (method={request.method}, UA='{ua}')"
+        )
         mcp_user = await require_mcp_oauth(request)
         return await mcp_discovery_probe(request, mcp_user)
     await optional_web_login(request)

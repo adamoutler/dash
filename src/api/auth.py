@@ -2,6 +2,7 @@ import base64
 import hashlib
 import hmac
 import json
+import logging
 import os
 import re
 import secrets
@@ -13,6 +14,8 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.security.utils import get_authorization_scheme_param
 from filelock import FileLock
 from starlette.requests import Request
+
+logger = logging.getLogger("api.auth")
 
 security_basic = HTTPBasic(auto_error=False)
 
@@ -610,10 +613,18 @@ async def require_mcp_oauth(request: Request) -> str:
     authorization = (
         request.headers.get("Authorization") if hasattr(request, "headers") else None
     )
+    client_ip = getattr(getattr(request, "client", None), "host", "unknown")
+    ua = request.headers.get("user-agent", "-") if hasattr(request, "headers") else "-"
+    path = getattr(getattr(request, "url", None), "path", "/")
+
     if not has_creds and _is_anonymous_allowed() and not authorization:
+        logger.info(f"[MCP-Auth] Anonymous access permitted for {client_ip} ({request.method} {path})")
         return "anonymous_user"
 
     if not authorization:
+        logger.info(
+            f"[MCP-Auth] Missing Authorization header from {client_ip} ({request.method} {path}, UA: {ua}) -> returning 401 with discovery headers"
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not authenticated",
@@ -624,7 +635,19 @@ async def require_mcp_oauth(request: Request) -> str:
     if scheme.lower() == "bearer":
         rec = token_manager.validate_oauth_token(param)
         if rec is not None:
-            return str(rec.get("username") or "oauth_user")
+            user_name = str(rec.get("username") or "oauth_user")
+            client_id = str(rec.get("client_id") or "")
+            logger.info(
+                f"[MCP-Auth] Bearer token verified for user='{user_name}' client_id='{client_id}' from {client_ip} ({request.method} {path})"
+            )
+            return user_name
+        logger.warning(
+            f"[MCP-Auth] Bearer token validation failed (invalid, expired, or non-OAuth domain) from {client_ip} ({request.method} {path})"
+        )
+    else:
+        logger.warning(
+            f"[MCP-Auth] Unsupported authorization scheme '{scheme}' from {client_ip} ({request.method} {path})"
+        )
 
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,

@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 import urllib.parse
 from typing import Annotated, Any
 
@@ -9,6 +10,8 @@ from pydantic import BaseModel
 from api.auth import require_mcp_oauth
 from api.services.workflow_service import WorkflowService
 from api.storage import RepoStorage
+
+logger = logging.getLogger("api.mcp")
 
 router = APIRouter(tags=["mcp"])
 storage = RepoStorage()
@@ -776,6 +779,12 @@ async def mcp_discovery_probe(
     request: Request,
     user: Annotated[str, Depends(require_mcp_oauth)],
 ):
+    client_ip = getattr(getattr(request, "client", None), "host", "unknown")
+    ua = request.headers.get("user-agent", "-") if hasattr(request, "headers") else "-"
+    path = getattr(getattr(request, "url", None), "path", "/")
+    logger.info(
+        f"[MCP-Probe] {request.method} {path} from {client_ip} (user='{user}', ua='{ua}')"
+    )
     if request.method == "HEAD":
         return Response(status_code=200)
     if request.method == "DELETE":
@@ -807,6 +816,13 @@ def _build_initialize_response(req: JsonRpcRequest, request: Request) -> dict[st
         client_ver = req.params.get("protocolVersion")
         if client_ver in ("2025-06-18", "2025-03-26", "2024-11-05"):
             requested_version = client_ver
+    client_ip = getattr(getattr(request, "client", None), "host", "unknown")
+    client_info = req.params.get("clientInfo", {}) if isinstance(req.params, dict) else {}
+    c_name = client_info.get("name", "unknown")
+    c_ver = client_info.get("version", "")
+    logger.info(
+        f"[MCP-Init] Initializing MCP session with client='{c_name} {c_ver}' (protocolVersion='{requested_version}') from {client_ip}"
+    )
     return {
         "jsonrpc": "2.0",
         "id": req.id,
@@ -830,6 +846,12 @@ async def mcp_endpoint(
     request: Request,
     user: Annotated[str, Depends(require_mcp_oauth)],
 ):
+    client_ip = getattr(getattr(request, "client", None), "host", "unknown")
+    ua = request.headers.get("user-agent", "-") if hasattr(request, "headers") else "-"
+    path = getattr(getattr(request, "url", None), "path", "/")
+    logger.info(
+        f"[MCP-RPC] {request.method} {path} method='{req.method}' (id={req.id}) from {client_ip} (user='{user}', ua='{ua}')"
+    )
     from api.config import ConfigManager
 
     config_manager = ConfigManager()
