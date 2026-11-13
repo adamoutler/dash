@@ -238,6 +238,9 @@
                 <div style="margin-top: 6px;"><strong>Request Code:</strong> <span id="waiting-code" class="oauth-user-code"></span></div>
                 <div id="waiting-timer" style="margin-top: 8px; font-size: 12px; color: var(--text-secondary);"></div>
             </div>
+            <div id="retry-actions" class="oauth-popup-actions" style="display: none; margin-top: 16px;">
+                <button type="button" id="retry-btn" class="oauth-btn-approve">Try Again</button>
+            </div>
         </div>
     </div>
 
@@ -308,13 +311,56 @@
             });
 
             let pollInterval = null;
+            let pollInFlight = false;
+            let isRedirecting = false;
+            const retryActions = document.getElementById('retry-actions');
+            const retryBtn = document.getElementById('retry-btn');
+
+            function resetToUsernameStep() {
+                if (pollInterval) {
+                    clearInterval(pollInterval);
+                    pollInterval = null;
+                }
+                pollInFlight = false;
+                isRedirecting = false;
+                errorBox.style.display = 'none';
+                retryActions.style.display = 'none';
+                document.getElementById('waiting-spinner').style.display = 'block';
+                document.getElementById('waiting-title').textContent = 'Waiting for Approval...';
+                document.getElementById('waiting-timer').textContent = '';
+                stepWaiting.style.display = 'none';
+                stepUsername.style.display = 'block';
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Request Access';
+            }
+
+            if (retryBtn) {
+                retryBtn.addEventListener('click', resetToUsernameStep);
+            }
 
             function startPolling(requestId, pollToken) {
+                if (pollInterval) {
+                    clearInterval(pollInterval);
+                }
+                pollInFlight = false;
+                isRedirecting = false;
                 pollInterval = setInterval(async () => {
+                    if (pollInFlight || isRedirecting) return;
+                    pollInFlight = true;
                     try {
                         const url = `/oauth/authorize/status/${encodeURIComponent(requestId)}?poll_token=${encodeURIComponent(pollToken)}`;
                         const res = await fetch(url, { cache: 'no-store' });
-                        if (!res.ok) return;
+                        if (!res.ok) {
+                            if (res.status === 403 || res.status === 404) {
+                                clearInterval(pollInterval);
+                                pollInterval = null;
+                                document.getElementById('waiting-spinner').style.display = 'none';
+                                document.getElementById('waiting-title').textContent = '⌛ Session Superseded or Expired';
+                                showError('This authorization request is no longer active. Click Try Again to submit a new request.');
+                                retryActions.style.display = 'flex';
+                            }
+                            return;
+                        }
                         const data = await res.json();
 
                         if (typeof data.remaining_seconds === 'number') {
@@ -323,25 +369,34 @@
                         }
 
                         if (data.status === 'approved' && data.redirect_url) {
+                            isRedirecting = true;
                             clearInterval(pollInterval);
+                            pollInterval = null;
                             document.getElementById('waiting-title').textContent = '✔ Approved! Redirecting...';
                             window.location.replace(data.redirect_url);
                         } else if (data.status === 'denied') {
+                            isRedirecting = true;
                             clearInterval(pollInterval);
+                            pollInterval = null;
                             document.getElementById('waiting-spinner').style.display = 'none';
                             document.getElementById('waiting-title').textContent = '✘ Request Disapproved';
                             showError('The connection request was disapproved from the Configure Dashboard.');
+                            retryActions.style.display = 'flex';
                             if (data.redirect_url) {
                                 setTimeout(() => window.location.replace(data.redirect_url), 2000);
                             }
                         } else if (data.status === 'expired') {
                             clearInterval(pollInterval);
+                            pollInterval = null;
                             document.getElementById('waiting-spinner').style.display = 'none';
                             document.getElementById('waiting-title').textContent = '⌛ Request Expired';
-                            showError('The approval request expired. Please return to the application and try again.');
+                            showError('The approval request expired. Click Try Again to submit a new request.');
+                            retryActions.style.display = 'flex';
                         }
                     } catch (err) {
                         console.error('Status poll error:', err);
+                    } finally {
+                        pollInFlight = false;
                     }
                 }, 1500);
             }

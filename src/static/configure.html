@@ -418,12 +418,21 @@
             }
         }
 
+        let lastSessionsSignature = null;
+        let lastPendingSignature = null;
+
         function renderOAuthSessions(sessionsList) {
             const listEl = document.getElementById('oauth-sessions-list');
             if (!listEl) return;
+
+            const safeList = Array.isArray(sessionsList) ? sessionsList : [];
+            const sig = JSON.stringify(safeList.map(s => `${s.token}|${s.username || ''}|${s.client_id || ''}|${s.name || ''}`));
+            if (sig === lastSessionsSignature) return;
+            lastSessionsSignature = sig;
+
             listEl.innerHTML = '';
 
-            if (!Array.isArray(sessionsList) || sessionsList.length === 0) {
+            if (safeList.length === 0) {
                 const empty = document.createElement('div');
                 empty.className = 'oauth-empty';
                 empty.textContent = 'No connected OAuth accounts.';
@@ -431,7 +440,7 @@
                 return;
             }
 
-            sessionsList.forEach((sess) => {
+            safeList.forEach((sess) => {
                 const row = document.createElement('div');
                 row.className = 'oauth-pending-item';
 
@@ -463,6 +472,7 @@
                 headers: getAuthHeaders()
             });
             if (res.ok) {
+                lastSessionsSignature = null;
                 loadData();
             } else {
                 let errMsg = 'Failed to delete OAuth session.';
@@ -478,10 +488,24 @@
             const listEl = document.getElementById('oauth-pending-list');
             const badgeEl = document.getElementById('oauth-pending-badge');
             if (!listEl) return;
+
+            const safeList = Array.isArray(pendingList) ? pendingList : [];
+            if (badgeEl) {
+                if (safeList.length === 0) {
+                    badgeEl.style.display = 'none';
+                } else {
+                    badgeEl.textContent = `${safeList.length} Pending`;
+                    badgeEl.style.display = 'inline-block';
+                }
+            }
+
+            const sig = JSON.stringify(safeList.map(r => `${r.id || r.req_id}|${r.username || ''}|${r.client_id || ''}|${r.user_code || ''}`));
+            if (sig === lastPendingSignature) return;
+            lastPendingSignature = sig;
+
             listEl.innerHTML = '';
 
-            if (!Array.isArray(pendingList) || pendingList.length === 0) {
-                if (badgeEl) badgeEl.style.display = 'none';
+            if (safeList.length === 0) {
                 const empty = document.createElement('div');
                 empty.className = 'oauth-empty';
                 empty.textContent = 'No pending connection requests.';
@@ -489,12 +513,7 @@
                 return;
             }
 
-            if (badgeEl) {
-                badgeEl.textContent = `${pendingList.length} Pending`;
-                badgeEl.style.display = 'inline-block';
-            }
-
-            pendingList.forEach((req) => {
+            safeList.forEach((req) => {
                 const reqId = req.id || req.req_id;
                 const row = document.createElement('div');
                 row.className = 'oauth-pending-item';
@@ -552,6 +571,8 @@
         });
 
         window.addEventListener('oauth-requests-updated', () => {
+            lastPendingSignature = null;
+            lastSessionsSignature = null;
             loadData();
         });
 

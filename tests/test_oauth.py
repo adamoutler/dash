@@ -860,3 +860,118 @@ def test_oauth_parameter_bounds():
     )
     assert res_simultaneous.status_code == 200
     assert res_simultaneous.json()["status"] == "pending"
+
+
+def test_oauth_repeated_attempts_and_reconnect_with_dynamic_google_redirect():
+    from urllib.parse import parse_qs, urlparse
+
+    admin_auth = ("adminuser", "adminpass")
+    verifier, challenge = _pkce_pair()
+
+    # 1. Register Gemini client with initial Google redirect_uri
+    reg = client.post(
+        "/oauth/register",
+        json={
+            "client_name": "Google Gemini App",
+            "redirect_uris": [
+                "https://oauth-redirect.googleusercontent.com/r/user_bound_custom-mcp-first111"
+            ],
+            "token_endpoint_auth_method": "client_secret_post",
+        },
+    ).json()
+    cid = reg["client_id"]
+    assert "client_secret" in reg
+
+    # 2. Submit two consecutive authorization attempts for the same (username, client_id);
+    # the second attempt must supersede the first so only 1 pending request remains.
+    attempt1 = client.post(
+        "/oauth/authorize",
+        json={
+            "username": "adam",
+            "client_id": cid,
+            "redirect_uri": "https://oauth-redirect.googleusercontent.com/r/user_bound_custom-mcp-first111",
+            "state": "state1",
+            "code_challenge": challenge,
+            "code_challenge_method": "S256",
+        },
+    ).json()
+    attempt2 = client.post(
+        "/oauth/authorize",
+        json={
+            "username": "adam",
+            "client_id": cid,
+            "redirect_uri": "https://oauth-redirect.googleusercontent.com/r/user_bound_custom-mcp-second222",
+            "state": "state2",
+            "code_challenge": challenge,
+            "code_challenge_method": "S256",
+        },
+    )
+    assert attempt2.status_code == 200
+    attempt2_data = attempt2.json()
+    assert attempt2_data["request_id"] != attempt1["request_id"]
+
+    pending = client.get("/api/oauth/pending", auth=admin_auth).json()["pending"]
+    adam_pending = [p for p in pending if p["username"] == "adam" and p["client_id"] == cid]
+    assert len(adam_pending) == 1
+    assert adam_pending[0]["id"] == attempt2_data["request_id"]
+
+    # 3. Approve attempt2 and exchange code
+    client.post(
+        f"/api/oauth/pending/{attempt2_data['request_id']}/approve", auth=admin_auth
+    )
+    poll2 = client.get(
+        f"/oauth/authorize/status/{attempt2_data['request_id']}",
+        params={"poll_token": attempt2_data["poll_token"]},
+    ).json()
+    code2 = parse_qs(urlparse(poll2["redirect_url"]).query)["code"][0]
+
+    tok2 = client.post(
+        "/oauth/token",
+        data={
+            "grant_type": "authorization_code",
+            "code": code2,
+            "code_verifier": verifier,
+            "redirect_uri": "https://oauth-redirect.googleusercontent.com/r/user_bound_custom-mcp-second222",
+            "client_id": cid,
+        },
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    ).json()
+    assert "access_token" in tok2
+
+    # 4. Reconnect with same (username, client_id) and a third dynamic Google redirect_uri
+    attempt3 = client.post(
+        "/oauth/authorize",
+        json={
+            "username": "adam",
+            "client_id": cid,
+            "redirect_uri": "https://vertexaisearch.cloud.google.com/oauth-redirect",
+            "state": "state3",
+            "code_challenge": challenge,
+            "code_challenge_method": "S256",
+        },
+    ).json()
+    client.post(
+        f"/api/oauth/pending/{attempt3['request_id']}/approve", auth=admin_auth
+    )
+    poll3 = client.get(
+        f"/oauth/authorize/status/{attempt3['request_id']}",
+        params={"poll_token": attempt3["poll_token"]},
+    ).json()
+    code3 = parse_qs(urlparse(poll3["redirect_url"]).query)["code"][0]
+    tok3 = client.post(
+        "/oauth/token",
+        json={
+            "grant_type": "authorization_code",
+            "code": code3,
+            "code_verifier": verifier,
+            "redirect_uri": "https://vertexaisearch.cloud.google.com/oauth-redirect",
+            "client_id": cid,
+        },
+    ).json()
+    assert "access_token" in tok3
+    assert tok3["access_token"] != tok2["access_token"]
+
+    # Verify only 1 active OAuth session exists for (adam, cid)
+    sessions = client.get("/api/oauth/pending", auth=admin_auth).json()["sessions"]
+    adam_sessions = [s for s in sessions if s.get("username") == "adam" and s.get("client_id") == cid]
+    assert len(adam_sessions) == 1

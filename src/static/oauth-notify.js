@@ -1,6 +1,8 @@
 (function () {
     const POLL_INTERVAL_MS = 3000;
     let containerEl = null;
+    let isPolling = false;
+    const inFlightDecisions = new Set();
 
     function ensureContainer() {
         if (!containerEl) {
@@ -22,7 +24,30 @@
         return m > 0 ? `${m}m ${s}s` : `${s}s`;
     }
 
+    async function ensureCsrfToken() {
+        if (window.csrfToken) return window.csrfToken;
+        try {
+            const res = await fetch('/api/auth/status', {
+                cache: 'no-store',
+                credentials: 'same-origin',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                if (data && data.csrf_token) {
+                    window.csrfToken = data.csrf_token;
+                }
+            }
+        } catch (e) {
+            // Ignore
+        }
+        return window.csrfToken || '';
+    }
+
     async function handleOAuthDecision(requestId, action, approveBtn, denyBtn) {
+        if (!requestId || inFlightDecisions.has(requestId)) return;
+        inFlightDecisions.add(requestId);
+
         if (approveBtn) approveBtn.disabled = true;
         if (denyBtn) denyBtn.disabled = true;
         if (action === 'approve' && approveBtn) {
@@ -32,6 +57,7 @@
         }
 
         try {
+            await ensureCsrfToken();
             const headers = {
                 'Content-Type': 'application/json',
                 'X-Requested-With': 'XMLHttpRequest'
@@ -44,7 +70,15 @@
                 credentials: 'same-origin',
                 headers: headers
             });
+            inFlightDecisions.delete(requestId);
             if (res.ok) {
+                if (containerEl) {
+                    const existingCard = containerEl.querySelector(`[data-request-id="${CSS.escape(requestId)}"]`);
+                    if (existingCard) existingCard.remove();
+                    if (containerEl.children.length === 0) {
+                        containerEl.style.display = 'none';
+                    }
+                }
                 await checkPendingOAuth();
                 window.dispatchEvent(new CustomEvent('oauth-requests-updated'));
             } else {
@@ -58,6 +92,7 @@
                 }
             }
         } catch (err) {
+            inFlightDecisions.delete(requestId);
             console.error('OAuth decision error:', err);
             if (approveBtn) {
                 approveBtn.disabled = false;
@@ -70,84 +105,111 @@
         }
     }
 
+    function createPopupCard(req) {
+        const reqId = req.id || req.req_id;
+        const card = document.createElement('div');
+        card.className = 'oauth-popup-card';
+        card.dataset.requestId = reqId;
+
+        const header = document.createElement('div');
+        header.className = 'oauth-popup-header';
+
+        const title = document.createElement('strong');
+        title.textContent = '🔐 Incoming OAuth Connection';
+
+        const timer = document.createElement('span');
+        timer.className = 'oauth-popup-timer';
+        timer.textContent = formatRemaining(req.expires_at);
+
+        header.appendChild(title);
+        header.appendChild(timer);
+
+        const body = document.createElement('div');
+        body.className = 'oauth-popup-body';
+
+        const userRow = document.createElement('div');
+        userRow.className = 'oauth-popup-row';
+        const userLabel = document.createElement('span');
+        userLabel.textContent = 'Username: ';
+        const userVal = document.createElement('code');
+        userVal.className = 'oauth-username-badge';
+        userVal.textContent = req.username || 'unknown';
+        userRow.appendChild(userLabel);
+        userRow.appendChild(userVal);
+
+        const clientRow = document.createElement('div');
+        clientRow.className = 'oauth-popup-meta';
+        const codeSuffix = req.user_code ? ` (${req.user_code})` : '';
+        clientRow.textContent = `Client: ${req.client_name || req.client_id}${codeSuffix}`;
+
+        body.appendChild(userRow);
+        body.appendChild(clientRow);
+
+        const actions = document.createElement('div');
+        actions.className = 'oauth-popup-actions';
+
+        const approveBtn = document.createElement('button');
+        approveBtn.type = 'button';
+        approveBtn.className = 'oauth-btn-approve';
+        approveBtn.textContent = '✔ Approve';
+
+        const denyBtn = document.createElement('button');
+        denyBtn.type = 'button';
+        denyBtn.className = 'oauth-btn-deny';
+        denyBtn.textContent = '✘ Disapprove';
+
+        approveBtn.onclick = () => handleOAuthDecision(reqId, 'approve', approveBtn, denyBtn);
+        denyBtn.onclick = () => handleOAuthDecision(reqId, 'deny', approveBtn, denyBtn);
+
+        actions.appendChild(approveBtn);
+        actions.appendChild(denyBtn);
+
+        card.appendChild(header);
+        card.appendChild(body);
+        card.appendChild(actions);
+        return card;
+    }
+
     function renderPopupCards(pendingList) {
         const container = ensureContainer();
-        container.innerHTML = '';
 
         if (!Array.isArray(pendingList) || pendingList.length === 0) {
+            container.innerHTML = '';
             container.style.display = 'none';
             return;
         }
 
         container.style.display = 'flex';
 
+        const activeIds = new Set(pendingList.map(r => r.id || r.req_id));
+
+        Array.from(container.children).forEach(child => {
+            const cid = child.dataset ? child.dataset.requestId : null;
+            if (!cid || !activeIds.has(cid)) {
+                child.remove();
+            }
+        });
+
         pendingList.forEach(req => {
             const reqId = req.id || req.req_id;
-            const card = document.createElement('div');
-            card.className = 'oauth-popup-card';
-            card.dataset.requestId = reqId;
-
-            const header = document.createElement('div');
-            header.className = 'oauth-popup-header';
-
-            const title = document.createElement('strong');
-            title.textContent = '🔐 Incoming OAuth Connection';
-
-            const timer = document.createElement('span');
-            timer.className = 'oauth-popup-timer';
-            timer.textContent = formatRemaining(req.expires_at);
-
-            header.appendChild(title);
-            header.appendChild(timer);
-
-            const body = document.createElement('div');
-            body.className = 'oauth-popup-body';
-
-            const userRow = document.createElement('div');
-            userRow.className = 'oauth-popup-row';
-            const userLabel = document.createElement('span');
-            userLabel.textContent = 'Username: ';
-            const userVal = document.createElement('code');
-            userVal.className = 'oauth-username-badge';
-            userVal.textContent = req.username || 'unknown';
-            userRow.appendChild(userLabel);
-            userRow.appendChild(userVal);
-
-            const clientRow = document.createElement('div');
-            clientRow.className = 'oauth-popup-meta';
-            const codeSuffix = req.user_code ? ` (${req.user_code})` : '';
-            clientRow.textContent = `Client: ${req.client_name || req.client_id}${codeSuffix}`;
-
-            body.appendChild(userRow);
-            body.appendChild(clientRow);
-
-            const actions = document.createElement('div');
-            actions.className = 'oauth-popup-actions';
-
-            const approveBtn = document.createElement('button');
-            approveBtn.type = 'button';
-            approveBtn.className = 'oauth-btn-approve';
-            approveBtn.textContent = '✔ Approve';
-
-            const denyBtn = document.createElement('button');
-            denyBtn.type = 'button';
-            denyBtn.className = 'oauth-btn-deny';
-            denyBtn.textContent = '✘ Disapprove';
-
-            approveBtn.onclick = () => handleOAuthDecision(reqId, 'approve', approveBtn, denyBtn);
-            denyBtn.onclick = () => handleOAuthDecision(reqId, 'deny', approveBtn, denyBtn);
-
-            actions.appendChild(approveBtn);
-            actions.appendChild(denyBtn);
-
-            card.appendChild(header);
-            card.appendChild(body);
-            card.appendChild(actions);
-            container.appendChild(card);
+            let card = Array.from(container.children).find(
+                c => c.dataset && c.dataset.requestId === reqId
+            );
+            if (card) {
+                const timerEl = card.querySelector('.oauth-popup-timer');
+                if (timerEl) {
+                    timerEl.textContent = formatRemaining(req.expires_at);
+                }
+            } else {
+                card = createPopupCard(req);
+                container.appendChild(card);
+            }
         });
     }
 
     async function checkPendingOAuth() {
+        if (isPolling) return;
+        isPolling = true;
         try {
             const res = await fetch('/api/oauth/pending', {
                 cache: 'no-store',
@@ -164,6 +226,8 @@
             window.dispatchEvent(new CustomEvent('oauth-pending-data', { detail: data }));
         } catch (e) {
             // Ignore transient offline errors
+        } finally {
+            isPolling = false;
         }
     }
 

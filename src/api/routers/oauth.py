@@ -7,7 +7,7 @@ import re
 import secrets
 import time
 from typing import Annotated, Any
-from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+from urllib.parse import parse_qsl, unquote, urlencode, urlparse, urlunparse
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import FileResponse, JSONResponse
@@ -28,7 +28,7 @@ USERNAME_RE = re.compile(r"^[a-zA-Z0-9_.@-]{1,64}$")
 PKCE_CHALLENGE_RE = re.compile(r"^[A-Za-z0-9_-]{43,128}$")
 PKCE_VERIFIER_RE = re.compile(r"^[A-Za-z0-9._~-]{43,128}$")
 PENDING_TTL_SECONDS = 300
-AUTH_CODE_TTL_SECONDS = 60
+AUTH_CODE_TTL_SECONDS = 300
 TOKEN_TTL_SECONDS = 31536000
 MAX_PENDING_REQUESTS = 50
 MAX_OAUTH_BODY_BYTES = 32768
@@ -70,6 +70,40 @@ def _is_valid_redirect_uri(uri: str) -> bool:
     return bool(
         parsed.scheme == "http" and parsed.hostname in ("localhost", "127.0.0.1", "::1")
     )
+
+
+def _is_google_redirect_host(hostname: str | None) -> bool:
+    if not hostname:
+        return False
+    host = hostname.lower()
+    return host in ("google.com", "googleusercontent.com") or host.endswith(
+        (".google.com", ".googleusercontent.com")
+    )
+
+
+def _is_compatible_redirect_uri(redirect_uri: str, registered_uris: list[str]) -> bool:
+    if not registered_uris or redirect_uri in registered_uris:
+        return True
+    try:
+        parsed = urlparse(redirect_uri)
+    except ValueError:
+        return False
+    if parsed.scheme != "https" or not parsed.netloc:
+        return False
+    for reg_uri in registered_uris:
+        try:
+            reg_parsed = urlparse(reg_uri)
+        except ValueError:
+            continue
+        if reg_parsed.scheme != "https":
+            continue
+        if reg_parsed.netloc == parsed.netloc:
+            return True
+        if _is_google_redirect_host(parsed.hostname) and _is_google_redirect_host(
+            reg_parsed.hostname
+        ):
+            return True
+    return False
 
 
 def _verify_pkce_s256(code_verifier: str, code_challenge: str) -> bool:
@@ -199,16 +233,19 @@ class OAuthManager:
                 for cid in sorted_ids[: len(clients_map) - MAX_REGISTERED_CLIENTS + 1]:
                     del clients_map[cid]
             client_id = f"mcp_{secrets.token_hex(16)}"
-            client_record = {
+            auth_method = token_endpoint_auth_method or "none"
+            client_record: dict[str, Any] = {
                 "client_id": client_id,
                 "client_name": client_name or "MCP OAuth Client",
                 "redirect_uris": redirect_uris[:MAX_REDIRECT_URIS_PER_CLIENT],
                 "grant_types": grant_types or ["authorization_code", "refresh_token"],
                 "response_types": response_types or ["code"],
-                "token_endpoint_auth_method": token_endpoint_auth_method or "none",
+                "token_endpoint_auth_method": auth_method,
                 "client_id_issued_at": now,
                 "client_secret_expires_at": 0,
             }
+            if auth_method in ("client_secret_basic", "client_secret_post"):
+                client_record["client_secret"] = f"secret_{secrets.token_urlsafe(24)}"
             clients_map[client_id] = client_record
             self._save_nolock(data)
             return client_record
@@ -229,6 +266,38 @@ class OAuthManager:
             data = self._load_nolock()
             self._prune_nolock(data, now)
 
+            client_info = data["clients"].get(client_id)
+            if client_info:
+                registered_uris = list(client_info.get("redirect_uris") or [])
+                if registered_uris and not _is_compatible_redirect_uri(
+                    redirect_uri, registered_uris
+                ):
+                    raise HTTPException(
+                        status_code=400,
+                        detail="redirect_uri does not match registered client.",
+                    )
+                if redirect_uri not in registered_uris:
+                    registered_uris.append(redirect_uri)
+                    client_info["redirect_uris"] = registered_uris[
+                        -MAX_REDIRECT_URIS_PER_CLIENT:
+                    ]
+            else:
+                client_info = {
+                    "client_id": client_id,
+                    "client_name": client_id,
+                    "redirect_uris": [redirect_uri],
+                }
+
+            # Supersede any older pending requests for the same (username, client_id)
+            # so repeated connection attempts never pile up duplicate approval cards.
+            for old_req_id, old_req in list(data["requests"].items()):
+                if (
+                    old_req.get("status") == "pending"
+                    and old_req.get("username") == username
+                    and old_req.get("client_id") == client_id
+                ):
+                    del data["requests"][old_req_id]
+
             active_pending = [
                 r
                 for r in data["requests"].values()
@@ -239,21 +308,6 @@ class OAuthManager:
                     status_code=429,
                     detail="Too many pending OAuth approval requests.",
                 )
-
-            client_info = data["clients"].get(client_id)
-            if client_info:
-                registered_uris = client_info.get("redirect_uris") or []
-                if registered_uris and redirect_uri not in registered_uris:
-                    raise HTTPException(
-                        status_code=400,
-                        detail="redirect_uri does not match registered client.",
-                    )
-            else:
-                client_info = {
-                    "client_id": client_id,
-                    "client_name": client_id,
-                    "redirect_uris": [redirect_uri],
-                }
 
             req_id = f"req_{secrets.token_hex(16)}"
             poll_token = secrets.token_urlsafe(24)
@@ -429,6 +483,8 @@ class OAuthManager:
             self._prune_nolock(data, now)
             code_hash = _hash_secret(raw_code)
             code_info = data["codes"].pop(code_hash, None)
+            if code_info and code_info.get("req_id"):
+                data["requests"].pop(code_info["req_id"], None)
             self._save_nolock(data)
 
             safe_code_hash = str(code_hash[:12]).replace("\r", "").replace("\n", "")
@@ -504,11 +560,38 @@ class OAuthManager:
             return False
         with FileLock(self.lockpath, timeout=FILE_LOCK_TIMEOUT):
             data = self._load_nolock()
+            removed = False
             if client_id in data.get("clients", {}):
                 del data["clients"][client_id]
+                removed = True
+            for req_id, req in list(data.get("requests", {}).items()):
+                if req.get("client_id") == client_id:
+                    del data["requests"][req_id]
+                    removed = True
+            for code_h, cinfo in list(data.get("codes", {}).items()):
+                if cinfo.get("client_id") == client_id:
+                    del data["codes"][code_h]
+                    removed = True
+            if removed:
                 self._save_nolock(data)
-                return True
-            return False
+            return removed
+
+    def cleanup_client_requests(self, client_id: str) -> None:
+        if not client_id:
+            return
+        with FileLock(self.lockpath, timeout=FILE_LOCK_TIMEOUT):
+            data = self._load_nolock()
+            changed = False
+            for req_id, req in list(data.get("requests", {}).items()):
+                if req.get("client_id") == client_id:
+                    del data["requests"][req_id]
+                    changed = True
+            for code_h, cinfo in list(data.get("codes", {}).items()):
+                if cinfo.get("client_id") == client_id:
+                    del data["codes"][code_h]
+                    changed = True
+            if changed:
+                self._save_nolock(data)
 
 
 oauth_manager = OAuthManager()
@@ -697,7 +780,11 @@ async def register_oauth_client(request: Request):
         valid_uris,
         safe_method,
     )
-    return JSONResponse(status_code=201, content=record)
+    return JSONResponse(
+        status_code=201,
+        content=record,
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 @router.get("/oauth/authorize", include_in_schema=False)
@@ -956,7 +1043,8 @@ def _extract_basic_client_id(request: Request) -> str | None:
     try:
         decoded = base64.b64decode(auth_header[6:].strip()).decode("utf-8")
         client_id, _, _ = decoded.partition(":")
-        return client_id.strip() or None
+        clean_id = unquote(client_id.strip())
+        return clean_id or None
     except (ValueError, UnicodeDecodeError):
         return None
 
@@ -979,6 +1067,7 @@ async def oauth_token_exchange(request: Request):
             "error": "unsupported_grant_type",
             "error_description": "Supported grant_types: authorization_code, refresh_token",
         },
+        headers={"Cache-Control": "no-store"},
     )
 
 
@@ -991,7 +1080,11 @@ async def oauth_token_exchange(request: Request):
     include_in_schema=False,
 )
 async def get_oauth_client_info(client_id: str):
-    return oauth_manager.get_client_public_info(client_id)
+    return JSONResponse(
+        status_code=200,
+        content=oauth_manager.get_client_public_info(client_id),
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 @router.delete(
@@ -1008,7 +1101,12 @@ async def delete_oauth_session(
 ):
     from api.auth import token_manager
 
-    success = token_manager.revoke_token(token)
+    revoked_records = token_manager.revoke_token_records(token)
+    success = len(revoked_records) > 0
+    for rec in revoked_records:
+        cid = rec.get("client_id")
+        if cid:
+            oauth_manager.cleanup_client_requests(str(cid))
     client_deleted = oauth_manager.remove_client(token)
     safe_token = str(token).replace("\r", "").replace("\n", "")[:64]
     safe_user = str(user).replace("\r", "").replace("\n", "")[:64]
@@ -1032,7 +1130,12 @@ async def oauth_token_revoke(request: Request):
     token = str(params.get("token") or "").strip()
     client_ip = getattr(getattr(request, "client", None), "host", "unknown")
     if token:
-        revoked = token_manager.revoke_token(token)
+        revoked_records = token_manager.revoke_token_records(token)
+        revoked = len(revoked_records) > 0
+        for rec in revoked_records:
+            cid = rec.get("client_id")
+            if cid:
+                oauth_manager.cleanup_client_requests(str(cid))
         safe_token = str(token[:12]).replace("\r", "").replace("\n", "")
         safe_ip = str(client_ip).replace("\r", "").replace("\n", "")[:64]
         logger.info(
@@ -1041,7 +1144,7 @@ async def oauth_token_revoke(request: Request):
             safe_token,
             revoked,
         )
-    return Response(status_code=200)
+    return Response(status_code=200, headers={"Cache-Control": "no-store"})
 
 
 @router.get(

@@ -89,10 +89,21 @@ class TokenManager:
             now = time.time()
             data = self._load_nolock()
             self._prune_nolock(data, now)
+            is_oauth = bool(extra.get("oauth"))
+            oauth_user = extra.get("username")
+            oauth_cid = extra.get("client_id")
+            if is_oauth and oauth_user and oauth_cid:
+                for old_k, old_v in list(data.items()):
+                    if (
+                        isinstance(old_v, dict)
+                        and old_v.get("oauth")
+                        and old_v.get("username") == oauth_user
+                        and old_v.get("client_id") == oauth_cid
+                    ):
+                        del data[old_k]
             token = secrets.token_hex(32)
             token_hash = _hash_token(token)
             token_id = f"tok_{secrets.token_hex(8)}"
-            is_oauth = bool(extra.get("oauth"))
             entry: dict[str, Any] = {
                 "id": token_id,
                 "name": name,
@@ -210,9 +221,9 @@ class TokenManager:
                 "expires_in": expires_in_sec,
             }
 
-    def revoke_token(self, token: str) -> bool:
+    def revoke_token_records(self, token: str) -> list[dict[str, Any]]:
         if not token:
-            return False
+            return []
         target_hash = _hash_token(token)
         with FileLock(self.lockpath, timeout=FILE_LOCK_TIMEOUT):
             now = time.time()
@@ -242,14 +253,20 @@ class TokenManager:
                 ):
                     matched_keys.append(k)
 
+            removed: list[dict[str, Any]] = []
             if matched_keys:
                 for mk in matched_keys:
-                    data.pop(mk, None)
+                    rec = data.pop(mk, None)
+                    if isinstance(rec, dict):
+                        removed.append(rec)
                 self._save_nolock(data)
-                return True
+                return removed
             if pruned:
                 self._save_nolock(data)
-            return False
+            return []
+
+    def revoke_token(self, token: str) -> bool:
+        return len(self.revoke_token_records(token)) > 0
 
     def list_tokens(self) -> list[dict[str, Any]]:
         with FileLock(self.lockpath, timeout=FILE_LOCK_TIMEOUT):
@@ -605,6 +622,7 @@ def build_mcp_oauth_headers(request: Request) -> dict[str, str]:
             f'resource_metadata="{resource_metadata}"'
         ),
         "Link": f'<{resource_metadata}>; rel="oauth-protected-resource"',
+        "Cache-Control": "no-store",
     }
 
 
