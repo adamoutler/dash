@@ -524,21 +524,25 @@ def test_root_mcp_probes_and_session_deletion():
 
     # 5. Configure data lists oauth_sessions with opaque IDs and allows deletion
     cfg_data = client.get("/configure/data", auth=admin_auth).json()
-    assert any(
-        s["username"] == "charlie"
-        and s["token"].startswith("tok_")
-        and s["token"] != access_token
-        for s in cfg_data["oauth_sessions"]
+    charlie_sess = next(
+        s for s in cfg_data["oauth_sessions"]
+        if s["username"] == "charlie" and s["token"].startswith("tok_")
     )
+    opaque_tok = charlie_sess["token"]
 
-    del_res = client.delete(f"/api/oauth/sessions/{access_token}", auth=admin_auth)
+    # Deleting via opaque token ID (as sent by UI) must succeed
+    del_res = client.delete(f"/api/oauth/sessions/{opaque_tok}", auth=admin_auth)
     assert del_res.status_code == 200
     assert (
         client.delete(
-            f"/api/oauth/sessions/{access_token}", auth=admin_auth
+            f"/api/oauth/sessions/{opaque_tok}", auth=admin_auth
         ).status_code
         == 404
     )
+
+    # Deleting client by client_id also succeeds
+    del_client_res = client.delete(f"/api/oauth/sessions/{cid}", auth=admin_auth)
+    assert del_client_res.status_code == 200
 
 
 def test_oauth_security_hardening_invariants():

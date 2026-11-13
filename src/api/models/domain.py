@@ -30,6 +30,14 @@ class RepoItem(BaseModel):
     workflow_name: str | None = Field(
         None, description="A friendly, human-readable name for the selected workflow"
     )
+    orig_workflow_id: str | None = Field(
+        None,
+        description="The original workflow ID if editing an existing tracked repository",
+    )
+    orig_branch: str | None = Field(
+        None,
+        description="The original branch if editing an existing tracked repository",
+    )
 
 
 class NodeType(str, Enum):

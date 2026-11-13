@@ -437,7 +437,7 @@ class OAuthManager:
             if expected_redirect and redirect_uri != expected_redirect:
                 return None
             expected_client = code_info.get("client_id")
-            if expected_client and client_id != expected_client:
+            if client_id and expected_client and client_id != expected_client:
                 return None
             if code_info.get("code_challenge_method", "S256") != "S256":
                 return None
@@ -457,6 +457,17 @@ class OAuthManager:
                     "client_name": str(client_info.get("client_name") or client_id),
                 }
             return {"client_id": client_id, "client_name": client_id}
+
+    def remove_client(self, client_id: str) -> bool:
+        if not client_id:
+            return False
+        with FileLock(self.lockpath, timeout=FILE_LOCK_TIMEOUT):
+            data = self._load_nolock()
+            if client_id in data.get("clients", {}):
+                del data["clients"][client_id]
+                self._save_nolock(data)
+                return True
+            return False
 
 
 oauth_manager = OAuthManager()
@@ -887,7 +898,8 @@ async def delete_oauth_session(
     from api.auth import token_manager
 
     success = token_manager.revoke_token(token)
-    if not success:
+    client_deleted = oauth_manager.remove_client(token)
+    if not success and not client_deleted:
         raise HTTPException(status_code=404, detail="OAuth session not found")
     return {"message": "OAuth session deleted"}
 

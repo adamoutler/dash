@@ -215,9 +215,11 @@ class TokenManager:
             now = time.time()
             data = self._load_nolock()
             pruned = self._prune_nolock(data, now)
+            matched_keys = []
             for k, v in list(data.items()):
                 stored_id = v.get("id", "")
                 stored_rt_hash = v.get("refresh_token_hash", "")
+                client_id = v.get("client_id", "")
                 if (
                     secrets.compare_digest(k, target_hash)
                     or (stored_id and secrets.compare_digest(stored_id, token))
@@ -225,10 +227,23 @@ class TokenManager:
                         stored_rt_hash
                         and secrets.compare_digest(stored_rt_hash, target_hash)
                     )
+                    or (
+                        client_id
+                        and secrets.compare_digest(str(client_id), token)
+                    )
+                    or (
+                        token.startswith("tok_")
+                        and len(token) > 4
+                        and secrets.compare_digest(k[: len(token) - 4], token[4:])
+                    )
                 ):
-                    del data[k]
-                    self._save_nolock(data)
-                    return True
+                    matched_keys.append(k)
+
+            if matched_keys:
+                for mk in matched_keys:
+                    data.pop(mk, None)
+                self._save_nolock(data)
+                return True
             if pruned:
                 self._save_nolock(data)
             return False

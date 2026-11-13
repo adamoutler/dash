@@ -457,6 +457,13 @@
             });
             if (res.ok) {
                 loadData();
+            } else {
+                let errMsg = 'Failed to delete OAuth session.';
+                try {
+                    const data = await res.json();
+                    if (data.detail) errMsg = data.detail;
+                } catch(e) {}
+                alert(errMsg);
             }
         }
 

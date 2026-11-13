@@ -440,25 +440,33 @@
                 }
                 if (this.levels[2] && this.levels[2].selectedIndex > 0) {
                     const opt = this.levels[2].options[this.levels[2].selectedIndex];
-                    workflowId = opt.dataset.id;
-                    workflowName = opt.textContent;
+                    const selectedId = opt.dataset.id;
+                    if (selectedId && selectedId !== 'any') {
+                        workflowId = selectedId;
+                        workflowName = opt.textContent;
+                    } else {
+                        workflowId = '';
+                        workflowName = '';
+                    }
                 }
             }
 
             document.getElementById('owner').value = owner || '';
             document.getElementById('repo').value = repo || '';
-            document.getElementById('workflow').value = workflowId || '';
-            document.getElementById('workflowName').value = workflowName || '';
+            document.getElementById('workflow').value = (workflowId === 'any' ? '' : (workflowId || ''));
+            document.getElementById('workflowName').value = (workflowId === 'any' ? '' : (workflowName || ''));
         }
 
         setEditMode(owner, repo, workflowId, workflowName) {
             this.container.innerHTML = '';
             this.levels = [];
 
+            const provider = document.getElementById(this.providerSelectId).value;
+
             const createInput = (val, placeholder) => {
                 const input = document.createElement('input');
                 input.type = 'text';
-                input.value = val;
+                input.value = val || '';
                 input.placeholder = placeholder;
                 input.readOnly = true;
                 input.style.flex = '1';
@@ -475,24 +483,95 @@
             row.style.display = 'flex';
             row.style.gap = '10px';
 
-            row.appendChild(createInput(owner, 'Owner'));
+            if (provider !== 'jenkins' && owner) {
+                row.appendChild(createInput(owner, 'Owner'));
+            }
             row.appendChild(createInput(repo, 'Repo'));
 
             this.container.appendChild(row);
 
-            if (workflowId || workflowName) {
-                const wfRow = document.createElement('div');
-                wfRow.style.display = 'flex';
-                wfRow.style.gap = '10px';
-                wfRow.style.marginTop = '10px';
-                wfRow.appendChild(createInput(workflowName || workflowId, 'Workflow'));
-                this.container.appendChild(wfRow);
-            }
+            const initialWfId = (workflowId === 'any' || !workflowId) ? '' : workflowId;
+            const initialWfName = (workflowId === 'any' || !workflowId) ? '' : (workflowName || workflowId);
 
             document.getElementById('owner').value = owner || '';
             document.getElementById('repo').value = repo || '';
-            document.getElementById('workflow').value = workflowId || '';
-            document.getElementById('workflowName').value = workflowName || '';
+            document.getElementById('workflow').value = initialWfId;
+            document.getElementById('workflowName').value = initialWfName;
+
+            // Render dynamic workflow select row
+            const wfRow = document.createElement('div');
+            wfRow.style.display = 'flex';
+            wfRow.style.gap = '10px';
+            wfRow.style.marginTop = '10px';
+            wfRow.style.alignItems = 'center';
+
+            const wfLabel = document.createElement('span');
+            wfLabel.textContent = 'Workflow:';
+            wfLabel.style.fontSize = '12px';
+            wfLabel.style.color = 'var(--text-secondary)';
+            wfLabel.style.minWidth = '65px';
+            wfRow.appendChild(wfLabel);
+
+            const wfSelect = document.createElement('select');
+            wfSelect.id = 'editWorkflowSelect';
+            wfSelect.className = 'browser-level';
+            wfSelect.style.flex = '1';
+            wfSelect.innerHTML = '<option value="">Any Workflow</option>';
+            wfRow.appendChild(wfSelect);
+            this.container.appendChild(wfRow);
+
+            const explorePath = (owner && provider !== 'jenkins') ? `${owner}/${repo}` : repo;
+            fetch(`/api/explore/${provider}/nodes?path=${encodeURIComponent(explorePath)}`)
+                .then(r => r.ok ? r.json() : [])
+                .then(nodes => {
+                    wfSelect.innerHTML = '';
+                    const anyOpt = document.createElement('option');
+                    anyOpt.value = '';
+                    anyOpt.textContent = 'Any Workflow';
+                    anyOpt.dataset.id = 'any';
+                    wfSelect.appendChild(anyOpt);
+
+                    let matched = false;
+                    if (Array.isArray(nodes)) {
+                        nodes.forEach(n => {
+                            if (n.id === 'any') return;
+                            const opt = document.createElement('option');
+                            opt.value = n.id;
+                            opt.textContent = n.name || n.id;
+                            opt.dataset.id = n.id;
+                            if (initialWfId && (n.id === initialWfId || String(n.id) === String(initialWfId) || n.name === initialWfName)) {
+                                opt.selected = true;
+                                matched = true;
+                            }
+                            wfSelect.appendChild(opt);
+                        });
+                    }
+
+                    if (initialWfId && !matched) {
+                        const customOpt = document.createElement('option');
+                        customOpt.value = initialWfId;
+                        customOpt.textContent = initialWfName || initialWfId;
+                        customOpt.dataset.id = initialWfId;
+                        customOpt.selected = true;
+                        wfSelect.appendChild(customOpt);
+                    }
+
+                    const updateWfInputs = () => {
+                        const selOpt = wfSelect.options[wfSelect.selectedIndex];
+                        if (selOpt && selOpt.dataset && selOpt.dataset.id && selOpt.dataset.id !== 'any' && selOpt.value) {
+                            document.getElementById('workflow').value = selOpt.value;
+                            document.getElementById('workflowName').value = selOpt.textContent;
+                        } else {
+                            document.getElementById('workflow').value = '';
+                            document.getElementById('workflowName').value = '';
+                        }
+                    };
+
+                    wfSelect.onchange = updateWfInputs;
+                })
+                .catch(err => {
+                    console.warn('Failed to fetch workflows for edit mode:', err);
+                });
         }
     }
     let pathBrowser;
@@ -528,6 +607,13 @@
         } catch(e) {}
 
         if (isEdit === true) {
+            window.editingRepo = {
+                provider,
+                owner,
+                repo,
+                workflowId: (workflowId === 'any' || !workflowId) ? null : workflowId,
+                branch: branch || null
+            };
             document.getElementById('provider').value = provider;
             document.getElementById('provider').disabled = true;
             document.getElementById('submitBtn').innerText = 'Update';
@@ -543,6 +629,7 @@
             addBtn.style.padding = '8px 12px';
             window.scrollTo({ top: 0, behavior: 'smooth' });
         } else {
+            window.editingRepo = null;
             if (form.style.display === 'block' && document.getElementById('submitBtn').innerText !== 'Update') {
                 form.style.display = 'none';
                 addBtn.innerHTML = '+ Add Repository';
@@ -585,17 +672,37 @@
         if (!repo) return;
         if (provider !== 'jenkins' && !owner) return;
 
+        let normalizedWfId = (workflow_id === 'any' || !workflow_id) ? null : workflow_id;
+        let normalizedWfName = (workflow_id === 'any' || !workflow_id) ? null : (workflow_name || null);
+        if (!normalizedWfId) normalizedWfName = null;
+
+        const payload = {
+            provider,
+            owner,
+            repo,
+            custom_links,
+            workflow_id: normalizedWfId,
+            workflow_name: normalizedWfName,
+            branch: branch || null
+        };
+
+        if (window.editingRepo) {
+            payload.orig_workflow_id = window.editingRepo.workflowId;
+            payload.orig_branch = window.editingRepo.branch;
+        }
+
         const res = await fetch('/api/repos', {
             method: 'POST',
             credentials: 'same-origin',
             headers: getAuthHeaders({'Content-Type': 'application/json'}),
-            body: JSON.stringify({provider, owner, repo, custom_links, workflow_id, workflow_name, branch: branch || null})
+            body: JSON.stringify(payload)
         });
         if (res.status === 401 || res.status === 403) {
             openLoginModal();
             return;
         }
 
+        window.editingRepo = null;
         document.getElementById('submitBtn').innerText = 'Add';
         document.getElementById('provider').disabled = false;
         document.getElementById('linksContainer').innerHTML = '';

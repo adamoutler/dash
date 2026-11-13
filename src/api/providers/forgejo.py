@@ -303,18 +303,41 @@ Recommendations:
         runs_url = f"{base_url}/actions/runs?limit=50"
         if branch:
             runs_url += f"&branch={quote(str(branch), safe='')}"
+        workflows: dict[str, str] = {}
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 resp = await client.get(runs_url, headers=headers)
                 if resp.status_code == 200:
                     runs = resp.json().get("workflow_runs", [])
-                    workflows = {}
                     for r in runs:
-                        w_id = str(r.get("workflow_id", r.get("name")))
+                        w_id = str(r.get("workflow_id") or r.get("name") or "")
                         if w_id and w_id not in workflows:
-                            workflows[w_id] = r.get("name", w_id)
-                    return [{"id": k, "name": v} for k, v in workflows.items()]
-                return []
+                            workflows[w_id] = str(r.get("name") or w_id)
+
+                for wf_dir in (
+                    ".forgejo/workflows",
+                    ".gitea/workflows",
+                    ".github/workflows",
+                ):
+                    try:
+                        wf_resp = await client.get(
+                            f"{base_url}/contents/{wf_dir}", headers=headers
+                        )
+                        if wf_resp.status_code == 200:
+                            data = wf_resp.json()
+                            if isinstance(data, list):
+                                for item in data:
+                                    if (
+                                        isinstance(item, dict)
+                                        and item.get("type") == "file"
+                                    ):
+                                        fname = str(item.get("name") or "")
+                                        if fname.endswith((".yaml", ".yml")):
+                                            if fname not in workflows:
+                                                workflows[fname] = fname
+                    except PROVIDER_EXC:
+                        pass
+                return [{"id": k, "name": v} for k, v in workflows.items()]
         except PROVIDER_EXC:
             return []
 
@@ -379,6 +402,70 @@ Recommendations:
             ]
         raise ProviderPathNotFoundError(f"Owner {owner} not found or no access")
 
+    async def _explore_repo(
+        self, client: httpx.AsyncClient, url: str, owner: str, repo: str, headers: dict
+    ) -> list[Node]:
+        workflows: dict[str, str] = {}
+        base_repo_url = f"{url}/api/v1/repos/{owner}/{repo}"
+
+        try:
+            runs_resp = await client.get(
+                f"{base_repo_url}/actions/runs?limit=50", headers=headers
+            )
+            if runs_resp.status_code == 200:
+                runs = runs_resp.json().get("workflow_runs", [])
+                for r in runs:
+                    w_id = str(r.get("workflow_id") or r.get("name") or "")
+                    if w_id and w_id not in workflows:
+                        workflows[w_id] = str(r.get("name") or w_id)
+        except PROVIDER_EXC:
+            pass
+
+        for wf_dir in (
+            ".forgejo/workflows",
+            ".gitea/workflows",
+            ".github/workflows",
+        ):
+            try:
+                wf_resp = await client.get(
+                    f"{base_repo_url}/contents/{wf_dir}", headers=headers
+                )
+                if wf_resp.status_code == 200:
+                    data = wf_resp.json()
+                    if isinstance(data, list):
+                        for item in data:
+                            if (
+                                isinstance(item, dict)
+                                and item.get("type") == "file"
+                            ):
+                                fname = str(item.get("name") or "")
+                                if fname.endswith((".yaml", ".yml")):
+                                    if fname not in workflows:
+                                        workflows[fname] = fname
+            except PROVIDER_EXC:
+                pass
+
+        nodes = [
+            Node(
+                id="any",
+                name="Any Workflow",
+                type=NodeType.WORKFLOW,
+                path=f"{owner}/{repo}/any",
+                has_children=False,
+            )
+        ]
+        for w_id, w_name in workflows.items():
+            nodes.append(
+                Node(
+                    id=w_id,
+                    name=w_name,
+                    type=NodeType.WORKFLOW,
+                    path=f"{owner}/{repo}/{w_id}",
+                    has_children=False,
+                )
+            )
+        return nodes
+
     async def explore(self, path: str) -> list[Node]:
         from urllib.parse import urlparse
 
@@ -398,16 +485,9 @@ Recommendations:
                 elif len(parts) == 1:
                     return await self._explore_owner(client, url, parts[0], headers)
                 elif len(parts) == 2:
-                    owner, repo = parts[0], parts[1]
-                    return [
-                        Node(
-                            id="any",
-                            name="Any Workflow",
-                            type=NodeType.WORKFLOW,
-                            path=f"{owner}/{repo}/any",
-                            has_children=False,
-                        )
-                    ]
+                    return await self._explore_repo(
+                        client, url, parts[0], parts[1], headers
+                    )
         except httpx.RequestError as e:
             raise ProviderPathNotFoundError(f"Failed to connect to Forgejo server: {e}")
         except ProviderPathNotFoundError:

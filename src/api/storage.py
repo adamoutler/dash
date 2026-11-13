@@ -71,12 +71,16 @@ class RepoStorage:
         workflow_id=None,
         workflow_name=None,
         branch=None,
+        orig_workflow_id=None,
+        orig_branch=None,
     ):
         """
         Adds a new repository or updates an existing one if it matches the unique constraints.
 
         Behavioral Contracts:
         - Uniqueness is defined by (provider, owner, repo, workflow_id, branch).
+        - If orig_workflow_id or orig_branch is specified, matches the existing repository
+          using those original values and updates it with the new configuration in-place.
         - If a match is found, the repository's configuration is updated.
         """
         repos = self.get_repos()
@@ -89,6 +93,20 @@ class RepoStorage:
             new_repo["workflow_name"] = workflow_name
         if branch:
             new_repo["branch"] = branch
+
+        # In edit mode, if original workflow/branch was specified, update that entry in-place
+        if orig_workflow_id is not None or orig_branch is not None:
+            for i, r in enumerate(repos):
+                if (
+                    r["provider"] == provider
+                    and r["owner"] == owner
+                    and r["repo"] == repo
+                    and r.get("workflow_id") == orig_workflow_id
+                    and r.get("branch") == orig_branch
+                ):
+                    repos[i] = new_repo
+                    self._save_repos(repos)
+                    return
 
         for i, r in enumerate(repos):
             if (

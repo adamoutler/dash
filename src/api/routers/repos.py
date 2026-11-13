@@ -20,6 +20,8 @@ async def add_repo(item: RepoItem, user: Annotated[str, Depends(require_web_logi
         item.workflow_id,
         item.workflow_name,
         item.branch,
+        item.orig_workflow_id,
+        item.orig_branch,
     )
     return {"message": "added"}
 

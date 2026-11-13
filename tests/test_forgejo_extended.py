@@ -71,3 +71,156 @@ async def test_fetch_status_no_url():
     res = await fp.fetch_status("owner", "repo")
     assert res["status"] == "error"
     assert res["commit_message"] == "Failed to fetch"
+
+
+@pytest.mark.asyncio
+async def test_forgejo_fetch_branches(forgejo_provider):
+    from unittest.mock import AsyncMock, patch
+    from httpx import Response
+
+    # Invalid input
+    assert await forgejo_provider.fetch_branches("bad/owner", "repo") == []
+
+    # Successful fetch
+    with patch("httpx.AsyncClient.get", new_callable=AsyncMock) as mock_get:
+        mock_get.return_value = Response(200, json=[{"name": "main"}, {"name": "develop"}])
+        branches = await forgejo_provider.fetch_branches("owner", "repo")
+        assert branches == ["main", "develop"]
+
+    # HTTP Error
+    with patch("httpx.AsyncClient.get", new_callable=AsyncMock) as mock_get:
+        mock_get.return_value = Response(500, json={})
+        assert await forgejo_provider.fetch_branches("owner", "repo") == []
+
+    # Exception
+    with patch("httpx.AsyncClient.get", side_effect=RuntimeError("boom")):
+        assert await forgejo_provider.fetch_branches("owner", "repo") == []
+
+
+@pytest.mark.asyncio
+async def test_forgejo_get_workflows(forgejo_provider):
+    from unittest.mock import AsyncMock, patch
+    from httpx import Response
+
+    # Invalid input
+    assert await forgejo_provider.get_workflows("bad/owner", "repo") == []
+
+    # Discovers from runs and contents
+    with patch("httpx.AsyncClient.get", new_callable=AsyncMock) as mock_get:
+        runs_resp = Response(
+            200,
+            json={
+                "workflow_runs": [
+                    {"workflow_id": "ci.yaml", "name": "CI Build"},
+                    {"name": "lint", "workflow_id": ""},
+                ]
+            },
+        )
+        forgejo_wf_resp = Response(
+            200,
+            json=[
+                {"name": "deploy.yml", "type": "file"},
+                {"name": "notes.txt", "type": "file"},
+            ],
+        )
+        gitea_wf_resp = Response(404, json={})
+        github_wf_resp = Response(404, json={})
+
+        mock_get.side_effect = [runs_resp, forgejo_wf_resp, gitea_wf_resp, github_wf_resp]
+
+        wfs = await forgejo_provider.get_workflows("owner", "repo", branch="main")
+        wf_ids = [w["id"] for w in wfs]
+        assert "ci.yaml" in wf_ids
+        assert "lint" in wf_ids
+        assert "deploy.yml" in wf_ids
+
+    # Exception in get_workflows
+    with patch("httpx.AsyncClient.get", side_effect=RuntimeError("fail")):
+        assert await forgejo_provider.get_workflows("owner", "repo") == []
+
+
+@pytest.mark.asyncio
+async def test_forgejo_fetch_artifacts_extended(forgejo_provider):
+    from unittest.mock import AsyncMock, patch
+    from httpx import Response
+
+    # Valid run + 200 artifacts
+    with patch("httpx.AsyncClient.get", new_callable=AsyncMock) as mock_get:
+        mock_get.side_effect = [
+            Response(200, json={"workflow_runs": [{"id": 42, "name": "build"}]}),
+            Response(200, json=[{"name": "artifact1"}]),
+        ]
+        res = await forgejo_provider.fetch_artifacts("owner", "repo", workflow_id="build", branch="main")
+        assert res == [{"name": "artifact1"}]
+
+    # 404 artifacts endpoint
+    with patch("httpx.AsyncClient.get", new_callable=AsyncMock) as mock_get:
+        mock_get.side_effect = [
+            Response(200, json={"workflow_runs": [{"id": 42, "name": "build"}]}),
+            Response(404, json={}),
+        ]
+        res = await forgejo_provider.fetch_artifacts("owner", "repo", workflow_id="any")
+        assert "error" in res
+        assert "Artifacts API endpoint not found" in res["error"]
+
+    # 500 artifacts endpoint
+    with patch("httpx.AsyncClient.get", new_callable=AsyncMock) as mock_get:
+        mock_get.side_effect = [
+            Response(200, json={"workflow_runs": [{"id": 42, "name": "build"}]}),
+            Response(500, json={}),
+        ]
+        res = await forgejo_provider.fetch_artifacts("owner", "repo")
+        assert "HTTP 500" in res["error"]
+
+    # Exception
+    with patch("httpx.AsyncClient.get", side_effect=RuntimeError("err")):
+        res = await forgejo_provider.fetch_artifacts("owner", "repo")
+        assert "Error fetching Forgejo artifacts." in res["error"]
+
+
+@pytest.mark.asyncio
+async def test_forgejo_explore_extended(forgejo_provider):
+    from unittest.mock import AsyncMock, patch
+    from httpx import Response
+    from api.explore import ProviderPathNotFoundError
+
+    # Root exploration
+    with patch("httpx.AsyncClient.get", new_callable=AsyncMock) as mock_get:
+        mock_get.side_effect = [
+            Response(200, json={"login": "myuser"}),
+            Response(200, json=[{"username": "myorg"}]),
+        ]
+        nodes = await forgejo_provider.explore("")
+        assert len(nodes) == 2
+        assert nodes[0].name == "myuser"
+        assert nodes[1].name == "myorg"
+
+    # Owner exploration
+    with patch("httpx.AsyncClient.get", new_callable=AsyncMock) as mock_get:
+        mock_get.side_effect = [
+            Response(404, json={}),
+            Response(200, json=[{"name": "repoA"}]),
+        ]
+        nodes = await forgejo_provider.explore("myuser")
+        assert len(nodes) == 1
+        assert nodes[0].name == "repoA"
+
+    # Repo exploration returns Any Workflow + runs + files
+    with patch("httpx.AsyncClient.get", new_callable=AsyncMock) as mock_get:
+        mock_get.side_effect = [
+            Response(200, json={"workflow_runs": [{"workflow_id": "test.yml", "name": "Test"}]}),
+            Response(200, json=[{"name": "prod.yaml", "type": "file"}]),
+            Response(404, json={}),
+            Response(404, json={}),
+        ]
+        nodes = await forgejo_provider.explore("myuser/repoA")
+        assert len(nodes) == 3
+        ids = [n.id for n in nodes]
+        assert "any" in ids
+        assert "test.yml" in ids
+        assert "prod.yaml" in ids
+
+    # Invalid URL
+    bad_fp = ForgejoProvider("token", "ftp://badurl")
+    with pytest.raises(ProviderPathNotFoundError):
+        await bad_fp.explore("")
