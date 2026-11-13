@@ -638,3 +638,55 @@ def test_session_signing_and_optional_web_login_edge_cases(monkeypatch, tmp_path
         ).status_code
         == 401
     )
+
+
+def test_require_auth_for_reads_and_oauth_allowed_emails_fallback(monkeypatch, tmp_path):
+    from fastapi.testclient import TestClient
+
+    from api.auth import (
+        TokenManager,
+        get_web_oauth_allowed_emails_raw,
+        is_web_oauth_configured,
+    )
+    from api.config import ConfigManager
+    from main import app
+
+    monkeypatch.setenv("DASHBOARD_USER", "admin")
+    monkeypatch.setenv("DASHBOARD_PASSWORD", "pass")
+    monkeypatch.setenv("REQUIRE_AUTH_FOR_READS", "true")
+    monkeypatch.delenv("GOOGLE_ALLOWED_EMAILS", raising=False)
+    monkeypatch.delenv("OAUTH_ALLOWED_EMAILS", raising=False)
+
+    tm = TokenManager(str(tmp_path / "tokens.json"))
+    monkeypatch.setattr("api.auth.token_manager", tm)
+    api_tok = tm.create_token("ci-reader", 3600, oauth=False)
+
+    client = TestClient(app)
+    assert client.get("/api/providers").status_code == 401
+    assert client.get("/api/status").status_code == 401
+    assert (
+        client.get(
+            "/api/logs?provider=github&owner=adamoutler&repo=dash"
+        ).status_code
+        == 401
+    )
+
+    assert (
+        client.get(
+            "/api/providers", headers={"Authorization": f"Bearer {api_tok}"}
+        ).status_code
+        == 200
+    )
+    assert client.get("/api/providers", auth=("admin", "pass")).status_code == 200
+
+    # GOOGLE_ALLOWED_EMAILS primary vs OAUTH_ALLOWED_EMAILS legacy fallback
+    cm = ConfigManager(filepath=str(tmp_path / "settings.json"))
+    monkeypatch.setattr("api.auth.config_manager", cm)
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "cid")
+    monkeypatch.setenv("GOOGLE_CLIENT_SECRET", "csecret")
+    monkeypatch.setenv("OAUTH_ALLOWED_EMAILS", "legacy@example.com")
+    assert get_web_oauth_allowed_emails_raw() == "legacy@example.com"
+    assert is_web_oauth_configured() is True
+
+    monkeypatch.setenv("GOOGLE_ALLOWED_EMAILS", "primary@example.com")
+    assert get_web_oauth_allowed_emails_raw() == "primary@example.com"

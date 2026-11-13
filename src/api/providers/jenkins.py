@@ -77,11 +77,17 @@ class JenkinsProvider(BaseProvider):
         repo: str,
         workflow_id: str | None = None,
         branch: str | None = None,
+        sha: str | None = None,
+        run_id: str | None = None,
     ) -> dict[str, Any]:
         if workflow_id == "any":
             workflow_id = None
 
-        if owner and (".." in owner or "\\" in owner):
+        if (
+            (owner and (".." in owner or "\\" in owner))
+            or not self.is_valid_sha(sha)
+            or not self.is_valid_run_id(run_id)
+        ):
             return self._error_result("jenkins", owner, repo)
 
         base_url = self._build_validated_base_url(repo)
@@ -92,7 +98,9 @@ class JenkinsProvider(BaseProvider):
 
         try:
             async with httpx.AsyncClient(timeout=10.0, auth=auth) as client:
-                return await self._resolve_jenkins_status(client, base_url, owner, repo)
+                return await self._resolve_jenkins_status(
+                    client, base_url, owner, repo, sha=sha, run_id=run_id
+                )
         except PROVIDER_EXC:
             return self._error_result("jenkins", owner, repo)
 
@@ -117,15 +125,58 @@ class JenkinsProvider(BaseProvider):
                 return items[0].get("msg", "")
         return ""
 
+    def _extract_jenkins_build_sha(self, build: dict | None) -> str:
+        if not isinstance(build, dict):
+            return ""
+        for action in build.get("actions", []) or []:
+            if isinstance(action, dict):
+                rev = action.get("lastBuiltRevision")
+                if isinstance(rev, dict) and rev.get("SHA1"):
+                    return str(rev["SHA1"])
+        for cs in build.get("changeSets", []) or []:
+            if isinstance(cs, dict):
+                for item in cs.get("items", []) or []:
+                    if isinstance(item, dict) and item.get("commitId"):
+                        return str(item["commitId"])
+        return ""
+
+    def _find_jenkins_build_by_sha(self, builds: list, sha: str) -> dict | None:
+        for b in builds or []:
+            if self.matches_sha(self._extract_jenkins_build_sha(b), sha):
+                return b
+        return None
+
     def _parse_jenkins_job_status(
-        self, data: dict, url: str, owner: str, repo_field: str
+        self,
+        data: dict,
+        url: str,
+        owner: str,
+        repo_field: str,
+        target_build: dict | None = None,
+        missing_ref: str | None = None,
     ) -> dict:
-        last_build = data.get("lastBuild")
-        in_queue = data.get("inQueue")
+        last_build = target_build if target_build is not None else data.get("lastBuild")
+        in_queue = data.get("inQueue") if target_build is None else False
         color = data.get("color", "")
 
         status = "unknown"
-        if in_queue or "anime" in color:
+        if missing_ref:
+            return {
+                "provider": "jenkins",
+                "owner": owner,
+                "repo": repo_field,
+                "status": "unknown",
+                "url": url,
+                "repo_url": url,
+                "updated_at": "",
+                "commit_message": f"No build found for {missing_ref}",
+                "started_at": "",
+                "expected_duration_sec": None,
+                "run_id": None,
+                "head_sha": "",
+            }
+
+        if in_queue or (target_build is None and "anime" in color):
             status = "running"
 
         if not last_build:
@@ -142,6 +193,8 @@ class JenkinsProvider(BaseProvider):
                 else "Job is in queue or starting",
                 "started_at": "",
                 "expected_duration_sec": None,
+                "run_id": None,
+                "head_sha": "",
             }
 
         status = self._extract_jenkins_status(status, last_build)
@@ -159,6 +212,8 @@ class JenkinsProvider(BaseProvider):
         expected_duration_sec = est_duration / 1000.0 if est_duration > 0 else 43.6
 
         commit_msg = self._extract_jenkins_commit_msg(last_build)
+        head_sha = self._extract_jenkins_build_sha(last_build)
+        build_num = last_build.get("number")
 
         return {
             "provider": "jenkins",
@@ -174,15 +229,27 @@ class JenkinsProvider(BaseProvider):
             "commit_message": commit_msg,
             "started_at": started_at,
             "expected_duration_sec": expected_duration_sec,
+            "run_id": str(build_num) if build_num is not None else None,
+            "head_sha": head_sha,
         }
 
     async def _resolve_jenkins_status(
-        self, client, url, owner, repo_field, max_depth=3
+        self,
+        client,
+        url,
+        owner,
+        repo_field,
+        max_depth=3,
+        sha: str | None = None,
+        run_id: str | None = None,
     ):
         if max_depth <= 0 or not self._is_allowed_jenkins_url(url):
             return self._error_result("jenkins", owner, repo_field)
 
-        api_url = f"{url.rstrip('/')}/api/json?tree=lastBuild[number,url,result,timestamp,duration,estimatedDuration,changeSets[items[msg]]],inQueue,color,jobs[name,url]"
+        if sha or run_id:
+            api_url = f"{url.rstrip('/')}/api/json?tree=lastBuild[number,url,result,timestamp,duration,estimatedDuration,changeSets[items[msg,commitId]]],builds[number,url,result,timestamp,duration,estimatedDuration,changeSets[items[msg,commitId]],actions[lastBuiltRevision[SHA1]]]{{0,20}},inQueue,color,fullDisplayName,displayName,jobs[name,url]"
+        else:
+            api_url = f"{url.rstrip('/')}/api/json?tree=lastBuild[number,url,result,timestamp,duration,estimatedDuration,changeSets[items[msg]]],inQueue,color,jobs[name,url]"
         resp = await client.get(api_url)
         if resp.status_code != 200:
             return self._error_result("jenkins", owner, repo_field)
@@ -191,6 +258,26 @@ class JenkinsProvider(BaseProvider):
         cls = data.get("_class", "")
 
         if "WorkflowJob" in cls or "FreeStyleProject" in cls:
+            if run_id:
+                build_resp = await client.get(
+                    f"{url.rstrip('/')}/{run_id.strip()}/api/json?tree=number,url,result,timestamp,duration,estimatedDuration,changeSets[items[msg,commitId]],actions[lastBuiltRevision[SHA1]]"
+                )
+                if build_resp.status_code != 200:
+                    return self._parse_jenkins_job_status(
+                        data, url, owner, repo_field, missing_ref=f"run {run_id}"
+                    )
+                return self._parse_jenkins_job_status(
+                    data, url, owner, repo_field, target_build=build_resp.json()
+                )
+            if sha:
+                matched = self._find_jenkins_build_by_sha(data.get("builds", []), sha)
+                if not matched:
+                    return self._parse_jenkins_job_status(
+                        data, url, owner, repo_field, missing_ref=f"SHA {sha}"
+                    )
+                return self._parse_jenkins_job_status(
+                    data, url, owner, repo_field, target_build=matched
+                )
             return self._parse_jenkins_job_status(data, url, owner, repo_field)
         elif "MultiBranchProject" in cls or "OrganizationFolder" in cls:
             jobs = data.get("jobs", [])
@@ -204,7 +291,13 @@ class JenkinsProvider(BaseProvider):
             if not self._is_allowed_jenkins_url(target_url):
                 return self._error_result("jenkins", owner, repo_field)
             return await self._resolve_jenkins_status(
-                client, target_url, owner, repo_field, max_depth - 1
+                client,
+                target_url,
+                owner,
+                repo_field,
+                max_depth - 1,
+                sha=sha,
+                run_id=run_id,
             )
 
         return self._error_result("jenkins", owner, repo_field)
@@ -215,12 +308,16 @@ class JenkinsProvider(BaseProvider):
         repo: str,
         workflow_id: str | None = None,
         branch: str | None = None,
+        sha: str | None = None,
+        run_id: str | None = None,
     ) -> str:
         if workflow_id == "any":
             workflow_id = None
 
         if owner and (".." in owner or "\\" in owner):
             return self._error_result("jenkins", owner, repo)
+        if not self.is_valid_sha(sha) or not self.is_valid_run_id(run_id):
+            return "Error fetching Jenkins logs."
 
         base_url = self._build_validated_base_url(repo)
         if not base_url:
@@ -230,15 +327,28 @@ class JenkinsProvider(BaseProvider):
 
         try:
             async with httpx.AsyncClient(timeout=10.0, auth=auth) as client:
-                return await self._resolve_jenkins_logs(client, base_url, max_depth=3)
+                return await self._resolve_jenkins_logs(
+                    client, base_url, max_depth=3, sha=sha, run_id=run_id
+                )
         except PROVIDER_EXC:
             return "Error fetching Jenkins logs."
 
-    async def _resolve_jenkins_logs(self, client, url, max_depth=3):
+    async def _resolve_jenkins_logs(
+        self,
+        client,
+        url,
+        max_depth=3,
+        sha: str | None = None,
+        run_id: str | None = None,
+    ):
         if max_depth <= 0 or not self._is_allowed_jenkins_url(url):
             return "Max depth reached while resolving Jenkins job."
 
-        api_url = f"{url.rstrip('/')}/api/json"
+        api_url = (
+            f"{url.rstrip('/')}/api/json?tree=_class,jobs[name,url],builds[number,url,changeSets[items[commitId]],actions[lastBuiltRevision[SHA1]]]{{0,20}}"
+            if sha
+            else f"{url.rstrip('/')}/api/json"
+        )
         resp = await client.get(api_url)
         if resp.status_code != 200:
             return "Failed to fetch job data from Jenkins."
@@ -247,11 +357,19 @@ class JenkinsProvider(BaseProvider):
         cls = data.get("_class", "")
 
         if "WorkflowJob" in cls or "FreeStyleProject" in cls:
-            last_build = data.get("lastBuild")
-            if not last_build:
-                return "No builds found."
+            if run_id:
+                build_url = f"{url.rstrip('/')}/{run_id.strip()}"
+            elif sha:
+                matched = self._find_jenkins_build_by_sha(data.get("builds", []), sha)
+                if not matched or not matched.get("url"):
+                    return f"No build found for SHA {sha}."
+                build_url = matched.get("url")
+            else:
+                last_build = data.get("lastBuild")
+                if not last_build:
+                    return "No builds found."
+                build_url = last_build.get("url")
 
-            build_url = last_build.get("url")
             if not self._is_allowed_jenkins_url(build_url):
                 return "Error fetching Jenkins logs."
             log_url = f"{build_url.rstrip('/')}/consoleText"
@@ -270,7 +388,9 @@ class JenkinsProvider(BaseProvider):
             target_url = target_job.get("url")
             if not self._is_allowed_jenkins_url(target_url):
                 return "Error fetching Jenkins logs."
-            return await self._resolve_jenkins_logs(client, target_url, max_depth - 1)
+            return await self._resolve_jenkins_logs(
+                client, target_url, max_depth - 1, sha=sha, run_id=run_id
+            )
 
         return "Unsupported Jenkins object class."
 
@@ -280,6 +400,8 @@ class JenkinsProvider(BaseProvider):
         repo: str,
         workflow_id: str | None = None,
         branch: str | None = None,
+        sha: str | None = None,
+        run_id: str | None = None,
     ) -> dict[str, Any]:
         return {"error": "Jenkins artifacts not implemented yet."}
 

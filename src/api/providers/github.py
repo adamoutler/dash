@@ -100,79 +100,154 @@ class GitHubProvider(BaseProvider):
 
         return workflow_id  # Fallback to original if not found
 
+    def _auth_headers(self) -> dict[str, str]:
+        if not self.token:
+            return {}
+        return {
+            "Authorization": f"Bearer {self.token}",
+            "Accept": ACCEPT_GITHUB_JSON,
+        }
+
+    def _build_github_runs_url(
+        self,
+        base_url: str,
+        workflow_id: str | None = None,
+        branch: str | None = None,
+        sha: str | None = None,
+        per_page: int = 10,
+    ) -> str:
+        safe_wf = quote(str(workflow_id), safe="") if workflow_id else None
+        runs_url = (
+            f"{base_url}/actions/workflows/{safe_wf}/runs?per_page={per_page}"
+            if safe_wf
+            else f"{base_url}/actions/runs?per_page={per_page}"
+        )
+        if branch:
+            safe_branch = quote(str(branch), safe="")
+            runs_url += f"&branch={safe_branch}"
+        if sha and len(sha.strip()) == 40:
+            runs_url += f"&head_sha={quote(sha.strip(), safe='')}"
+        return runs_url
+
+    async def _resolve_github_run(
+        self,
+        client: httpx.AsyncClient,
+        base_url: str,
+        headers: dict[str, str],
+        workflow_id: str | None = None,
+        branch: str | None = None,
+        sha: str | None = None,
+        run_id: str | None = None,
+        per_page: int = 10,
+    ) -> tuple[dict[str, Any], list[dict[str, Any]], int]:
+        if run_id:
+            resp = await client.get(
+                f"{base_url}/actions/runs/{run_id.strip()}", headers=headers
+            )
+            if resp.status_code != 200:
+                return {}, [], resp.status_code
+            run = resp.json()
+            if not isinstance(run, dict) or not run.get("id"):
+                return {}, [], 404
+            return run, [run], 200
+
+        effective_per_page = 30 if sha and per_page < 30 else per_page
+        runs_url = self._build_github_runs_url(
+            base_url, workflow_id, branch, sha=sha, per_page=effective_per_page
+        )
+        runs_resp = await client.get(runs_url, headers=headers)
+        if runs_resp.status_code != 200:
+            return {}, [], runs_resp.status_code
+
+        runs_data = runs_resp.json()
+        runs = runs_data.get("workflow_runs", []) or []
+        if sha:
+            runs = [r for r in runs if self.matches_sha(r.get("head_sha"), sha)]
+            if not runs:
+                return {}, [], 200
+
+        if per_page == 1 and not sha:
+            run = runs[0] if runs else {}
+        else:
+            run = (
+                max(
+                    runs,
+                    key=lambda x: (
+                        (x.get("created_at") or x.get("created", ""))[:16],
+                        self._get_status_weight(x),
+                        x.get("updated_at") or x.get("updated", ""),
+                    ),
+                )
+                if runs
+                else {}
+            )
+        return run, runs, 200
+
     async def fetch_status(
         self,
         owner: str,
         repo: str,
         workflow_id: str | None = None,
         branch: str | None = None,
+        sha: str | None = None,
+        run_id: str | None = None,
     ) -> dict[str, Any]:
         if (
             not _is_valid_slug(owner)
             or not _is_valid_slug(repo)
             or not _is_valid_workflow_id(workflow_id)
+            or not self.is_valid_sha(sha)
+            or not self.is_valid_run_id(run_id)
         ):
             err = self._error_result("github", owner, repo)
-            err["commit_message"] = "Invalid owner, repo, or workflow."
+            err["commit_message"] = "Invalid owner, repo, workflow, sha, or run_id."
             return err
         workflow_id = await self._resolve_workflow_id(owner, repo, workflow_id)
         if not _is_valid_workflow_id(workflow_id):
             err = self._error_result("github", owner, repo)
             err["commit_message"] = "Invalid workflow."
             return err
-        headers = (
-            {
-                "Authorization": f"Bearer {self.token}",
-                "Accept": ACCEPT_GITHUB_JSON,
-            }
-            if self.token
-            else {}
-        )
+        headers = self._auth_headers()
         base_url = f"https://api.github.com/repos/{owner}/{repo}"
-        safe_wf = quote(str(workflow_id), safe="") if workflow_id else None
-
-        runs_url = (
-            f"{base_url}/actions/workflows/{safe_wf}/runs?per_page=10"
-            if safe_wf
-            else f"{base_url}/actions/runs?per_page=10"
-        )
-        if branch:
-            safe_branch = quote(str(branch), safe="")
-            runs_url += (
-                f"&branch={safe_branch}"
-                if "?" in runs_url
-                else f"?branch={safe_branch}"
-            )
 
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
-                runs_resp = await client.get(runs_url, headers=headers)
+                run, runs, status_code = await self._resolve_github_run(
+                    client,
+                    base_url,
+                    headers,
+                    workflow_id=workflow_id,
+                    branch=branch,
+                    sha=sha,
+                    run_id=run_id,
+                    per_page=10,
+                )
 
-                if runs_resp.status_code == 403:
+                if status_code == 403:
                     err = self._error_result("github", owner, repo)
                     err["commit_message"] = "GitHub API Rate Limit Exceeded (403)"
                     return err
-                elif runs_resp.status_code != 200:
+                elif status_code != 200:
                     err = self._error_result("github", owner, repo)
-                    err["commit_message"] = (
-                        f"Failed to fetch (HTTP {runs_resp.status_code})"
-                    )
+                    err["commit_message"] = f"Failed to fetch (HTTP {status_code})"
                     return err
 
-                runs_data = runs_resp.json()
-                runs = runs_data.get("workflow_runs", [])
-                run = (
-                    max(
-                        runs,
-                        key=lambda x: (
-                            (x.get("created_at") or x.get("created", ""))[:16],
-                            self._get_status_weight(x),
-                            x.get("updated_at") or x.get("updated", ""),
-                        ),
-                    )
-                    if runs
-                    else {}
-                )
+                if sha and not run:
+                    return {
+                        "provider": "github",
+                        "owner": owner,
+                        "repo": repo,
+                        "status": "unknown",
+                        "url": f"https://github.com/{owner}/{repo}/actions",
+                        "repo_url": f"https://github.com/{owner}/{repo}",
+                        "updated_at": "",
+                        "commit_message": f"No workflow run found for SHA {sha}",
+                        "started_at": "",
+                        "expected_duration_sec": None,
+                        "workflow_name": "",
+                        "run_id": None,
+                        "head_sha": sha,
+                    }
 
                 commit_msg = self._extract_commit_msg(run)
 
@@ -201,6 +276,8 @@ class GitHubProvider(BaseProvider):
                     "started_at": started_at,
                     "expected_duration_sec": expected_duration_sec,
                     "workflow_name": run.get("name", ""),
+                    "run_id": str(run["id"]) if run.get("id") is not None else None,
+                    "head_sha": run.get("head_sha") or "",
                 }
         except PROVIDER_EXC:
             err = self._error_result("github", owner, repo)
@@ -213,45 +290,36 @@ class GitHubProvider(BaseProvider):
         repo: str,
         workflow_id: str | None = None,
         branch: str | None = None,
+        sha: str | None = None,
+        run_id: str | None = None,
     ) -> str:
         if (
             not _is_valid_slug(owner)
             or not _is_valid_slug(repo)
             or not _is_valid_workflow_id(workflow_id)
+            or not self.is_valid_sha(sha)
+            or not self.is_valid_run_id(run_id)
         ):
             return "Error fetching GitHub logs."
         workflow_id = await self._resolve_workflow_id(owner, repo, workflow_id)
         if not _is_valid_workflow_id(workflow_id):
             return "Error fetching GitHub logs."
-        headers = (
-            {
-                "Authorization": f"Bearer {self.token}",
-                "Accept": ACCEPT_GITHUB_JSON,
-            }
-            if self.token
-            else {}
-        )
+        headers = self._auth_headers()
         base_url = f"https://api.github.com/repos/{owner}/{repo}"
-        safe_wf = quote(str(workflow_id), safe="") if workflow_id else None
-        runs_url = (
-            f"{base_url}/actions/workflows/{safe_wf}/runs?per_page=1"
-            if safe_wf
-            else f"{base_url}/actions/runs?per_page=1"
-        )
-        if branch:
-            safe_branch = quote(str(branch), safe="")
-            runs_url += (
-                f"&branch={safe_branch}"
-                if "?" in runs_url
-                else f"?branch={safe_branch}"
-            )
         try:
             async with httpx.AsyncClient(timeout=15.0) as client:
-                runs_resp = await client.get(runs_url, headers=headers)
-                if runs_resp.status_code != 200:
+                run, _, status_code = await self._resolve_github_run(
+                    client,
+                    base_url,
+                    headers,
+                    workflow_id=workflow_id,
+                    branch=branch,
+                    sha=sha,
+                    run_id=run_id,
+                    per_page=1,
+                )
+                if status_code != 200:
                     return "Failed to fetch runs from GitHub."
-                runs_list = runs_resp.json().get("workflow_runs", [])
-                run = runs_list[0] if runs_list else {}
                 if not run.get("id"):
                     return "No runs found."
 
@@ -306,47 +374,36 @@ class GitHubProvider(BaseProvider):
         repo: str,
         workflow_id: str | None = None,
         branch: str | None = None,
+        sha: str | None = None,
+        run_id: str | None = None,
     ) -> dict[str, Any]:
         if (
             not _is_valid_slug(owner)
             or not _is_valid_slug(repo)
             or not _is_valid_workflow_id(workflow_id)
+            or not self.is_valid_sha(sha)
+            or not self.is_valid_run_id(run_id)
         ):
             return {"error": "Error fetching GitHub artifacts."}
         workflow_id = await self._resolve_workflow_id(owner, repo, workflow_id)
         if not _is_valid_workflow_id(workflow_id):
             return {"error": "Error fetching GitHub artifacts."}
-        headers = (
-            {
-                "Authorization": f"Bearer {self.token}",
-                "Accept": ACCEPT_GITHUB_JSON,
-            }
-            if self.token
-            else {}
-        )
+        headers = self._auth_headers()
         base_url = f"https://api.github.com/repos/{owner}/{repo}"
-        safe_wf = quote(str(workflow_id), safe="") if workflow_id else None
-        runs_url = (
-            f"{base_url}/actions/workflows/{safe_wf}/runs?per_page=1"
-            if safe_wf
-            else f"{base_url}/actions/runs?per_page=1"
-        )
-        if branch:
-            safe_branch = quote(str(branch), safe="")
-            runs_url += (
-                f"&branch={safe_branch}"
-                if "?" in runs_url
-                else f"?branch={safe_branch}"
-            )
         try:
             async with httpx.AsyncClient(timeout=15.0) as client:
-                runs_resp = await client.get(runs_url, headers=headers)
-                if runs_resp.status_code != 200:
-                    return {
-                        "error": f"Failed to fetch runs. HTTP {runs_resp.status_code}"
-                    }
-                runs_list = runs_resp.json().get("workflow_runs", [])
-                run = runs_list[0] if runs_list else {}
+                run, _, status_code = await self._resolve_github_run(
+                    client,
+                    base_url,
+                    headers,
+                    workflow_id=workflow_id,
+                    branch=branch,
+                    sha=sha,
+                    run_id=run_id,
+                    per_page=1,
+                )
+                if status_code != 200:
+                    return {"error": f"Failed to fetch runs. HTTP {status_code}"}
                 if not run.get("id"):
                     return {"error": "No runs found."}
 

@@ -20,31 +20,39 @@ def normalize_selector(value: str | None) -> str | None:
     return val
 
 
+def _sanitize_slug_part(value: str | None, max_len: int = 50) -> str:
+    return "".join(c for c in (value or "") if c.isalnum() or c in "-_")[:max_len]
+
+
 def get_log_filename(
     provider: str,
     owner: str,
     repo: str,
     workflow_id: str | None = None,
     branch: str | None = None,
+    sha: str | None = None,
+    run_id: str | None = None,
 ) -> str:
-    safe_provider = "".join(c for c in provider if c.isalnum() or c in "-_")[:32]
-    safe_owner = "".join(c for c in owner if c.isalnum() or c in "-_")[:50]
-    safe_repo = "".join(c for c in repo if c.isalnum() or c in "-_")[:50]
+    safe_provider = _sanitize_slug_part(provider, 32)
+    safe_owner = _sanitize_slug_part(owner, 50)
+    safe_repo = _sanitize_slug_part(repo, 50)
 
     norm_wf = normalize_selector(workflow_id)
     norm_br = normalize_selector(branch)
+    norm_sha = normalize_selector(sha)
+    norm_run = normalize_selector(run_id)
 
-    safe_branch = (
-        ("_" + "".join(c for c in norm_br if c.isalnum() or c in "-_")[:50])
-        if norm_br
-        else ""
-    )
-    safe_wf = (
-        ("_" + "".join(c for c in norm_wf if c.isalnum() or c in "-_")[:50])
-        if norm_wf
-        else ""
-    )
-    return f"{safe_provider}_{safe_owner}_{safe_repo}{safe_branch}{safe_wf}_latest.log"
+    safe_branch = f"_{_sanitize_slug_part(norm_br, 50)}" if norm_br else ""
+    safe_wf = f"_{_sanitize_slug_part(norm_wf, 50)}" if norm_wf else ""
+
+    suffix_parts = []
+    if norm_run:
+        suffix_parts.append(f"run_{_sanitize_slug_part(norm_run, 32)}")
+    if norm_sha:
+        suffix_parts.append(f"sha_{_sanitize_slug_part(norm_sha, 64)}")
+    suffix = "_".join(suffix_parts) if suffix_parts else "latest"
+
+    return f"{safe_provider}_{safe_owner}_{safe_repo}{safe_branch}{safe_wf}_{suffix}.log"
 
 
 def get_candidate_log_filenames(
@@ -53,26 +61,40 @@ def get_candidate_log_filenames(
     repo: str,
     workflow_id: str | None = None,
     branch: str | None = None,
+    sha: str | None = None,
+    run_id: str | None = None,
 ) -> list[str]:
     """Generates ordered candidate filenames from most specific to base unconstrained."""
-    safe_provider = "".join(c for c in provider if c.isalnum() or c in "-_")[:32]
-    safe_owner = "".join(c for c in owner if c.isalnum() or c in "-_")[:50]
-    safe_repo = "".join(c for c in repo if c.isalnum() or c in "-_")[:50]
+    safe_provider = _sanitize_slug_part(provider, 32)
+    safe_owner = _sanitize_slug_part(owner, 50)
+    safe_repo = _sanitize_slug_part(repo, 50)
     prefix = f"{safe_provider}_{safe_owner}_{safe_repo}"
 
     norm_wf = normalize_selector(workflow_id)
     norm_br = normalize_selector(branch)
+    norm_sha = normalize_selector(sha)
+    norm_run = normalize_selector(run_id)
 
-    safe_branch = (
-        ("_" + "".join(c for c in norm_br if c.isalnum() or c in "-_")[:50])
-        if norm_br
-        else ""
-    )
-    safe_wf = (
-        ("_" + "".join(c for c in norm_wf if c.isalnum() or c in "-_")[:50])
-        if norm_wf
-        else ""
-    )
+    safe_branch = f"_{_sanitize_slug_part(norm_br, 50)}" if norm_br else ""
+    safe_wf = f"_{_sanitize_slug_part(norm_wf, 50)}" if norm_wf else ""
+
+    if norm_run or norm_sha:
+        targeted: list[str] = []
+        suffix_variants: list[str] = []
+        if norm_run and norm_sha:
+            suffix_variants.append(
+                f"run_{_sanitize_slug_part(norm_run, 32)}_sha_{_sanitize_slug_part(norm_sha, 64)}"
+            )
+        if norm_run:
+            suffix_variants.append(f"run_{_sanitize_slug_part(norm_run, 32)}")
+        if norm_sha:
+            suffix_variants.append(f"sha_{_sanitize_slug_part(norm_sha, 64)}")
+        for sfx in suffix_variants:
+            for scope in (f"{safe_branch}{safe_wf}", safe_branch, safe_wf, ""):
+                fname = f"{prefix}{scope}_{sfx}.log"
+                if fname not in targeted:
+                    targeted.append(fname)
+        return targeted
 
     candidates: list[str] = []
     # 1. Exact match (e.g. repo_branch_wf_latest.log or repo_latest.log)
@@ -121,6 +143,17 @@ class WorkflowService:
             )
         return None
 
+    @staticmethod
+    def _build_selector_kwargs(
+        sha: str | None = None, run_id: str | None = None
+    ) -> dict[str, str]:
+        kwargs: dict[str, str] = {}
+        if sha is not None:
+            kwargs["sha"] = sha
+        if run_id is not None:
+            kwargs["run_id"] = run_id
+        return kwargs
+
     async def get_all_statuses(
         self, repos: list[dict[str, Any]]
     ) -> list[dict[str, Any]]:
@@ -134,6 +167,7 @@ class WorkflowService:
                         repo=r.get("repo"),
                         workflow_id=r.get("workflow_id"),
                         branch=r.get("branch"),
+                        **self._build_selector_kwargs(r.get("sha"), r.get("run_id")),
                     )
                 )
             else:
@@ -176,11 +210,17 @@ class WorkflowService:
         repo: str,
         workflow_id: str | None = None,
         branch: str | None = None,
+        sha: str | None = None,
+        run_id: str | None = None,
     ) -> dict[str, Any]:
         provider_instance = self._get_provider_instance(provider)
         if provider_instance:
             return await provider_instance.fetch_status(
-                owner, repo, workflow_id, branch
+                owner,
+                repo,
+                workflow_id,
+                branch,
+                **self._build_selector_kwargs(sha, run_id),
             )
         return {
             "provider": provider,
@@ -220,10 +260,14 @@ class WorkflowService:
             display_name = owner if provider == "jenkins" else f"{owner}/{repo_name}"
 
         log_link = res_obj.get("log_url") or res_obj.get("url") or "N/A"
+        run_line = f"\nrun_id: {res_obj['run_id']}" if res_obj.get("run_id") else ""
+        sha_line = f"\nsha: {res_obj['head_sha']}" if res_obj.get("head_sha") else ""
 
         return (
             f"status: {status_emoji}  {status_text}\n"
-            f"repo: {display_name}\n"
+            f"repo: {display_name}"
+            f"{run_line}"
+            f"{sha_line}\n"
             f"started: {res_obj.get('started_at') or 'N/A'}{duration_info}\n"
             f"commit: {res_obj.get('commit_message') or 'N/A'}\n"
             f"log: {log_link}"
@@ -236,10 +280,18 @@ class WorkflowService:
         repo: str,
         workflow_id: str | None = None,
         branch: str | None = None,
+        sha: str | None = None,
+        run_id: str | None = None,
     ) -> str:
         provider_instance = self._get_provider_instance(provider)
         if provider_instance:
-            return await provider_instance.fetch_logs(owner, repo, workflow_id, branch)
+            return await provider_instance.fetch_logs(
+                owner,
+                repo,
+                workflow_id,
+                branch,
+                **self._build_selector_kwargs(sha, run_id),
+            )
         return UNKNOWN_PROVIDER
 
     async def get_artifacts(
@@ -249,11 +301,17 @@ class WorkflowService:
         repo: str,
         workflow_id: str | None = None,
         branch: str | None = None,
+        sha: str | None = None,
+        run_id: str | None = None,
     ) -> dict[str, Any]:
         provider_instance = self._get_provider_instance(provider)
         if provider_instance:
             return await provider_instance.fetch_artifacts(
-                owner, repo, workflow_id, branch
+                owner,
+                repo,
+                workflow_id,
+                branch,
+                **self._build_selector_kwargs(sha, run_id),
             )
         return {"error": UNKNOWN_PROVIDER}
 

@@ -421,12 +421,24 @@
         let lastSessionsSignature = null;
         let lastPendingSignature = null;
 
+        function formatCallbackOrigin(uri) {
+            if (!uri) return '';
+            try {
+                const parsed = new URL(uri);
+                return parsed.origin && parsed.origin !== 'null'
+                    ? parsed.origin
+                    : `${parsed.protocol}//${parsed.host}`;
+            } catch (e) {
+                return uri;
+            }
+        }
+
         function renderOAuthSessions(sessionsList) {
             const listEl = document.getElementById('oauth-sessions-list');
             if (!listEl) return;
 
             const safeList = Array.isArray(sessionsList) ? sessionsList : [];
-            const sig = JSON.stringify(safeList.map(s => `${s.token}|${s.username || ''}|${s.client_id || ''}|${s.name || ''}`));
+            const sig = JSON.stringify(safeList.map(s => `${s.token}|${s.username || ''}|${s.client_id || ''}|${s.client_name || ''}|${s.redirect_uri || ''}|${s.scope || ''}|${s.name || ''}`));
             if (sig === lastSessionsSignature) return;
             lastSessionsSignature = sig;
 
@@ -451,8 +463,19 @@
 
                 const metaDiv = document.createElement('div');
                 metaDiv.className = 'oauth-popup-meta';
-                metaDiv.textContent = sess.client_id ? `Client: ${sess.client_id} (${sess.name})` : sess.name;
+                const displayClient = sess.client_name || sess.client_id || sess.name;
+                const idPart = sess.client_id && sess.client_name && sess.client_name !== sess.client_id ? ` | ID: ${sess.client_id}` : '';
+                metaDiv.textContent = sess.client_id ? `Client: ${displayClient}${idPart} | Scope: ${sess.scope || 'mcp:access'}` : sess.name;
                 infoDiv.appendChild(metaDiv);
+
+                const originText = formatCallbackOrigin(sess.redirect_uri);
+                if (originText) {
+                    const originDiv = document.createElement('div');
+                    originDiv.className = 'oauth-popup-meta';
+                    originDiv.textContent = `Callback: ${originText}`;
+                    originDiv.title = sess.redirect_uri;
+                    infoDiv.appendChild(originDiv);
+                }
 
                 const deleteBtn = document.createElement('button');
                 deleteBtn.className = 'oauth-btn-deny';
@@ -499,7 +522,7 @@
                 }
             }
 
-            const sig = JSON.stringify(safeList.map(r => `${r.id || r.req_id}|${r.username || ''}|${r.client_id || ''}|${r.user_code || ''}`));
+            const sig = JSON.stringify(safeList.map(r => `${r.id || r.req_id}|${r.username || ''}|${r.client_id || ''}|${r.client_name || ''}|${r.redirect_uri || ''}|${r.scope || ''}|${r.user_code || ''}`));
             if (sig === lastPendingSignature) return;
             lastPendingSignature = sig;
 
@@ -525,9 +548,25 @@
 
                 const metaDiv = document.createElement('div');
                 metaDiv.className = 'oauth-popup-meta';
+                const displayName = req.client_name || req.client_id || 'Unknown client';
+                const idLabel = req.client_id && req.client_name && req.client_name !== req.client_id ? ` | ID: ${req.client_id}` : '';
                 const codeLabel = req.user_code ? ` | Code: ${req.user_code}` : '';
-                metaDiv.textContent = `Client: ${req.client_name || req.client_id}${codeLabel}`;
+                metaDiv.textContent = `Client: ${displayName}${idLabel}${codeLabel}`;
                 infoDiv.appendChild(metaDiv);
+
+                const originText = formatCallbackOrigin(req.redirect_uri);
+                if (originText) {
+                    const originDiv = document.createElement('div');
+                    originDiv.className = 'oauth-popup-meta';
+                    originDiv.textContent = `Callback: ${originText} | Scope: ${req.scope || 'mcp:access'}`;
+                    originDiv.title = req.redirect_uri;
+                    infoDiv.appendChild(originDiv);
+                } else {
+                    const scopeDiv = document.createElement('div');
+                    scopeDiv.className = 'oauth-popup-meta';
+                    scopeDiv.textContent = `Scope: ${req.scope || 'mcp:access'}`;
+                    infoDiv.appendChild(scopeDiv);
+                }
 
                 const btnGroup = document.createElement('div');
                 btnGroup.style.display = 'flex';

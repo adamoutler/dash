@@ -333,3 +333,76 @@ def test_public_read_optional_login_vs_write_requires_login():
         == 401
     )
     assert client.get("/api/explore/github/nodes").status_code == 401
+
+
+def test_openapi_security_schemes_and_settings_schema():
+    res = client.get("/openapi.json")
+    assert res.status_code == 200
+    spec = res.json()
+
+    schemes = spec.get("components", {}).get("securitySchemes", {})
+    assert "HTTPBasic" in schemes
+    assert "CookieAuth" in schemes
+    assert "BearerAuth" in schemes
+    assert "McpOAuth" in schemes
+    assert schemes["CookieAuth"]["in"] == "cookie"
+    assert schemes["CookieAuth"]["name"] == "dash_session"
+
+    status_sec = spec["paths"]["/api/status"]["get"].get("security", [])
+    status_scheme_names = {k for item in status_sec for k in item}
+    assert {"CookieAuth", "HTTPBasic", "BearerAuth"}.issubset(status_scheme_names)
+
+    artifacts_sec = spec["paths"]["/api/artifacts"]["get"].get("security", [])
+    assert any("BearerAuth" in item for item in artifacts_sec)
+
+    post_logs_sec = spec["paths"]["/api/logs"]["post"].get("security", [])
+    assert any("BearerAuth" in item for item in post_logs_sec)
+
+    mcp_sec = spec["paths"]["/mcp"]["post"].get("security", [])
+    mcp_scheme_names = {k for item in mcp_sec for k in item}
+    assert {"McpOAuth", "BearerAuth"}.issubset(mcp_scheme_names)
+
+    settings_schema_ref = spec["paths"]["/api/settings"]["get"]["responses"]["200"][
+        "content"
+    ]["application/json"]["schema"]["$ref"]
+    assert settings_schema_ref.endswith("/SettingsStatusResponse")
+    settings_props = spec["components"]["schemas"]["SettingsStatusResponse"][
+        "properties"
+    ]
+    for secret_key in (
+        "github_token",
+        "forgejo_token",
+        "jenkins_token",
+        "dashboard_password",
+        "web_oauth_client_secret",
+    ):
+        assert secret_key not in settings_props
+
+
+def test_llms_txt_and_ui_layout_improvements():
+    llms = client.get("/llms.txt")
+    assert llms.status_code == 200
+    body = llms.text
+    assert "Authorization Boundary:" in body
+    assert "untrusted external data" in body
+    assert "REQUIRE_AUTH_FOR_READS=true" in body
+    assert "GOOGLE_ALLOWED_EMAILS" in body
+    assert "actions/upload-artifact@v4" in body
+    assert 'status != "success"' in body
+    assert "chown -R root:root .gemini && sudo chmod -R go-w .gemini" in body
+
+    kanban = client.get("/gemini-kanban.txt")
+    assert kanban.status_code == 200
+    assert "chown -R root:root .gemini && sudo chmod -R go-w .gemini" in kanban.text
+    assert "HEAD_SHA" in kanban.text
+    assert '"$CI_STATUS" != "success"' in kanban.text
+
+    css = client.get("/static/design-system.css")
+    assert css.status_code == 200
+    assert "position: static;" in css.text
+    assert ".header-actions, .header-utilities" in css.text
+
+    index = client.get("/")
+    assert index.status_code == 200
+    assert 'class="header-actions"' in index.text
+    assert 'class="header-utilities"' in index.text

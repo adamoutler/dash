@@ -138,15 +138,19 @@
     <div class="header">
         <h1>Dash</h1>
         <div class="header-right">
-            <button id="installAppBtn" style="display:none;" class="add-btn">Install App</button>
-            <button class="theme-toggle-btn" onclick="toggleTheme()" title="Toggle Dark Mode">
-                <span id="themeIcon">☀️</span>
-            </button>
-            <button class="add-btn write-only" onclick="toggleForm()" id="addRepoBtn" style="display:none;">+ Add Repository</button>
-            <a href="/configure" class="nav-btn write-only" id="configBtn" style="display:none;">⚙️ Configure</a>
-            <span id="userBadge" class="user-badge write-only" style="display:none;"></span>
-            <button class="login-btn" id="loginBtn" onclick="openLoginModal()">🔒 Login</button>
-            <button class="logout-btn write-only" id="logoutBtn" style="display:none;" onclick="logoutWebsite()">Logout</button>
+            <div class="header-actions">
+                <button class="add-btn write-only" onclick="toggleForm()" id="addRepoBtn" style="display:none;">+ Add Repository</button>
+                <a href="/configure" class="nav-btn write-only" id="configBtn" style="display:none;">⚙️ Configure</a>
+                <span id="userBadge" class="user-badge write-only" style="display:none;"></span>
+            </div>
+            <div class="header-utilities">
+                <button id="installAppBtn" style="display:none;" class="add-btn">Install App</button>
+                <button class="theme-toggle-btn" onclick="toggleTheme()" title="Toggle Dark Mode">
+                    <span id="themeIcon">☀️</span>
+                </button>
+                <button class="login-btn" id="loginBtn" onclick="openLoginModal()">🔒 Login</button>
+                <button class="logout-btn write-only" id="logoutBtn" style="display:none;" onclick="logoutWebsite()">Logout</button>
+            </div>
         </div>
     </div>
 

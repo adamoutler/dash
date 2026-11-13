@@ -86,15 +86,32 @@ class ForgejoProvider(BaseProvider):
                 valid_runs += 1
         return total_duration / valid_runs if valid_runs > 0 else None
 
-    def _get_latest_forgejo_run(self, all_runs: list, workflow_id: str | None) -> dict:
+    def _get_latest_forgejo_run(
+        self,
+        all_runs: list,
+        workflow_id: str | None,
+        sha: str | None = None,
+        run_id: str | None = None,
+    ) -> dict:
         runs = []
         for r in all_runs:
-            if (
-                not workflow_id
-                or r.get("name") == workflow_id
-                or str(r.get("workflow_id")) == workflow_id
+            if run_id is not None:
+                if (
+                    str(r.get("id")) != str(run_id).strip()
+                    and str(r.get("index_in_repo")) != str(run_id).strip()
+                ):
+                    continue
+            elif (
+                workflow_id
+                and r.get("name") != workflow_id
+                and str(r.get("workflow_id")) != workflow_id
             ):
-                runs.append(r)
+                continue
+            if sha is not None and not self.matches_sha(
+                r.get("head_sha") or r.get("sha"), sha
+            ):
+                continue
+            runs.append(r)
 
         return (
             max(
@@ -115,6 +132,8 @@ class ForgejoProvider(BaseProvider):
         repo: str,
         workflow_id: str | None = None,
         branch: str | None = None,
+        sha: str | None = None,
+        run_id: str | None = None,
     ) -> dict[str, Any]:
         if workflow_id == "any":
             workflow_id = None
@@ -123,6 +142,8 @@ class ForgejoProvider(BaseProvider):
             or not _is_valid_slug(owner)
             or not _is_valid_slug(repo)
             or not _is_valid_workflow_id(workflow_id)
+            or not self.is_valid_sha(sha)
+            or not self.is_valid_run_id(run_id)
         ):
             return self._error_result("forgejo", owner, repo)
 
@@ -133,6 +154,7 @@ class ForgejoProvider(BaseProvider):
         )
         base_url = f"{self.url.rstrip('/')}/api/v1/repos/{owner}/{repo}"
         safe_branch = quote(str(branch), safe="") if branch else None
+        safe_sha = quote(str(sha.strip()), safe="") if sha else None
 
         runs_url = f"{base_url}/actions/runs?limit=30"
         if safe_branch:
@@ -141,9 +163,13 @@ class ForgejoProvider(BaseProvider):
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 runs_resp = await client.get(runs_url, headers=headers)
+                commit_filter = (
+                    f"&sha={safe_sha}"
+                    if safe_sha
+                    else (f"&sha={safe_branch}" if safe_branch else "")
+                )
                 commits_resp = await client.get(
-                    f"{base_url}/commits?limit=1"
-                    + (f"&sha={safe_branch}" if safe_branch else ""),
+                    f"{base_url}/commits?limit=1{commit_filter}",
                     headers=headers,
                 )
 
@@ -154,8 +180,22 @@ class ForgejoProvider(BaseProvider):
                 commits_data = commits_resp.json()
 
                 all_runs = runs_data.get("workflow_runs", [])
-                run = self._get_latest_forgejo_run(all_runs, workflow_id)
+                run = self._get_latest_forgejo_run(
+                    all_runs, workflow_id, sha=sha, run_id=run_id
+                )
+                if run_id and not run:
+                    direct_resp = await client.get(
+                        f"{base_url}/actions/runs/{run_id.strip()}", headers=headers
+                    )
+                    if direct_resp.status_code == 200 and isinstance(
+                        direct_resp.json(), dict
+                    ):
+                        run = direct_resp.json()
+
                 commit_msg = self._extract_forgejo_commit_msg(commits_data)
+                if (sha or run_id) and not run and commit_msg == "No commit message":
+                    target_ref = f"run {run_id}" if run_id else f"SHA {sha}"
+                    commit_msg = f"No workflow run found for {target_ref}"
 
                 status = run.get("status") or "unknown"
                 common_status = status.lower()
@@ -179,6 +219,8 @@ class ForgejoProvider(BaseProvider):
                     "started_at": started_at,
                     "expected_duration_sec": expected_duration_sec,
                     "workflow_name": run.get("name", ""),
+                    "run_id": str(run["id"]) if run.get("id") is not None else None,
+                    "head_sha": run.get("head_sha") or run.get("sha") or (sha or ""),
                 }
         except PROVIDER_EXC:
             return self._error_result("forgejo", owner, repo)
@@ -189,6 +231,8 @@ class ForgejoProvider(BaseProvider):
         repo: str,
         workflow_id: str | None = None,
         branch: str | None = None,
+        sha: str | None = None,
+        run_id: str | None = None,
     ) -> str:
         wf_param = (
             f"&workflow_id={workflow_id}"
@@ -196,6 +240,8 @@ class ForgejoProvider(BaseProvider):
             else ""
         )
         branch_param = f"&branch={branch}" if branch and branch != "any" else ""
+        sha_param = f"&sha={sha}" if sha else ""
+        run_id_param = f"&run_id={run_id}" if run_id else ""
 
         return f"""Forgejo/Gitea logs are not natively available via API in this version.
 
@@ -203,7 +249,7 @@ To view logs here, please configure your CI pipeline to upload logs to the dashb
 You can do this by adding a step that runs on failure using the always() method.
 
 Example curl command to upload logs:
-curl -X POST "${{DASH_API_URL}}/api/logs?provider=forgejo&owner={owner}&repo={repo}{wf_param}{branch_param}" \\
+curl -X POST "${{DASH_API_URL}}/api/logs?provider=forgejo&owner={owner}&repo={repo}{wf_param}{branch_param}{sha_param}{run_id_param}" \\
      -H "Authorization: Bearer ${{DASH_API_TOKEN}}" \\
      -H "Content-Type: text/plain" \\
      --data-binary @path/to/your/logfile.log
@@ -220,6 +266,8 @@ Recommendations:
         repo: str,
         workflow_id: str | None = None,
         branch: str | None = None,
+        sha: str | None = None,
+        run_id: str | None = None,
     ) -> dict[str, Any]:
         if workflow_id == "any":
             workflow_id = None
@@ -229,6 +277,8 @@ Recommendations:
             not _is_valid_slug(owner)
             or not _is_valid_slug(repo)
             or not _is_valid_workflow_id(workflow_id)
+            or not self.is_valid_sha(sha)
+            or not self.is_valid_run_id(run_id)
         ):
             return {"error": "Error fetching Forgejo artifacts."}
         base_url = f"{self.url.rstrip('/')}/api/v1/repos/{owner}/{repo}"
@@ -244,20 +294,25 @@ Recommendations:
 
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
-                runs_resp = await client.get(runs_url, headers=headers)
-                if runs_resp.status_code != 200:
-                    return {
-                        "error": f"Failed to fetch runs. HTTP {runs_resp.status_code}"
-                    }
+                target_run_id = run_id.strip() if run_id else None
+                if not target_run_id:
+                    runs_resp = await client.get(runs_url, headers=headers)
+                    if runs_resp.status_code != 200:
+                        return {
+                            "error": f"Failed to fetch runs. HTTP {runs_resp.status_code}"
+                        }
 
-                runs_data = runs_resp.json()
-                all_runs = runs_data.get("workflow_runs", [])
-                run = self._get_latest_forgejo_run(all_runs, workflow_id)
-                if not run.get("id"):
-                    return {"error": "No runs found."}
+                    runs_data = runs_resp.json()
+                    all_runs = runs_data.get("workflow_runs", [])
+                    run = self._get_latest_forgejo_run(
+                        all_runs, workflow_id, sha=sha, run_id=run_id
+                    )
+                    if not run.get("id"):
+                        return {"error": "No runs found."}
+                    target_run_id = str(run["id"])
 
                 artifacts_resp = await client.get(
-                    f"{base_url}/actions/runs/{run['id']}/artifacts", headers=headers
+                    f"{base_url}/actions/runs/{target_run_id}/artifacts", headers=headers
                 )
                 if artifacts_resp.status_code == 200:
                     return artifacts_resp.json()

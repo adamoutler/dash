@@ -202,7 +202,9 @@
         <div id="step-username">
             <div class="oauth-info-box">
                 <div><strong>Client:</strong> <span id="client-display"></span></div>
-                <div style="margin-top: 4px;"><strong>Scope:</strong> <span id="scope-display"></span></div>
+                <div style="margin-top: 4px;"><strong>Client ID:</strong> <code id="client-id-display"></code></div>
+                <div style="margin-top: 4px;"><strong>Callback Origin:</strong> <span id="redirect-origin-display"></span></div>
+                <div style="margin-top: 4px;"><strong>Permissions:</strong> <span id="scope-display"></span></div>
             </div>
 
             <form id="oauth-form">
@@ -235,6 +237,9 @@
             </p>
             <div>
                 <div><strong>Username:</strong> <code id="waiting-username" class="oauth-username-badge"></code></div>
+                <div style="margin-top: 6px;"><strong>Client:</strong> <span id="waiting-client"></span> (<code id="waiting-client-id"></code>)</div>
+                <div style="margin-top: 4px;"><strong>Callback Origin:</strong> <span id="waiting-redirect-origin"></span></div>
+                <div style="margin-top: 4px;"><strong>Permissions:</strong> <span id="waiting-scope"></span></div>
                 <div style="margin-top: 6px;"><strong>Request Code:</strong> <span id="waiting-code" class="oauth-user-code"></span></div>
                 <div id="waiting-timer" style="margin-top: 8px; font-size: 12px; color: var(--text-secondary);"></div>
             </div>
@@ -255,15 +260,43 @@
             const codeChallengeMethod = params.get('code_challenge_method') || 'S256';
             const scope = params.get('scope') || 'mcp:access';
 
-            document.getElementById('client-display').textContent = clientId;
-            document.getElementById('scope-display').textContent = scope;
+            function formatCallbackOrigin(uri) {
+                if (!uri) return 'Not provided';
+                try {
+                    const parsed = new URL(uri);
+                    return parsed.origin && parsed.origin !== 'null' ? parsed.origin : `${parsed.protocol}//${parsed.host}`;
+                } catch (e) {
+                    return uri;
+                }
+            }
+
+            function formatScopeLabel(rawScope) {
+                const s = (rawScope || 'mcp:access').trim();
+                if (s === 'mcp:access') {
+                    return 'mcp:access (Read status, logs, artifacts & trigger builds via MCP)';
+                }
+                return s;
+            }
+
+            let resolvedClientName = clientId;
+            const callbackOrigin = formatCallbackOrigin(redirectUri);
+            const scopeLabel = formatScopeLabel(scope);
+
+            document.getElementById('client-display').textContent = resolvedClientName;
+            document.getElementById('client-id-display').textContent = clientId;
+            const redirEl = document.getElementById('redirect-origin-display');
+            redirEl.textContent = callbackOrigin;
+            if (redirectUri) redirEl.title = redirectUri;
+            document.getElementById('scope-display').textContent = scopeLabel;
 
             if (clientId) {
                 fetch(`/oauth/clients/${encodeURIComponent(clientId)}`, { cache: 'no-store' })
                     .then(r => r.ok ? r.json() : null)
                     .then(info => {
                         if (info && info.client_name) {
-                            document.getElementById('client-display').textContent = info.client_name;
+                            resolvedClientName = info.client_name;
+                            const suffix = info.registered === false ? ' (unregistered client ID)' : '';
+                            document.getElementById('client-display').textContent = `${resolvedClientName}${suffix}`;
                         }
                     })
                     .catch(() => {});
@@ -439,6 +472,13 @@
                     stepUsername.style.display = 'none';
                     stepWaiting.style.display = 'block';
                     document.getElementById('waiting-username').textContent = username;
+                    document.getElementById('waiting-client').textContent = data.client_name || resolvedClientName;
+                    document.getElementById('waiting-client-id').textContent = data.client_id || clientId;
+                    const waitRedirEl = document.getElementById('waiting-redirect-origin');
+                    const finalUri = data.redirect_uri || redirectUri;
+                    waitRedirEl.textContent = formatCallbackOrigin(finalUri);
+                    if (finalUri) waitRedirEl.title = finalUri;
+                    document.getElementById('waiting-scope').textContent = formatScopeLabel(data.scope || scope);
                     document.getElementById('waiting-code').textContent = data.user_code || data.request_id;
                     startPolling(data.request_id, data.poll_token || '');
                 } catch (err) {

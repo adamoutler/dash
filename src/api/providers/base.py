@@ -1,5 +1,9 @@
+import re
 from abc import ABC, abstractmethod
 from typing import Any
+
+SAFE_SHA_RE = re.compile(r"^[0-9a-fA-F]{4,64}$")
+SAFE_RUN_ID_RE = re.compile(r"^[0-9]{1,30}$")
 
 
 class ProviderPathNotFoundError(Exception):
@@ -26,6 +30,8 @@ class BaseProvider(ABC):
         repo: str,
         workflow_id: str | None = None,
         branch: str | None = None,
+        sha: str | None = None,
+        run_id: str | None = None,
     ) -> dict[str, Any]:
         """Fetch the CI status for a repository/workflow."""
 
@@ -36,6 +42,8 @@ class BaseProvider(ABC):
         repo: str,
         workflow_id: str | None = None,
         branch: str | None = None,
+        sha: str | None = None,
+        run_id: str | None = None,
     ) -> str:
         """Fetch the execution logs for a repository/workflow."""
 
@@ -46,6 +54,8 @@ class BaseProvider(ABC):
         repo: str,
         workflow_id: str | None = None,
         branch: str | None = None,
+        sha: str | None = None,
+        run_id: str | None = None,
     ) -> dict[str, Any]:
         """Fetch the artifacts for a repository/workflow."""
 
@@ -88,3 +98,22 @@ class BaseProvider(ABC):
         ]:
             return 2
         return 1
+
+    @staticmethod
+    def is_valid_sha(sha: str | None) -> bool:
+        """Return True when sha is None or a 4-64 character hex commit hash."""
+        return sha is None or bool(SAFE_SHA_RE.match(sha.strip()))
+
+    @staticmethod
+    def is_valid_run_id(run_id: str | None) -> bool:
+        """Return True when run_id is None or a safe numeric workflow run identifier."""
+        return run_id is None or bool(SAFE_RUN_ID_RE.match(run_id.strip()))
+
+    @staticmethod
+    def matches_sha(candidate_sha: str | None, target_sha: str | None) -> bool:
+        """Match full or unambiguous hex-prefix commit SHA case-insensitively."""
+        if not target_sha:
+            return True
+        if not candidate_sha:
+            return False
+        return candidate_sha.strip().lower().startswith(target_sha.strip().lower())

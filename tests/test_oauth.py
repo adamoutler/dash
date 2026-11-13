@@ -975,3 +975,94 @@ def test_oauth_repeated_attempts_and_reconnect_with_dynamic_google_redirect():
     sessions = client.get("/api/oauth/pending", auth=admin_auth).json()["sessions"]
     adam_sessions = [s for s in sessions if s.get("username") == "adam" and s.get("client_id") == cid]
     assert len(adam_sessions) == 1
+
+
+def test_oauth_client_identity_callback_and_permissions_visibility(isolated_oauth_env):
+    tm, _ = isolated_oauth_env
+    admin_auth = ("adminuser", "adminpass")
+    verifier, challenge = _pkce_pair("visibility_verifier_1234567890_abcdefghijklmno")
+
+    reg = client.post(
+        "/oauth/register",
+        json={
+            "client_name": "Gemini Verified Client",
+            "redirect_uris": ["https://gemini.google.com/oauth/cb"],
+        },
+    ).json()
+    cid = reg["client_id"]
+
+    info_res = client.get(f"/oauth/clients/{cid}")
+    assert info_res.status_code == 200
+    assert info_res.json()["client_name"] == "Gemini Verified Client"
+    assert info_res.json()["redirect_uris"] == ["https://gemini.google.com/oauth/cb"]
+    assert info_res.json()["registered"] is True
+
+    unknown_info = client.get("/oauth/clients/unregistered-client-xyz").json()
+    assert unknown_info["registered"] is False
+
+    page = client.get(
+        "/oauth/authorize",
+        params={
+            "client_id": cid,
+            "redirect_uri": "https://gemini.google.com/oauth/cb",
+            "state": "st",
+            "code_challenge": challenge,
+            "code_challenge_method": "S256",
+            "scope": "mcp:access",
+        },
+    )
+    assert page.status_code == 200
+    assert "/api/" not in page.text
+    for elem_id in (
+        "client-id-display",
+        "redirect-origin-display",
+        "waiting-client",
+        "waiting-redirect-origin",
+        "waiting-scope",
+    ):
+        assert elem_id in page.text
+
+    auth_res = client.post(
+        "/oauth/authorize",
+        json={
+            "username": "adam",
+            "client_id": cid,
+            "redirect_uri": "https://gemini.google.com/oauth/cb",
+            "state": "st",
+            "code_challenge": challenge,
+            "code_challenge_method": "S256",
+            "scope": "mcp:access",
+        },
+    )
+    assert auth_res.status_code == 200
+    auth_data = auth_res.json()
+    assert auth_data["client_id"] == cid
+    assert auth_data["client_name"] == "Gemini Verified Client"
+    assert auth_data["redirect_uri"] == "https://gemini.google.com/oauth/cb"
+    assert auth_data["scope"] == "mcp:access"
+
+    client.post(f"/api/oauth/pending/{auth_data['request_id']}/approve", auth=admin_auth)
+    from urllib.parse import parse_qs, urlparse
+
+    poll = client.get(
+        f"/oauth/authorize/status/{auth_data['request_id']}",
+        params={"poll_token": auth_data["poll_token"]},
+    ).json()
+    code = parse_qs(urlparse(poll["redirect_url"]).query)["code"][0]
+    tok_res = client.post(
+        "/oauth/token",
+        json={
+            "grant_type": "authorization_code",
+            "code": code,
+            "code_verifier": verifier,
+            "redirect_uri": "https://gemini.google.com/oauth/cb",
+            "client_id": cid,
+        },
+    )
+    assert tok_res.status_code == 200
+
+    tokens = tm.list_tokens()
+    assert len(tokens) == 1
+    assert tokens[0]["client_name"] == "Gemini Verified Client"
+    assert tokens[0]["redirect_uri"] == "https://gemini.google.com/oauth/cb"
+    assert tokens[0]["scope"] == "mcp:access"

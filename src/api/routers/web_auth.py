@@ -15,6 +15,7 @@ from api.auth import (
     create_signed_payload,
     get_base_url,
     get_web_login_credentials,
+    get_web_oauth_allowed_emails_raw,
     is_web_login_configured,
     is_web_oauth_configured,
     verify_session_cookie,
@@ -238,9 +239,7 @@ async def web_oauth_callback(
     client_secret = str(
         cm.get_value("web_oauth_client_secret", "GOOGLE_CLIENT_SECRET") or ""
     ).strip()
-    allowed_raw = str(
-        cm.get_value("web_oauth_allowed_emails", "GOOGLE_ALLOWED_EMAILS") or ""
-    )
+    allowed_raw = get_web_oauth_allowed_emails_raw()
     allowed_emails = {e.strip().lower() for e in allowed_raw.split(",") if e.strip()}
     if not allowed_emails:
         raise HTTPException(

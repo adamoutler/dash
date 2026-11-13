@@ -1,6 +1,7 @@
 import asyncio
 import os
 from typing import Annotated
+from urllib.parse import quote
 
 import anyio
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -9,6 +10,7 @@ from fastapi.responses import StreamingResponse
 from api.auth import optional_web_login, require_api_token
 from api.config import LOGS_DIR, ConfigManager
 from api.models.domain import ProviderType
+from api.providers.base import BaseProvider
 from api.services.workflow_service import (
     WorkflowService,
     get_candidate_log_filenames,
@@ -36,6 +38,17 @@ async def get_workflows(
     return await workflow_service.get_workflows(provider, owner, repo, branch)
 
 
+def _selector_kwargs(
+    sha: str | None = None, run_id: str | None = None
+) -> dict[str, str]:
+    kwargs: dict[str, str] = {}
+    if sha is not None:
+        kwargs["sha"] = sha
+    if run_id is not None:
+        kwargs["run_id"] = run_id
+    return kwargs
+
+
 @router.get("/artifacts", summary="Fetch Workflow Artifacts")
 async def get_artifacts(
     provider: ProviderType,
@@ -44,9 +57,22 @@ async def get_artifacts(
     user: Annotated[str, Depends(require_api_token)],
     workflow_id: str | None = None,
     branch: str | None = None,
+    sha: str | None = None,
+    run_id: str | None = None,
 ):
+    norm_sha = normalize_selector(sha)
+    norm_run = normalize_selector(run_id)
+    if not BaseProvider.is_valid_sha(norm_sha) or not BaseProvider.is_valid_run_id(
+        norm_run
+    ):
+        raise HTTPException(status_code=400, detail="Invalid sha or run_id parameter.")
     return await workflow_service.get_artifacts(
-        provider, owner, repo, workflow_id, branch
+        provider,
+        owner,
+        repo,
+        workflow_id,
+        branch,
+        **_selector_kwargs(norm_sha, norm_run),
     )
 
 
@@ -63,6 +89,8 @@ async def post_logs(
     request: Request,
     workflow_id: str | None = None,
     branch: str | None = None,
+    sha: str | None = None,
+    run_id: str | None = None,
 ):
     buffer = bytearray()
     async for chunk in request.stream():
@@ -77,6 +105,15 @@ async def post_logs(
     if any(pt in s for s in (owner, repo) for pt in ("..", "/", "\\")):
         raise HTTPException(status_code=400, detail="Invalid provider, owner, or repo.")
 
+    norm_wf = normalize_selector(workflow_id)
+    norm_branch = normalize_selector(branch)
+    norm_sha = normalize_selector(sha)
+    norm_run = normalize_selector(run_id)
+    if not BaseProvider.is_valid_sha(norm_sha) or not BaseProvider.is_valid_run_id(
+        norm_run
+    ):
+        raise HTTPException(status_code=400, detail="Invalid sha or run_id parameter.")
+
     safe_provider = "".join(c for c in provider if c.isalnum() or c in "-_")
     safe_owner = "".join(c for c in owner if c.isalnum() or c in "-_")
     safe_repo = "".join(c for c in repo if c.isalnum() or c in "-_")
@@ -84,11 +121,15 @@ async def post_logs(
     if not safe_provider or not safe_owner or not safe_repo:
         raise HTTPException(status_code=400, detail="Invalid provider, owner, or repo.")
 
-    norm_wf = normalize_selector(workflow_id)
-    norm_branch = normalize_selector(branch)
-
     filename = os.path.basename(
-        get_log_filename(safe_provider, safe_owner, safe_repo, norm_wf, norm_branch)
+        get_log_filename(
+            safe_provider,
+            safe_owner,
+            safe_repo,
+            norm_wf,
+            norm_branch,
+            **_selector_kwargs(norm_sha, norm_run),
+        )
     )
     filepath = os.path.join(LOGS_DIR, filename)
     real_filepath = os.path.realpath(filepath)
@@ -119,6 +160,8 @@ async def get_logs(
     user: Annotated[str | None, Depends(optional_web_login)],
     workflow_id: str | None = None,
     branch: str | None = None,
+    sha: str | None = None,
+    run_id: str | None = None,
 ):
     if any(pt in s for s in (owner, repo) for pt in ("..", "/", "\\")):
         raise HTTPException(status_code=400, detail="Invalid provider, owner, or repo.")
@@ -132,12 +175,23 @@ async def get_logs(
 
     norm_wf = normalize_selector(workflow_id)
     norm_branch = normalize_selector(branch)
+    norm_sha = normalize_selector(sha)
+    norm_run = normalize_selector(run_id)
+    if not BaseProvider.is_valid_sha(norm_sha) or not BaseProvider.is_valid_run_id(
+        norm_run
+    ):
+        raise HTTPException(status_code=400, detail="Invalid sha or run_id parameter.")
 
     real_logs_dir = os.path.realpath(LOGS_DIR)
 
     # 1. Check candidate filenames in order (most specific down to base unconstrained)
     candidates = get_candidate_log_filenames(
-        safe_provider, safe_owner, safe_repo, norm_wf, norm_branch
+        safe_provider,
+        safe_owner,
+        safe_repo,
+        norm_wf,
+        norm_branch,
+        **_selector_kwargs(norm_sha, norm_run),
     )
     for filename in candidates:
         safe_name = os.path.basename(filename)
@@ -152,38 +206,44 @@ async def get_logs(
             async with await anyio.open_file(real_filepath, "r", encoding="utf-8") as f:
                 return {"log": await f.read()}
 
-    # 2. Hardened fallback search: Look for newest log for this provider/owner/repo
-    prefix = f"{safe_provider}_{safe_owner}_{safe_repo}_"
-    matched_logs: list[tuple[float, str]] = []
-    try:
-        with os.scandir(real_logs_dir) as it:
-            for idx, entry in enumerate(it):
-                if idx >= 1000:
-                    break
-                if not entry.is_file(follow_symlinks=False):
-                    continue
-                name = entry.name
-                if name.startswith(prefix) and name.endswith(".log"):
-                    real_entry_path = os.path.realpath(entry.path)
-                    if (
-                        os.path.commonpath([real_entry_path, real_logs_dir])
-                        == real_logs_dir
-                        and os.path.dirname(real_entry_path) == real_logs_dir
-                    ):
-                        matched_logs.append((entry.stat().st_mtime, real_entry_path))
-    except OSError:
-        pass
+    # 2. Hardened fallback search: only when not pinned to a specific sha or run_id
+    if not norm_sha and not norm_run:
+        prefix = f"{safe_provider}_{safe_owner}_{safe_repo}_"
+        matched_logs: list[tuple[float, str]] = []
+        try:
+            with os.scandir(real_logs_dir) as it:
+                for idx, entry in enumerate(it):
+                    if idx >= 1000:
+                        break
+                    if not entry.is_file(follow_symlinks=False):
+                        continue
+                    name = entry.name
+                    if name.startswith(prefix) and name.endswith(".log"):
+                        real_entry_path = os.path.realpath(entry.path)
+                        if (
+                            os.path.commonpath([real_entry_path, real_logs_dir])
+                            == real_logs_dir
+                            and os.path.dirname(real_entry_path) == real_logs_dir
+                        ):
+                            matched_logs.append((entry.stat().st_mtime, real_entry_path))
+        except OSError:
+            pass
 
-    if matched_logs:
-        matched_logs.sort(key=lambda x: x[0], reverse=True)
-        async with await anyio.open_file(
-            matched_logs[0][1], "r", encoding="utf-8"
-        ) as f:
-            return {"log": await f.read()}
+        if matched_logs:
+            matched_logs.sort(key=lambda x: x[0], reverse=True)
+            async with await anyio.open_file(
+                matched_logs[0][1], "r", encoding="utf-8"
+            ) as f:
+                return {"log": await f.read()}
 
     # 3. Provider API Fallback
     log = await workflow_service.get_logs(
-        provider, safe_owner, safe_repo, norm_wf, norm_branch
+        provider,
+        safe_owner,
+        safe_repo,
+        norm_wf,
+        norm_branch,
+        **_selector_kwargs(norm_sha, norm_run),
     )
     return {"log": log}
 
@@ -218,14 +278,22 @@ def _build_dash_log_url(
     repo: str,
     branch: str | None,
     wf_id: str | None,
+    sha: str | None = None,
+    run_id: str | None = None,
 ) -> str:
     url = f"{base_url}/api/logs?provider={provider}&owner={owner}&repo={repo}"
     norm_br = normalize_selector(branch)
     norm_wf = normalize_selector(wf_id)
+    norm_sha = normalize_selector(sha)
+    norm_run = normalize_selector(run_id)
     if norm_br:
-        url += f"&branch={norm_br}"
+        url += f"&branch={quote(norm_br, safe='')}"
     if norm_wf:
-        url += f"&workflow_id={norm_wf}"
+        url += f"&workflow_id={quote(norm_wf, safe='')}"
+    if norm_sha:
+        url += f"&sha={quote(norm_sha, safe='')}"
+    if norm_run:
+        url += f"&run_id={quote(norm_run, safe='')}"
     return url
 
 
@@ -263,7 +331,14 @@ def _enhance_results(repos: list, results: list, base_url: str):
         ) and os.path.exists(filepath)
 
         dash_log_url = _build_dash_log_url(
-            base_url, provider, owner, repo, branch, wf_id
+            base_url,
+            provider,
+            owner,
+            repo,
+            branch,
+            wf_id,
+            sha=r.get("sha"),
+            run_id=r.get("run_id"),
         )
 
         res["log_url"] = dash_log_url
@@ -279,16 +354,30 @@ async def get_status(
     request: Request,
     user: Annotated[str | None, Depends(optional_web_login)],
     query: str | None = None,
+    sha: str | None = None,
+    run_id: str | None = None,
 ):
+    norm_sha = normalize_selector(sha)
+    norm_run = normalize_selector(run_id)
+    if not BaseProvider.is_valid_sha(norm_sha) or not BaseProvider.is_valid_run_id(
+        norm_run
+    ):
+        raise HTTPException(status_code=400, detail="Invalid sha or run_id parameter.")
+
     repos = storage.get_repos()
 
     if query:
         repos = _filter_repos(repos, query)
 
-    results = await workflow_service.get_all_statuses(repos)
+    effective_repos = (
+        [{**r, **_selector_kwargs(norm_sha, norm_run)} for r in repos]
+        if (norm_sha or norm_run)
+        else repos
+    )
+    results = await workflow_service.get_all_statuses(effective_repos)
     base_url = str(request.base_url).rstrip("/")
 
-    _enhance_results(repos, results, base_url)
+    _enhance_results(effective_repos, results, base_url)
 
     return results
 
@@ -341,10 +430,27 @@ async def wait_status(
     repo: str,
     workflow_id: str | None = None,
     branch: str | None = None,
+    sha: str | None = None,
+    run_id: str | None = None,
 ):
+    norm_sha = normalize_selector(sha)
+    norm_run = normalize_selector(run_id)
+    if not BaseProvider.is_valid_sha(norm_sha) or not BaseProvider.is_valid_run_id(
+        norm_run
+    ):
+        raise HTTPException(status_code=400, detail="Invalid sha or run_id parameter.")
+
     base_url = str(request.base_url).rstrip("/") if hasattr(request, "base_url") else ""
     dash_log_url = (
-        _build_dash_log_url(base_url, provider, owner, repo, branch, workflow_id)
+        _build_dash_log_url(
+            base_url,
+            provider,
+            owner,
+            repo,
+            branch,
+            workflow_id,
+            **_selector_kwargs(norm_sha, norm_run),
+        )
         if base_url
         else None
     )
@@ -356,7 +462,12 @@ async def wait_status(
 
         while True:
             res = await workflow_service.get_single_status(
-                provider, owner, repo, workflow_id, branch
+                provider,
+                owner,
+                repo,
+                workflow_id,
+                branch,
+                **_selector_kwargs(norm_sha, norm_run),
             )
             if (
                 res.get("status") == "error"

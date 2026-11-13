@@ -294,3 +294,82 @@ async def test_mcp_wait(mock_sleep, mock_fetch, setup_env):
             data = json.loads(content.strip())
             assert data["jsonrpc"] == "2.0"
             assert data["result"]["status"] == "success"
+
+
+@patch("api.providers.github.GitHubProvider.fetch_status")
+def test_mcp_tools_list_and_sha_run_id_targeting(mock_fetch, setup_env):
+    headers, _ = setup_env
+    storage.add_repo("github", "testowner", "testrepo", None, "wf_1", None, "main")
+
+    tools_res = client.post(
+        "/mcp",
+        json={"jsonrpc": "2.0", "method": "tools/list", "id": 10},
+        headers=headers,
+    )
+    assert tools_res.status_code == 200
+    tools = {t["name"]: t for t in tools_res.json()["result"]["tools"]}
+    assert "untrusted external data" in tools["get_status"]["description"].lower()
+    assert "untrusted external data" in tools["get_logs"]["description"].lower()
+    for name in ("get_status", "get_logs", "wait"):
+        props = tools[name]["inputSchema"]["properties"]
+        assert "sha" in props
+        assert "run_id" in props
+
+    mock_fetch.return_value = {
+        "status": "success",
+        "url": "https://github.com/testowner/testrepo/actions/runs/555",
+        "repo_url": "https://github.com/testowner/testrepo",
+        "commit_message": "exact build",
+        "started_at": "2026-11-13T12:00:00Z",
+        "run_id": "555",
+        "head_sha": "deadbeef1234",
+    }
+    status_res = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "method": "tools/call",
+            "id": 11,
+            "params": {
+                "name": "get_status",
+                "arguments": {"repo": "testrepo", "sha": "deadbeef"},
+            },
+        },
+        headers=headers,
+    )
+    assert status_res.status_code == 200
+    text = status_res.json()["result"]["content"][0]["text"]
+    assert "run_id: 555" in text
+    assert "sha: deadbeef1234" in text
+    mock_fetch.assert_called_once_with(
+        "testowner", "testrepo", "wf_1", "main", sha="deadbeef"
+    )
+
+    logs_res = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "method": "get_logs",
+            "id": 12,
+            "params": {"repo": "testrepo", "run_id": "555"},
+        },
+        headers=headers,
+    )
+    assert logs_res.status_code == 200
+    assert "&run_id=555" in logs_res.json()["result"]
+
+    bad_res = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "method": "tools/call",
+            "id": 13,
+            "params": {
+                "name": "get_status",
+                "arguments": {"repo": "testrepo", "sha": "../../bad"},
+            },
+        },
+        headers=headers,
+    )
+    assert bad_res.status_code == 200
+    assert bad_res.json()["error"]["code"] == -32602

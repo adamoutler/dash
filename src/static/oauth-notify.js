@@ -4,6 +4,18 @@
     let isPolling = false;
     const inFlightDecisions = new Set();
 
+    function formatCallbackOrigin(uri) {
+        if (!uri) return '';
+        try {
+            const parsed = new URL(uri);
+            return parsed.origin && parsed.origin !== 'null'
+                ? parsed.origin
+                : `${parsed.protocol}//${parsed.host}`;
+        } catch (e) {
+            return uri;
+        }
+    }
+
     function ensureContainer() {
         if (!containerEl) {
             containerEl = document.createElement('div');
@@ -12,7 +24,16 @@
             containerEl.setAttribute('role', 'region');
             containerEl.setAttribute('aria-label', 'OAuth Approval Notifications');
             containerEl.setAttribute('aria-live', 'polite');
-            document.body.appendChild(containerEl);
+            const indexContainer = document.querySelector('.container');
+            const indexHeader = indexContainer ? indexContainer.querySelector('.header') : null;
+            const oauthSection = document.getElementById('oauth-section');
+            if (indexHeader && indexContainer) {
+                indexHeader.insertAdjacentElement('afterend', containerEl);
+            } else if (oauthSection && oauthSection.parentNode) {
+                oauthSection.parentNode.insertBefore(containerEl, oauthSection);
+            } else {
+                document.body.appendChild(containerEl);
+            }
         }
         return containerEl;
     }
@@ -139,11 +160,29 @@
 
         const clientRow = document.createElement('div');
         clientRow.className = 'oauth-popup-meta';
+        const displayName = req.client_name || req.client_id || 'Unknown client';
+        const idSuffix = req.client_id && req.client_name && req.client_name !== req.client_id ? ` | ID: ${req.client_id}` : '';
         const codeSuffix = req.user_code ? ` (${req.user_code})` : '';
-        clientRow.textContent = `Client: ${req.client_name || req.client_id}${codeSuffix}`;
+        clientRow.textContent = `Client: ${displayName}${idSuffix}${codeSuffix}`;
 
         body.appendChild(userRow);
         body.appendChild(clientRow);
+
+        const originText = formatCallbackOrigin(req.redirect_uri);
+        if (originText) {
+            const originRow = document.createElement('div');
+            originRow.className = 'oauth-popup-meta';
+            originRow.textContent = `Callback: ${originText}`;
+            if (req.redirect_uri) {
+                originRow.title = req.redirect_uri;
+            }
+            body.appendChild(originRow);
+        }
+
+        const scopeRow = document.createElement('div');
+        scopeRow.className = 'oauth-popup-meta';
+        scopeRow.textContent = `Scope: ${req.scope || 'mcp:access'}`;
+        body.appendChild(scopeRow);
 
         const actions = document.createElement('div');
         actions.className = 'oauth-popup-actions';

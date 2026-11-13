@@ -344,6 +344,10 @@ class OAuthManager:
                 "poll_token": poll_token,
                 "user_code": user_code,
                 "username": username,
+                "client_id": client_id,
+                "client_name": req_record["client_name"],
+                "redirect_uri": redirect_uri,
+                "scope": req_record["scope"],
                 "status": "pending",
                 "expires_at": expires_at,
                 "expires_in": PENDING_TTL_SECONDS,
@@ -544,7 +548,7 @@ class OAuthManager:
             )
             return code_info
 
-    def get_client_public_info(self, client_id: str) -> dict[str, str]:
+    def get_client_public_info(self, client_id: str) -> dict[str, Any]:
         with FileLock(self.lockpath, timeout=FILE_LOCK_TIMEOUT):
             data = self._load_nolock()
             client_info = data.get("clients", {}).get(client_id)
@@ -552,8 +556,15 @@ class OAuthManager:
                 return {
                     "client_id": client_id,
                     "client_name": str(client_info.get("client_name") or client_id),
+                    "redirect_uris": list(client_info.get("redirect_uris") or []),
+                    "registered": True,
                 }
-            return {"client_id": client_id, "client_name": client_id}
+            return {
+                "client_id": client_id,
+                "client_name": client_id,
+                "redirect_uris": [],
+                "registered": False,
+            }
 
     def remove_client(self, client_id: str) -> bool:
         if not client_id:
@@ -963,6 +974,8 @@ def _handle_auth_code_grant(params: dict[str, Any]) -> JSONResponse:
         expires_in_sec=TOKEN_TTL_SECONDS,
         username=username,
         client_id=code_info["client_id"],
+        client_name=c_name,
+        redirect_uri=code_info.get("redirect_uri", ""),
         scope=scope,
         refresh_token=refresh_token,
         oauth=True,

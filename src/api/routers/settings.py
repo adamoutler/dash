@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from api.auth import (
+    get_web_oauth_allowed_emails_raw,
     is_web_login_configured,
     is_web_oauth_configured,
     optional_web_login,
@@ -44,30 +45,44 @@ class SettingsUpdate(BaseModel):
     web_oauth_allowed_emails: str | None = None
 
 
-@router.get("/settings", summary="Get Configured Providers")
+class SettingsStatusResponse(BaseModel):
+    """Non-secret configuration status returned by GET /api/settings (secrets are never reflected)."""
+
+    github_configured: bool
+    forgejo_configured: bool
+    jenkins_configured: bool
+    website_login_configured: bool
+    website_oauth_configured: bool
+    web_oauth_client_id: str | None = None
+    web_oauth_allowed_emails: str | None = None
+
+
+@router.get(
+    "/settings",
+    summary="Get Configured Providers",
+    response_model=SettingsStatusResponse,
+)
 async def get_settings_status(user: Annotated[str, Depends(require_web_login)]):
-    return {
-        "github_configured": bool(
+    return SettingsStatusResponse(
+        github_configured=bool(
             config_manager.get_value("github_token", "GITHUB_TOKEN")
         ),
-        "forgejo_configured": bool(
+        forgejo_configured=bool(
             config_manager.get_value("forgejo_token", "FORGEJO_TOKEN")
             and config_manager.get_value("forgejo_url", "FORGEJO_URL")
         ),
-        "jenkins_configured": bool(
+        jenkins_configured=bool(
             config_manager.get_value("jenkins_user", "JENKINS_USER")
             and config_manager.get_value("jenkins_token", "JENKINS_TOKEN")
             and config_manager.get_value("jenkins_url", "JENKINS_URL")
         ),
-        "website_login_configured": is_web_login_configured(),
-        "website_oauth_configured": is_web_oauth_configured(),
-        "web_oauth_client_id": config_manager.get_value(
+        website_login_configured=is_web_login_configured(),
+        website_oauth_configured=is_web_oauth_configured(),
+        web_oauth_client_id=config_manager.get_value(
             "web_oauth_client_id", "GOOGLE_CLIENT_ID"
         ),
-        "web_oauth_allowed_emails": config_manager.get_value(
-            "web_oauth_allowed_emails", "GOOGLE_ALLOWED_EMAILS"
-        ),
-    }
+        web_oauth_allowed_emails=get_web_oauth_allowed_emails_raw() or None,
+    )
 
 
 @router.post("/settings", summary="Update Settings")

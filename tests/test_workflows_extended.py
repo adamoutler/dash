@@ -199,3 +199,194 @@ async def test_wait_status(mock_sleep, setup_env):
             assert response.status_code == 200
             text = "".join(list(response.iter_text()))
             assert "Error: Unknown provider" in text
+
+
+@pytest.mark.asyncio
+async def test_exact_build_sha_and_run_id_targeting(setup_env, tmp_path, monkeypatch):
+    from unittest.mock import MagicMock
+
+    from api.providers.forgejo import ForgejoProvider
+    from api.providers.github import GitHubProvider
+    from api.services.workflow_service import (
+        get_candidate_log_filenames,
+        get_log_filename,
+    )
+
+    monkeypatch.setattr("api.routers.workflows.LOGS_DIR", str(tmp_path))
+
+    # 1. Exact log filename & isolation from _latest.log
+    fname = get_log_filename("github", "adamoutler", "dash", sha="deadbeef", run_id="42")
+    assert "_run_42_sha_deadbeef.log" in fname
+    candidates = get_candidate_log_filenames(
+        "github", "adamoutler", "dash", sha="deadbeef", run_id="42"
+    )
+    assert all("_latest.log" not in c for c in candidates)
+
+    (tmp_path / "github_adamoutler_dash_latest.log").write_text("WRONG_LATEST_LOG")
+    post_res = client.post(
+        "/api/logs?provider=github&owner=adamoutler&repo=dash&sha=deadbeef&run_id=42",
+        content=b"EXACT_SHA_LOG",
+        headers=setup_env,
+    )
+    assert post_res.status_code == 200
+
+    get_res = client.get(
+        "/api/logs?provider=github&owner=adamoutler&repo=dash&sha=deadbeef&run_id=42"
+    )
+    assert get_res.status_code == 200
+    assert get_res.json()["log"] == "EXACT_SHA_LOG"
+
+    # Invalid sha or run_id rejected with 400
+    assert (
+        client.get(
+            "/api/logs?provider=github&owner=adamoutler&repo=dash&sha=../../etc"
+        ).status_code
+        == 400
+    )
+    assert (
+        client.get(
+            "/api/status?run_id=bad_id!"
+        ).status_code
+        == 400
+    )
+
+    # 2. GitHubProvider fetch_status pinning by sha and run_id
+    gh = GitHubProvider(token="tok")
+    mock_runs_resp = MagicMock(status_code=200)
+    mock_runs_resp.json.return_value = {
+        "workflow_runs": [
+            {
+                "id": 200,
+                "status": "completed",
+                "conclusion": "failure",
+                "head_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                "head_commit": {"message": "newer build"},
+                "created_at": "2026-11-13T12:00:00Z",
+                "updated_at": "2026-11-13T12:05:00Z",
+                "name": "CI",
+            },
+            {
+                "id": 100,
+                "status": "completed",
+                "conclusion": "success",
+                "head_sha": "aaa1111bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                "head_commit": {"message": "target commit"},
+                "created_at": "2026-11-13T11:00:00Z",
+                "updated_at": "2026-11-13T11:05:00Z",
+                "name": "CI",
+            },
+        ]
+    }
+    mock_client = AsyncMock()
+    mock_client.get.return_value = mock_runs_resp
+    mock_client.__aenter__.return_value = mock_client
+
+    with patch("httpx.AsyncClient", return_value=mock_client):
+        res_sha = await gh.fetch_status("adamoutler", "dash", sha="aaa1111")
+    assert res_sha["status"] == "success"
+    assert res_sha["run_id"] == "100"
+    assert res_sha["head_sha"].startswith("aaa1111")
+
+    # Direct run_id lookup
+    mock_run_resp = MagicMock(status_code=200)
+    mock_run_resp.json.return_value = {
+        "id": 987,
+        "status": "completed",
+        "conclusion": "success",
+        "head_sha": "ccc987",
+        "head_commit": {"message": "run 987"},
+        "updated_at": "2026-11-13T10:00:00Z",
+        "name": "CI",
+    }
+    mock_client.get.return_value = mock_run_resp
+    with patch("httpx.AsyncClient", return_value=mock_client):
+        res_run = await gh.fetch_status("adamoutler", "dash", run_id="987")
+    assert res_run["run_id"] == "987"
+    assert res_run["head_sha"] == "ccc987"
+
+    # 3. ForgejoProvider _get_latest_forgejo_run pinning
+    fj = ForgejoProvider(token="ftok", url="https://git.example.com")
+    picked = fj._get_latest_forgejo_run(
+        [
+            {"id": 10, "head_sha": "abc1111", "created": "2026-11-13T10:00:00Z"},
+            {"id": 11, "head_sha": "def2222", "created": "2026-11-13T11:00:00Z"},
+        ],
+        workflow_id=None,
+        sha="abc1111",
+    )
+    assert picked["id"] == 10
+
+    # 4. Endpoint passthrough on /api/status and /api/artifacts
+    with patch(
+        "api.routers.workflows.workflow_service.get_artifacts", new_callable=AsyncMock
+    ) as mock_art:
+        mock_art.return_value = {"artifacts": [{"id": 1}]}
+        art_res = client.get(
+            "/api/artifacts?provider=github&owner=adamoutler&repo=dash&run_id=987",
+            headers=setup_env,
+        )
+        assert art_res.status_code == 200
+        mock_art.assert_called_once_with(
+            "github", "adamoutler", "dash", None, None, run_id="987"
+        )
+
+    # 5. JenkinsProvider sha and run_id targeting
+    from api.providers.jenkins import JenkinsProvider
+
+    jp = JenkinsProvider(user="u", token="t", url="https://jenkins.example.com")
+    j_job_resp = MagicMock(status_code=200)
+    j_job_resp.json.return_value = {
+        "_class": "org.jenkinsci.plugins.workflow.job.WorkflowJob",
+        "fullDisplayName": "MyJob",
+        "builds": [
+            {
+                "number": 12,
+                "url": "https://jenkins.example.com/job/MyJob/12/",
+                "result": "SUCCESS",
+                "timestamp": 1700000000000,
+                "estimatedDuration": 10000,
+                "actions": [{"lastBuiltRevision": {"SHA1": "deadbeef0001"}}],
+                "changeSets": [{"items": [{"msg": "fix ci", "commitId": "deadbeef0001"}]}],
+            }
+        ],
+    }
+    j_log_resp = MagicMock(status_code=200, text="Jenkins console output #12")
+    j_build_resp = MagicMock(status_code=200)
+    j_build_resp.json.return_value = {
+        "number": 12,
+        "url": "https://jenkins.example.com/job/MyJob/12/",
+        "result": "SUCCESS",
+        "timestamp": 1700000000000,
+        "estimatedDuration": 10000,
+        "actions": [{"lastBuiltRevision": {"SHA1": "deadbeef0001"}}],
+    }
+    mock_j_client = AsyncMock()
+    mock_j_client.get.side_effect = [
+        j_job_resp,  # fetch_status(sha)
+        j_job_resp,  # fetch_logs(sha)
+        j_log_resp,  # consoleText
+        j_job_resp,  # fetch_status(run_id)
+        j_build_resp,  # build 12 json
+        j_job_resp,  # fetch_logs(run_id)
+        j_log_resp,  # consoleText
+    ]
+    mock_j_client.__aenter__.return_value = mock_j_client
+    with patch("httpx.AsyncClient", return_value=mock_j_client):
+        j_st = await jp.fetch_status(
+            "MyJob", "https://jenkins.example.com/job/MyJob/", sha="deadbeef"
+        )
+        j_lg = await jp.fetch_logs(
+            "MyJob", "https://jenkins.example.com/job/MyJob/", sha="deadbeef"
+        )
+        j_st_run = await jp.fetch_status(
+            "MyJob", "https://jenkins.example.com/job/MyJob/", run_id="12"
+        )
+        j_lg_run = await jp.fetch_logs(
+            "MyJob", "https://jenkins.example.com/job/MyJob/", run_id="12"
+        )
+    assert j_st["status"] == "success"
+    assert j_st["run_id"] == "12"
+    assert j_st["head_sha"] == "deadbeef0001"
+    assert "Jenkins console output #12" in j_lg
+    assert j_st_run["run_id"] == "12"
+    assert "Jenkins console output #12" in j_lg_run

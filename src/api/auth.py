@@ -9,15 +9,46 @@ import secrets
 import time
 from typing import Annotated, Any
 
-from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from fastapi import HTTPException, Security, status
+from fastapi.security import (
+    APIKeyCookie,
+    HTTPAuthorizationCredentials,
+    HTTPBasic,
+    HTTPBasicCredentials,
+    HTTPBearer,
+    OAuth2AuthorizationCodeBearer,
+)
 from fastapi.security.utils import get_authorization_scheme_param
 from filelock import FileLock
 from starlette.requests import Request
 
 logger = logging.getLogger("api.auth")
 
-security_basic = HTTPBasic(auto_error=False)
+security_basic = HTTPBasic(
+    auto_error=False,
+    scheme_name="HTTPBasic",
+    description="Website administrator HTTP Basic credentials (DASHBOARD_USER / DASHBOARD_PASSWORD).",
+)
+security_cookie = APIKeyCookie(
+    name="dash_session",
+    auto_error=False,
+    scheme_name="CookieAuth",
+    description="Signed HttpOnly website session cookie issued by /api/auth/login or Google OIDC callback.",
+)
+security_bearer = HTTPBearer(
+    auto_error=False,
+    scheme_name="BearerAuth",
+    description="Static API Bearer token (`api_token` domain) for CI scripts, hooks, and REST API automation.",
+)
+security_mcp_oauth = OAuth2AuthorizationCodeBearer(
+    authorizationUrl="/oauth/authorize",
+    tokenUrl="/oauth/token",
+    refreshUrl="/oauth/token",
+    scopes={"mcp:access": "Full access to Dash MCP tools and CI/CD status resources"},
+    scheme_name="McpOAuth",
+    description="OAuth 2.0 + PKCE (S256) Bearer token (`mcp_oauth` domain) for MCP clients; also accepts static API Bearer tokens.",
+    auto_error=False,
+)
 
 DATA_DIR = os.getenv("DATA_DIR", "data")
 DEFAULT_TOKENS_PATH = os.path.join(DATA_DIR, "tokens.json")
@@ -51,6 +82,11 @@ def _hash_token(value: str) -> str:
 
 def _is_anonymous_allowed() -> bool:
     return os.environ.get("ALLOW_ANONYMOUS_ACCESS", "").strip().lower() == "true"
+
+
+def _is_auth_required_for_reads() -> bool:
+    """Return True when REQUIRE_AUTH_FOR_READS=true enforces auth on read routes."""
+    return os.environ.get("REQUIRE_AUTH_FOR_READS", "").strip().lower() == "true"
 
 
 class TokenManager:
@@ -290,6 +326,12 @@ class TokenManager:
                     item["username"] = v["username"]
                 if v.get("client_id"):
                     item["client_id"] = v["client_id"]
+                if v.get("client_name"):
+                    item["client_name"] = v["client_name"]
+                if v.get("redirect_uri"):
+                    item["redirect_uri"] = v["redirect_uri"]
+                if v.get("scope"):
+                    item["scope"] = v["scope"]
                 result.append(item)
             return result
 
@@ -316,6 +358,23 @@ def is_web_login_configured() -> bool:
     return bool(user and password)
 
 
+def get_web_oauth_allowed_emails_raw() -> str:
+    """Return comma-separated allowlisted emails for Google Website OAuth.
+
+    Prefers ``web_oauth_allowed_emails`` / ``GOOGLE_ALLOWED_EMAILS`` and falls back to
+    legacy ``oauth_allowed_emails`` / ``OAUTH_ALLOWED_EMAILS`` for compatibility.
+    """
+    cm = _get_config_manager()
+    primary = str(
+        cm.get_value("web_oauth_allowed_emails", "GOOGLE_ALLOWED_EMAILS") or ""
+    ).strip()
+    if primary:
+        return primary
+    return str(
+        cm.get_value("oauth_allowed_emails", "OAUTH_ALLOWED_EMAILS") or ""
+    ).strip()
+
+
 def is_web_oauth_configured() -> bool:
     cm = _get_config_manager()
     client_id = str(
@@ -324,9 +383,7 @@ def is_web_oauth_configured() -> bool:
     client_secret = str(
         cm.get_value("web_oauth_client_secret", "GOOGLE_CLIENT_SECRET") or ""
     ).strip()
-    allowed_emails = str(
-        cm.get_value("web_oauth_allowed_emails", "GOOGLE_ALLOWED_EMAILS") or ""
-    ).strip()
+    allowed_emails = get_web_oauth_allowed_emails_raw()
     return bool(client_id and client_secret and allowed_emails)
 
 
@@ -463,7 +520,12 @@ async def get_current_user(request: Request) -> str:
     )
 
 
-async def require_api_token(request: Request) -> str:
+async def require_api_token(
+    request: Request,
+    _bearer_credentials: Annotated[
+        HTTPAuthorizationCredentials | None, Security(security_bearer)
+    ] = None,
+) -> str:
     has_creds = is_web_login_configured() or is_web_oauth_configured()
     authorization = (
         request.headers.get("Authorization") if hasattr(request, "headers") else None
@@ -492,8 +554,9 @@ async def require_api_token(request: Request) -> str:
 
 
 def require_basic_auth(
-    credentials: Annotated[HTTPBasicCredentials | None, Depends(security_basic)] = None,
+    credentials: Annotated[HTTPBasicCredentials | None, Security(security_basic)] = None,
     request: Request = None,  # type: ignore[assignment]
+    _cookie_session: Annotated[str | None, Security(security_cookie)] = None,
 ) -> str:
     if (
         request is not None
@@ -541,7 +604,16 @@ def require_basic_auth(
 require_web_login = require_basic_auth
 
 
-async def optional_web_login(request: Request) -> str | None:
+async def optional_web_login(
+    request: Request,
+    _cookie_session: Annotated[str | None, Security(security_cookie)] = None,
+    _basic_credentials: Annotated[
+        HTTPBasicCredentials | None, Security(security_basic)
+    ] = None,
+    _bearer_credentials: Annotated[
+        HTTPAuthorizationCredentials | None, Security(security_bearer)
+    ] = None,
+) -> str | None:
     if hasattr(request, "cookies") and isinstance(
         getattr(request, "cookies", None), dict
     ):
@@ -554,6 +626,12 @@ async def optional_web_login(request: Request) -> str | None:
         request.headers.get("Authorization") if hasattr(request, "headers") else None
     )
     if not authorization:
+        if _is_auth_required_for_reads():
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication required to read dashboard resources",
+                headers=_web_auth_headers(request),
+            )
         return None
 
     scheme, param = get_authorization_scheme_param(authorization)
@@ -626,7 +704,13 @@ def build_mcp_oauth_headers(request: Request) -> dict[str, str]:
     }
 
 
-async def require_mcp_oauth(request: Request) -> str:
+async def require_mcp_oauth(
+    request: Request,
+    _mcp_oauth: Annotated[str | None, Security(security_mcp_oauth)] = None,
+    _bearer_credentials: Annotated[
+        HTTPAuthorizationCredentials | None, Security(security_bearer)
+    ] = None,
+) -> str:
     has_creds = is_web_login_configured() or is_web_oauth_configured()
     authorization = (
         request.headers.get("Authorization") if hasattr(request, "headers") else None
