@@ -52,7 +52,7 @@ def test_status_indicator_sizing_css():
 
     sw_res = client.get("/sw.js")
     assert sw_res.status_code == 200
-    assert "ci-dashboard-v8" in sw_res.text
+    assert "ci-dashboard-v9" in sw_res.text
     assert "/static/index.html" not in sw_res.text
 
 

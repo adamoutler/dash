@@ -691,8 +691,9 @@
     }
 
     window.editRepoByIndex = function(index) {
-        if (!window.dashboardData || !window.dashboardData[index]) return;
-        const item = window.dashboardData[index];
+        const data = (typeof dashboardData !== 'undefined' && Array.isArray(dashboardData)) ? dashboardData : (window.dashboardData || []);
+        if (!data || !data[index]) return;
+        const item = data[index];
         toggleForm(true, item.provider, item.owner, item.repo, JSON.stringify(item.custom_links || []), item.workflow_id || '', item.workflow_name || '', item.branch || '');
     };
 
@@ -837,6 +838,7 @@
                 return;
             }
             dashboardData = await res.json();
+            window.dashboardData = dashboardData;
 
             if (!Array.isArray(dashboardData)) {
                 const list = document.getElementById('repoList');
