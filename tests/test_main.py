@@ -35,6 +35,8 @@ def test_read_index():
         'window.isAuthenticated ? `<button class="icon-btn edit-btn write-only"'
         in response.text
     )
+    assert 'editRepoByIndex' in response.text
+    assert 'headers: getAuthHeaders()' in response.text
 
 
 def test_status_indicator_sizing_css():

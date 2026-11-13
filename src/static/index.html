@@ -96,7 +96,7 @@
     </div>
   </div>
 </div>
-<div id="repoModal" class="modal write-only" role="dialog" aria-modal="true" aria-labelledby="repoModalTitle">
+<div id="repoModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="repoModalTitle">
   <div class="modal-content repo-modal-card">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
       <h2 id="repoModalTitle" style="margin: 0; font-size: 1.25rem;">Add Repository</h2>
@@ -334,9 +334,12 @@
     class CascadingPathBrowser {
         constructor(containerId, providerSelectId) {
             this.container = document.getElementById(containerId);
+            this.providerSelectId = providerSelectId;
             this.providerSelect = document.getElementById(providerSelectId);
             this.levels = [];
-            this.providerSelect.addEventListener('change', () => this.reset());
+            if (this.providerSelect) {
+                this.providerSelect.addEventListener('change', () => this.reset());
+            }
         }
 
         reset() {
@@ -468,7 +471,7 @@
             this.container.innerHTML = '';
             this.levels = [];
 
-            const provider = document.getElementById(this.providerSelectId).value;
+            const provider = (this.providerSelect ? this.providerSelect.value : (this.providerSelectId ? document.getElementById(this.providerSelectId)?.value : null)) || 'github';
 
             const createInput = (val, placeholder) => {
                 const input = document.createElement('input');
@@ -528,7 +531,10 @@
             this.container.appendChild(wfRow);
 
             const explorePath = (owner && provider !== 'jenkins') ? `${owner}/${repo}` : repo;
-            fetch(`/api/explore/${provider}/nodes?path=${encodeURIComponent(explorePath)}`)
+            fetch(`/api/explore/${provider}/nodes?path=${encodeURIComponent(explorePath)}`, {
+                credentials: 'same-origin',
+                headers: getAuthHeaders()
+            })
                 .then(r => r.ok ? r.json() : [])
                 .then(nodes => {
                     wfSelect.innerHTML = '';
@@ -539,20 +545,19 @@
                     wfSelect.appendChild(anyOpt);
 
                     let matched = false;
-                    if (Array.isArray(nodes)) {
-                        nodes.forEach(n => {
-                            if (n.id === 'any') return;
-                            const opt = document.createElement('option');
-                            opt.value = n.id;
-                            opt.textContent = n.name || n.id;
-                            opt.dataset.id = n.id;
-                            if (initialWfId && (n.id === initialWfId || String(n.id) === String(initialWfId) || n.name === initialWfName)) {
-                                opt.selected = true;
-                                matched = true;
-                            }
-                            wfSelect.appendChild(opt);
-                        });
-                    }
+                    const list = Array.isArray(nodes) ? nodes : (nodes && Array.isArray(nodes.nodes) ? nodes.nodes : []);
+                    list.forEach(n => {
+                        if (n.id === 'any') return;
+                        const opt = document.createElement('option');
+                        opt.value = n.id;
+                        opt.textContent = n.name || n.id;
+                        opt.dataset.id = n.id;
+                        if (initialWfId && (n.id === initialWfId || String(n.id) === String(initialWfId) || n.name === initialWfName)) {
+                            opt.selected = true;
+                            matched = true;
+                        }
+                        wfSelect.appendChild(opt);
+                    });
 
                     if (initialWfId && !matched) {
                         const customOpt = document.createElement('option');
@@ -633,7 +638,15 @@
 
         let customLinks = [];
         try {
-            if (customLinksRaw) customLinks = JSON.parse(decodeURIComponent(customLinksRaw));
+            if (customLinksRaw) {
+                if (typeof customLinksRaw === 'object') {
+                    customLinks = customLinksRaw;
+                } else if (typeof customLinksRaw === 'string' && customLinksRaw.startsWith('[')) {
+                    customLinks = JSON.parse(customLinksRaw);
+                } else {
+                    customLinks = JSON.parse(decodeURIComponent(customLinksRaw));
+                }
+            }
         } catch(e) {}
 
         if (isEdit === true) {
@@ -648,13 +661,17 @@
             document.getElementById('provider').disabled = true;
             if (submitBtn) submitBtn.innerText = 'Update';
             if (modalTitle) modalTitle.innerText = 'Edit Repository';
-            document.getElementById('branchInput').value = branch;
-
-            pathBrowser.setEditMode(owner, repo, workflowId, workflowName);
-
-            customLinks.forEach(link => addLinkRow(link.name, link.url));
+            document.getElementById('branchInput').value = branch || '';
 
             if (modal) modal.style.display = 'block';
+
+            try {
+                pathBrowser.setEditMode(owner, repo, workflowId, workflowName);
+            } catch (err) {
+                console.error('Error in pathBrowser.setEditMode:', err);
+            }
+
+            customLinks.forEach(link => addLinkRow(link.name, link.url));
         } else {
             if (modal && modal.style.display === 'block' && (!submitBtn || submitBtn.innerText !== 'Update')) {
                 closeRepoModal();
@@ -672,6 +689,12 @@
             if (modal) modal.style.display = 'block';
         }
     }
+
+    window.editRepoByIndex = function(index) {
+        if (!window.dashboardData || !window.dashboardData[index]) return;
+        const item = window.dashboardData[index];
+        toggleForm(true, item.provider, item.owner, item.repo, JSON.stringify(item.custom_links || []), item.workflow_id || '', item.workflow_name || '', item.branch || '');
+    };
 
     async function addRepo() {
         const provider = document.getElementById('provider').value;
@@ -903,7 +926,7 @@
                         </div>
                         <div class="actions-container">
                             <button class="icon-btn" style="color: #6a737d;" onclick="fetchLogs('${item.provider}', '${item.owner}', '${item.repo}', '${item.workflow_id || ''}', '${item.branch || ''}')" title="View Logs">📄</button>
-                            ${window.isAuthenticated ? `<button class="icon-btn edit-btn write-only" onclick="toggleForm(true, '${item.provider}', '${item.owner}', '${item.repo}', '${customLinksEncoded}', '${item.workflow_id || ''}', '${item.workflow_name || ''}', '${item.branch || ''}')" title="Edit">✎</button>
+                            ${window.isAuthenticated ? `<button class="icon-btn edit-btn write-only" onclick="editRepoByIndex(${index})" title="Edit">✎</button>
                             <button class="icon-btn delete-btn write-only" onclick="removeRepo('${item.provider}', '${item.owner}', '${item.repo}', '${item.workflow_id || ''}', '${item.branch || ''}')" title="Remove">✕</button>` : ''}
                         </div>
                     </div>
