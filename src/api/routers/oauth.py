@@ -434,42 +434,60 @@ class OAuthManager:
             code_info = data["codes"].pop(code_hash, None)
             self._save_nolock(data)
 
+            safe_code_hash = str(code_hash[:12]).replace("\r", "").replace("\n", "")
             if not code_info:
                 logger.warning(
-                    f"[OAuth-Token] Auth code not found in store (hash={code_hash[:12]}...)"
+                    "[OAuth-Token] Auth code not found in store (hash=%s...)",
+                    safe_code_hash,
                 )
                 return None
             if now > code_info.get("expires_at", 0):
                 logger.warning(
-                    f"[OAuth-Token] Auth code expired (expires_at={code_info.get('expires_at')}, now={now})"
+                    "[OAuth-Token] Auth code expired (expires_at=%s, now=%s)",
+                    code_info.get("expires_at"),
+                    now,
                 )
                 return None
             expected_redirect = code_info.get("redirect_uri")
+            safe_exp_redir = str(expected_redirect).replace("\r", "").replace("\n", "")[:256]
+            safe_recv_redir = str(redirect_uri).replace("\r", "").replace("\n", "")[:256]
             if expected_redirect and redirect_uri != expected_redirect:
                 logger.warning(
-                    f"[OAuth-Token] redirect_uri mismatch. Expected: '{expected_redirect}', Received: '{redirect_uri}'"
+                    "[OAuth-Token] redirect_uri mismatch. Expected: '%s', Received: '%s'",
+                    safe_exp_redir,
+                    safe_recv_redir,
                 )
                 return None
             expected_client = code_info.get("client_id")
+            safe_exp_client = str(expected_client).replace("\r", "").replace("\n", "")[:64]
+            safe_recv_client = str(client_id).replace("\r", "").replace("\n", "")[:64]
             if client_id and expected_client and client_id != expected_client:
                 logger.warning(
-                    f"[OAuth-Token] client_id mismatch. Expected: '{expected_client}', Received: '{client_id}'"
+                    "[OAuth-Token] client_id mismatch. Expected: '%s', Received: '%s'",
+                    safe_exp_client,
+                    safe_recv_client,
                 )
                 return None
-            if code_info.get("code_challenge_method", "S256") != "S256":
+            ccm = str(code_info.get("code_challenge_method", "S256")).replace("\r", "").replace("\n", "")[:16]
+            if ccm != "S256":
                 logger.warning(
-                    f"[OAuth-Token] Unsupported code_challenge_method '{code_info.get('code_challenge_method')}'"
+                    "[OAuth-Token] Unsupported code_challenge_method '%s'",
+                    ccm,
                 )
                 return None
             if not _verify_pkce_s256(
                 code_verifier, code_info.get("code_challenge", "")
             ):
                 logger.warning(
-                    f"[OAuth-Token] PKCE S256 verification failed for client_id='{expected_client}'"
+                    "[OAuth-Token] PKCE S256 verification failed for client_id='%s'",
+                    safe_exp_client,
                 )
                 return None
+            safe_u = str(code_info.get("username", "")).replace("\r", "").replace("\n", "")[:64]
             logger.info(
-                f"[OAuth-Token] Auth code successfully validated for client_id='{expected_client}', user='{code_info.get('username')}'"
+                "[OAuth-Token] Auth code successfully validated for client_id='%s', user='%s'",
+                safe_exp_client,
+                safe_u,
             )
             return code_info
 
@@ -504,26 +522,32 @@ def _build_protected_resource_metadata(
 ) -> dict[str, Any]:
     base_url = get_base_url(request)
     clean_sub = subpath.strip("/")
-    resource_url = f"{base_url}/{clean_sub}" if clean_sub else base_url
-    client_ip = getattr(getattr(request, "client", None), "host", "unknown")
+    resource_url = f"{base_url}/{clean_sub}" if clean_sub else f"{base_url}/mcp"
+    safe_ip = str(getattr(getattr(request, "client", None), "host", "unknown")).replace("\r", "").replace("\n", "")[:64]
+    safe_sub = str(subpath).replace("\r", "").replace("\n", "")[:64]
     logger.info(
-        f"[OAuth-Discovery] Protected resource metadata request from {client_ip} (subpath='{subpath}') -> resource='{resource_url}'"
+        "[OAuth-Discovery] Protected resource metadata request from %s (subpath='%s') -> resource='%s'",
+        safe_ip,
+        safe_sub,
+        resource_url,
     )
     return {
         "resource": resource_url,
         "authorization_servers": [base_url],
         "bearer_methods_supported": ["header"],
         "scopes_supported": ["mcp:access", "openid", "profile"],
-        "resource_documentation": f"{base_url}/llms.txt",
-        "logo_uri": f"{base_url}/icon.png",
+        "resource_documentation": f"{base_url}/oauth/llms.txt",
+        "logo_uri": f"{base_url}/oauth/icon.png",
     }
 
 
 def _build_auth_server_metadata(request: Request) -> dict[str, Any]:
     base_url = get_base_url(request)
-    client_ip = getattr(getattr(request, "client", None), "host", "unknown")
+    safe_ip = str(getattr(getattr(request, "client", None), "host", "unknown")).replace("\r", "").replace("\n", "")[:64]
     logger.info(
-        f"[OAuth-Discovery] Authorization server metadata request from {client_ip} -> issuer='{base_url}'"
+        "[OAuth-Discovery] Authorization server metadata request from %s -> issuer='%s'",
+        safe_ip,
+        base_url,
     )
     return {
         "issuer": base_url,
@@ -542,7 +566,7 @@ def _build_auth_server_metadata(request: Request) -> dict[str, Any]:
         ],
         "code_challenge_methods_supported": ["S256"],
         "client_id_metadata_document_supported": True,
-        "logo_uri": f"{base_url}/icon.png",
+        "logo_uri": f"{base_url}/oauth/icon.png",
     }
 
 
@@ -667,8 +691,17 @@ async def register_oauth_client(request: Request):
         token_endpoint_auth_method=auth_method,
     )
     client_ip = getattr(getattr(request, "client", None), "host", "unknown")
+    safe_name = str(client_name).replace("\r", "").replace("\n", "")[:64]
+    safe_cid = str(record.get("client_id", "")).replace("\r", "").replace("\n", "")[:64]
+    safe_ip = str(client_ip).replace("\r", "").replace("\n", "")[:64]
+    safe_method = str(auth_method).replace("\r", "").replace("\n", "")[:32]
     logger.info(
-        f"[OAuth-Register] Registered client '{client_name}' (id='{record.get('client_id')}') from {client_ip} with redirect_uris={valid_uris}, auth_method='{auth_method}'"
+        "[OAuth-Register] Registered client '%s' (id='%s') from %s with redirect_uris=%s, auth_method='%s'",
+        safe_name,
+        safe_cid,
+        safe_ip,
+        valid_uris,
+        safe_method,
     )
     return JSONResponse(status_code=201, content=record)
 
@@ -741,8 +774,22 @@ async def oauth_authorize_submit(request: Request):
         scope=scope,
         client_ip=client_ip,
     )
+    safe_ip = str(client_ip).replace("\r", "").replace("\n", "")[:64]
+    safe_user = str(username).replace("\r", "").replace("\n", "")[:64]
+    safe_cid = str(client_id).replace("\r", "").replace("\n", "")[:64]
+    safe_redir = str(redirect_uri).replace("\r", "").replace("\n", "")[:256]
+    safe_scope = str(scope).replace("\r", "").replace("\n", "")[:64]
+    safe_req_id = str(created.get("request_id", "")).replace("\r", "").replace("\n", "")[:64]
+    safe_ucode = str(created.get("user_code", "")).replace("\r", "").replace("\n", "")[:64]
     logger.info(
-        f"[OAuth-Authorize] Authorization request from {client_ip}: user='{username}', client_id='{client_id}', redirect_uri='{redirect_uri}', scope='{scope}' -> request_id='{created.get('request_id')}', user_code='{created.get('user_code')}'"
+        "[OAuth-Authorize] Authorization request from %s: user='%s', client_id='%s', redirect_uri='%s', scope='%s' -> request_id='%s', user_code='%s'",
+        safe_ip,
+        safe_user,
+        safe_cid,
+        safe_redir,
+        safe_scope,
+        safe_req_id,
+        safe_ucode,
     )
     if params.get("auto_approve"):
         is_admin = False
@@ -792,8 +839,15 @@ def _handle_auth_code_grant(params: dict[str, Any]) -> JSONResponse:
     redirect_uri = str(params.get("redirect_uri") or "").strip() or None
     client_id = str(params.get("client_id") or "").strip() or None
 
+    safe_code = str(code[:10]).replace("\r", "").replace("\n", "")
+    safe_cid = str(client_id).replace("\r", "").replace("\n", "")[:64]
+    safe_redir = str(redirect_uri).replace("\r", "").replace("\n", "")[:256]
+
     logger.info(
-        f"[OAuth-Token] Exchanging auth code (code={code[:10]}..., client_id='{client_id}', redirect_uri='{redirect_uri}')"
+        "[OAuth-Token] Exchanging auth code (code=%s..., client_id='%s', redirect_uri='%s')",
+        safe_code,
+        safe_cid,
+        safe_redir,
     )
 
     if not code or not code_verifier:
@@ -816,7 +870,9 @@ def _handle_auth_code_grant(params: dict[str, Any]) -> JSONResponse:
     )
     if not code_info:
         logger.warning(
-            f"[OAuth-Token] Failed code exchange for client_id='{client_id}', redirect_uri='{redirect_uri}'"
+            "[OAuth-Token] Failed code exchange for client_id='%s', redirect_uri='%s'",
+            safe_cid,
+            safe_redir,
         )
         return JSONResponse(
             status_code=400,
@@ -839,8 +895,13 @@ def _handle_auth_code_grant(params: dict[str, Any]) -> JSONResponse:
         refresh_token=refresh_token,
         oauth=True,
     )
+    safe_user = str(username).replace("\r", "").replace("\n", "")[:64]
+    safe_cname = str(c_name).replace("\r", "").replace("\n", "")[:64]
     logger.info(
-        f"[OAuth-Token] Successfully issued access_token and refresh_token for user='{username}', client='{c_name}' ({code_info['client_id']})"
+        "[OAuth-Token] Successfully issued access_token and refresh_token for user='%s', client='%s' (%s)",
+        safe_user,
+        safe_cname,
+        safe_cid,
     )
     return JSONResponse(
         status_code=200,
@@ -860,7 +921,8 @@ def _handle_refresh_token_grant(params: dict[str, Any]) -> JSONResponse:
 
     refresh_token = str(params.get("refresh_token") or "").strip()
     client_id = str(params.get("client_id") or "").strip() or None
-    logger.info(f"[OAuth-Token] Refresh token request for client_id='{client_id}'")
+    safe_cid = str(client_id).replace("\r", "").replace("\n", "")[:64]
+    logger.info("[OAuth-Token] Refresh token request for client_id='%s'", safe_cid)
     if not refresh_token:
         logger.warning("[OAuth-Token] Missing refresh_token in refresh_token grant request")
         return JSONResponse(
@@ -875,7 +937,8 @@ def _handle_refresh_token_grant(params: dict[str, Any]) -> JSONResponse:
     )
     if not rotated:
         logger.warning(
-            f"[OAuth-Token] Refresh token rotation failed (invalid or expired) for client_id='{client_id}'"
+            "[OAuth-Token] Refresh token rotation failed (invalid or expired) for client_id='%s'",
+            safe_cid,
         )
         return JSONResponse(
             status_code=400,
@@ -885,7 +948,8 @@ def _handle_refresh_token_grant(params: dict[str, Any]) -> JSONResponse:
             },
         )
     logger.info(
-        f"[OAuth-Token] Successfully rotated refresh token for client_id='{client_id}'"
+        "[OAuth-Token] Successfully rotated refresh token for client_id='%s'",
+        safe_cid,
     )
     return JSONResponse(
         status_code=200,
@@ -961,8 +1025,14 @@ async def delete_oauth_session(
 
     success = token_manager.revoke_token(token)
     client_deleted = oauth_manager.remove_client(token)
+    safe_token = str(token).replace("\r", "").replace("\n", "")[:64]
+    safe_user = str(user).replace("\r", "").replace("\n", "")[:64]
     logger.info(
-        f"[OAuth-Session] Admin '{user}' requested deletion of session target='{token}' -> token_revoked={success}, client_deleted={client_deleted}"
+        "[OAuth-Session] Admin '%s' requested deletion of session target='%s' -> token_revoked=%s, client_deleted=%s",
+        safe_user,
+        safe_token,
+        success,
+        client_deleted,
     )
     if not success and not client_deleted:
         raise HTTPException(status_code=404, detail="OAuth session not found")
@@ -978,7 +1048,14 @@ async def oauth_token_revoke(request: Request):
     client_ip = getattr(getattr(request, "client", None), "host", "unknown")
     if token:
         revoked = token_manager.revoke_token(token)
-        logger.info(f"[OAuth-Revoke] Token revocation from {client_ip} (token={token[:12]}...) -> outcome: {revoked}")
+        safe_token = str(token[:12]).replace("\r", "").replace("\n", "")
+        safe_ip = str(client_ip).replace("\r", "").replace("\n", "")[:64]
+        logger.info(
+            "[OAuth-Revoke] Token revocation from %s (token=%s...) -> outcome: %s",
+            safe_ip,
+            safe_token,
+            revoked,
+        )
     return Response(status_code=200)
 
 
@@ -1011,16 +1088,24 @@ async def list_pending_oauth(user: Annotated[str, Depends(require_web_login)]):
 async def approve_pending_oauth(
     request_id: str, user: Annotated[str, Depends(require_web_login)]
 ):
+    safe_req_id = str(request_id).replace("\r", "").replace("\n", "")[:64]
+    safe_user = str(user).replace("\r", "").replace("\n", "")[:64]
     result = oauth_manager.approve_request(request_id)
     if not result:
         logger.warning(
-            f"[OAuth-Approval] Admin '{user}' tried to approve request_id='{request_id}' but it was not found or expired"
+            "[OAuth-Approval] Admin '%s' tried to approve request_id='%s' but it was not found or expired",
+            safe_user,
+            safe_req_id,
         )
         raise HTTPException(
             status_code=404, detail="Pending OAuth request not found or expired"
         )
+    safe_redir = str(result.get("redirect_url", "")).replace("\r", "").replace("\n", "")[:256]
     logger.info(
-        f"[OAuth-Approval] Admin '{user}' approved request_id='{request_id}' -> redirect_url='{result.get('redirect_url')}'"
+        "[OAuth-Approval] Admin '%s' approved request_id='%s' -> redirect_url='%s'",
+        safe_user,
+        safe_req_id,
+        safe_redir,
     )
     return result
 
@@ -1037,13 +1122,21 @@ async def approve_pending_oauth(
 async def deny_pending_oauth(
     request_id: str, user: Annotated[str, Depends(require_web_login)]
 ):
+    safe_req_id = str(request_id).replace("\r", "").replace("\n", "")[:64]
+    safe_user = str(user).replace("\r", "").replace("\n", "")[:64]
     result = oauth_manager.deny_request(request_id)
     if not result:
         logger.warning(
-            f"[OAuth-Approval] Admin '{user}' tried to deny request_id='{request_id}' but it was not found or expired"
+            "[OAuth-Approval] Admin '%s' tried to deny request_id='%s' but it was not found or expired",
+            safe_user,
+            safe_req_id,
         )
         raise HTTPException(
             status_code=404, detail="Pending OAuth request not found or expired"
         )
-    logger.info(f"[OAuth-Approval] Admin '{user}' denied request_id='{request_id}'")
+    logger.info(
+        "[OAuth-Approval] Admin '%s' denied request_id='%s'",
+        safe_user,
+        safe_req_id,
+    )
     return result

@@ -132,8 +132,14 @@ async def read_index(request: Request):
     client_ip = getattr(getattr(request, "client", None), "host", "unknown")
     ua = request.headers.get("user-agent", "-") if hasattr(request, "headers") else "-"
     if _is_mcp_probe_request(request):
+        safe_ip = str(client_ip).replace("\r", "").replace("\n", "")[:64]
+        safe_ua = str(ua).replace("\r", "").replace("\n", "")[:128]
+        safe_method = str(request.method).replace("\r", "").replace("\n", "")[:16]
         logger.info(
-            f"[MCP-Probe] Intercepted root / request from {client_ip} as MCP probe (method={request.method}, UA='{ua}')"
+            "[MCP-Probe] Intercepted root / request from %s as MCP probe (method=%s, UA='%s')",
+            safe_ip,
+            safe_method,
+            safe_ua,
         )
         mcp_user = await require_mcp_oauth(request)
         return await mcp_discovery_probe(request, mcp_user)
@@ -187,6 +193,8 @@ async def read_icon_svg():
 
 
 @app.get("/llms.txt", summary="LLM Agent Instructions")
+@app.get("/mcp/llms.txt", include_in_schema=False)
+@app.get("/oauth/llms.txt", include_in_schema=False)
 async def read_llms_txt():
     return FileResponse(os.path.join(STATIC_DIR, "llms.txt"))
 

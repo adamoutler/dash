@@ -779,11 +779,18 @@ async def mcp_discovery_probe(
     request: Request,
     user: Annotated[str, Depends(require_mcp_oauth)],
 ):
-    client_ip = getattr(getattr(request, "client", None), "host", "unknown")
-    ua = request.headers.get("user-agent", "-") if hasattr(request, "headers") else "-"
-    path = getattr(getattr(request, "url", None), "path", "/")
+    safe_ip = str(getattr(getattr(request, "client", None), "host", "unknown")).replace("\r", "").replace("\n", "")[:64]
+    safe_ua = str(request.headers.get("user-agent", "-") if hasattr(request, "headers") else "-").replace("\r", "").replace("\n", "")[:128]
+    safe_path = str(getattr(getattr(request, "url", None), "path", "/")).replace("\r", "").replace("\n", "")[:128]
+    safe_method = str(request.method).replace("\r", "").replace("\n", "")[:16]
+    safe_user = str(user).replace("\r", "").replace("\n", "")[:64]
     logger.info(
-        f"[MCP-Probe] {request.method} {path} from {client_ip} (user='{user}', ua='{ua}')"
+        "[MCP-Probe] %s %s from %s (user='%s', ua='%s')",
+        safe_method,
+        safe_path,
+        safe_ip,
+        safe_user,
+        safe_ua,
     )
     if request.method == "HEAD":
         return Response(status_code=200)
@@ -820,8 +827,16 @@ def _build_initialize_response(req: JsonRpcRequest, request: Request) -> dict[st
     client_info = req.params.get("clientInfo", {}) if isinstance(req.params, dict) else {}
     c_name = client_info.get("name", "unknown")
     c_ver = client_info.get("version", "")
+    safe_cname = str(c_name).replace("\r", "").replace("\n", "")[:64]
+    safe_cver = str(c_ver).replace("\r", "").replace("\n", "")[:32]
+    safe_ip = str(client_ip).replace("\r", "").replace("\n", "")[:64]
+    safe_ver = str(requested_version).replace("\r", "").replace("\n", "")[:32]
     logger.info(
-        f"[MCP-Init] Initializing MCP session with client='{c_name} {c_ver}' (protocolVersion='{requested_version}') from {client_ip}"
+        "[MCP-Init] Initializing MCP session with client='%s %s' (protocolVersion='%s') from %s",
+        safe_cname,
+        safe_cver,
+        safe_ver,
+        safe_ip,
     )
     return {
         "jsonrpc": "2.0",
@@ -846,11 +861,22 @@ async def mcp_endpoint(
     request: Request,
     user: Annotated[str, Depends(require_mcp_oauth)],
 ):
-    client_ip = getattr(getattr(request, "client", None), "host", "unknown")
-    ua = request.headers.get("user-agent", "-") if hasattr(request, "headers") else "-"
-    path = getattr(getattr(request, "url", None), "path", "/")
+    safe_ip = str(getattr(getattr(request, "client", None), "host", "unknown")).replace("\r", "").replace("\n", "")[:64]
+    safe_ua = str(request.headers.get("user-agent", "-") if hasattr(request, "headers") else "-").replace("\r", "").replace("\n", "")[:128]
+    safe_path = str(getattr(getattr(request, "url", None), "path", "/")).replace("\r", "").replace("\n", "")[:128]
+    safe_method = str(request.method).replace("\r", "").replace("\n", "")[:16]
+    safe_rpc_method = str(req.method).replace("\r", "").replace("\n", "")[:64]
+    safe_rpc_id = str(req.id).replace("\r", "").replace("\n", "")[:64]
+    safe_user = str(user).replace("\r", "").replace("\n", "")[:64]
     logger.info(
-        f"[MCP-RPC] {request.method} {path} method='{req.method}' (id={req.id}) from {client_ip} (user='{user}', ua='{ua}')"
+        "[MCP-RPC] %s %s method='%s' (id=%s) from %s (user='%s', ua='%s')",
+        safe_method,
+        safe_path,
+        safe_rpc_method,
+        safe_rpc_id,
+        safe_ip,
+        safe_user,
+        safe_ua,
     )
     from api.config import ConfigManager
 

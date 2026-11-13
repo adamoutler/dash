@@ -52,6 +52,14 @@ def test_well_known_discovery_endpoints():
     pr_root = client.get("/.well-known/oauth-protected-resource")
     assert pr_root.status_code == 200
     assert "authorization_servers" in pr_root.json()
+    assert pr_root.json()["resource"].endswith("/mcp")
+    assert pr_root.json()["logo_uri"].endswith("/oauth/icon.png")
+    assert pr_root.json()["resource_documentation"].endswith("/oauth/llms.txt")
+
+    assert client.get("/oauth/llms.txt").status_code == 200
+    assert client.get("/mcp/llms.txt").status_code == 200
+    assert client.get("/oauth/icon.png").status_code == 200
+    assert client.get("/mcp/icon.png").status_code == 200
 
     pr_sub = client.get("/.well-known/oauth-protected-resource/mcp")
     assert pr_sub.status_code == 200

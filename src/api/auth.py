@@ -617,13 +617,27 @@ async def require_mcp_oauth(request: Request) -> str:
     ua = request.headers.get("user-agent", "-") if hasattr(request, "headers") else "-"
     path = getattr(getattr(request, "url", None), "path", "/")
 
+    safe_ip = str(client_ip).replace("\r", "").replace("\n", "")[:64]
+    safe_ua = str(ua).replace("\r", "").replace("\n", "")[:128]
+    safe_path = str(path).replace("\r", "").replace("\n", "")[:128]
+    safe_method = str(request.method).replace("\r", "").replace("\n", "")[:16]
+
     if not has_creds and _is_anonymous_allowed() and not authorization:
-        logger.info(f"[MCP-Auth] Anonymous access permitted for {client_ip} ({request.method} {path})")
+        logger.info(
+            "[MCP-Auth] Anonymous access permitted for %s (%s %s)",
+            safe_ip,
+            safe_method,
+            safe_path,
+        )
         return "anonymous_user"
 
     if not authorization:
         logger.info(
-            f"[MCP-Auth] Missing Authorization header from {client_ip} ({request.method} {path}, UA: {ua}) -> returning 401 with discovery headers"
+            "[MCP-Auth] Missing Authorization header from %s (%s %s, UA: %s) -> returning 401 with discovery headers",
+            safe_ip,
+            safe_method,
+            safe_path,
+            safe_ua,
         )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -632,21 +646,36 @@ async def require_mcp_oauth(request: Request) -> str:
         )
 
     scheme, param = get_authorization_scheme_param(authorization)
+    safe_scheme = str(scheme).replace("\r", "").replace("\n", "")[:32]
     if scheme.lower() == "bearer":
         rec = token_manager.validate_oauth_token(param)
         if rec is not None:
             user_name = str(rec.get("username") or "oauth_user")
             client_id = str(rec.get("client_id") or "")
+            safe_user = user_name.replace("\r", "").replace("\n", "")[:64]
+            safe_cid = client_id.replace("\r", "").replace("\n", "")[:64]
             logger.info(
-                f"[MCP-Auth] Bearer token verified for user='{user_name}' client_id='{client_id}' from {client_ip} ({request.method} {path})"
+                "[MCP-Auth] Bearer token verified for user='%s' client_id='%s' from %s (%s %s)",
+                safe_user,
+                safe_cid,
+                safe_ip,
+                safe_method,
+                safe_path,
             )
             return user_name
         logger.warning(
-            f"[MCP-Auth] Bearer token validation failed (invalid, expired, or non-OAuth domain) from {client_ip} ({request.method} {path})"
+            "[MCP-Auth] Bearer token validation failed (invalid, expired, or non-OAuth domain) from %s (%s %s)",
+            safe_ip,
+            safe_method,
+            safe_path,
         )
     else:
         logger.warning(
-            f"[MCP-Auth] Unsupported authorization scheme '{scheme}' from {client_ip} ({request.method} {path})"
+            "[MCP-Auth] Unsupported authorization scheme '%s' from %s (%s %s)",
+            safe_scheme,
+            safe_ip,
+            safe_method,
+            safe_path,
         )
 
     raise HTTPException(
