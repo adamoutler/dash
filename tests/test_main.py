@@ -52,6 +52,12 @@ def test_status_indicator_sizing_css():
     assert "/static/index.html" not in sw_res.text
 
 
+def test_img_jenkins_svg():
+    res = client.get("/img/jenkins.svg")
+    assert res.status_code == 200
+    assert "image/svg+xml" in res.headers["content-type"]
+
+
 def test_static_html_templates_blocked_unauthenticated():
     for html_path in (
         "/static/index.html",

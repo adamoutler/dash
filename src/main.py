@@ -104,7 +104,9 @@ class ProtectedStaticFiles(StaticFiles):
 
 
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
+IMG_DIR = os.path.join(STATIC_DIR, "img")
 app.mount("/static", ProtectedStaticFiles(directory=STATIC_DIR), name="static")
+app.mount("/img", ProtectedStaticFiles(directory=IMG_DIR), name="img")
 
 
 def _is_mcp_probe_request(request: Request) -> bool:
