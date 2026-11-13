@@ -148,19 +148,16 @@
     }
 
     async function checkPendingOAuth() {
-        const isConfigPage = window.location.pathname.startsWith('/configure');
-        const isAuthed = document.body && document.body.getAttribute('data-authenticated') === 'true';
-        if (!isConfigPage && !isAuthed) {
-            if (containerEl) containerEl.style.display = 'none';
-            return;
-        }
         try {
             const res = await fetch('/api/oauth/pending', {
                 cache: 'no-store',
                 credentials: 'same-origin',
                 headers: { 'X-Requested-With': 'XMLHttpRequest' }
             });
-            if (!res.ok) return;
+            if (!res.ok) {
+                if (containerEl) containerEl.style.display = 'none';
+                return;
+            }
             const data = await res.json();
             const pending = data.pending || [];
             renderPopupCards(pending);

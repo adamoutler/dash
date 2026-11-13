@@ -23,6 +23,25 @@ from api.routers.settings import router as settings_router
 from api.routers.web_auth import router as web_auth_router
 from api.routers.workflows import router as workflows_router
 
+
+def _configure_logging() -> None:
+    root_logger = logging.getLogger()
+    if not root_logger.handlers:
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(levelname)s:     %(name)s - %(message)s",
+        )
+    uvicorn_err = logging.getLogger("uvicorn.error")
+    for name in ("api", "api.oauth", "api.auth", "api.mcp", "main"):
+        lg = logging.getLogger(name)
+        lg.setLevel(logging.INFO)
+        if uvicorn_err.handlers and not lg.handlers:
+            for h in uvicorn_err.handlers:
+                lg.addHandler(h)
+            lg.propagate = False
+
+
+_configure_logging()
 logger = logging.getLogger("main")
 
 

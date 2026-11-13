@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ci-dashboard-v9';
+const CACHE_NAME = 'ci-dashboard-v10';
 const STATIC_ASSETS = [
     '/',
     '/static/design-system.css',
@@ -40,10 +40,17 @@ self.addEventListener('fetch', event => {
     }
 
     if (
-        url.pathname.startsWith('/api/') ||
+        event.request.method !== 'GET' ||
         url.pathname.startsWith('/oauth') ||
-        url.pathname.startsWith('/configure') ||
+        url.pathname.startsWith('/mcp') ||
         url.pathname.startsWith('/.well-known')
+    ) {
+        return;
+    }
+
+    if (
+        url.pathname.startsWith('/api/') ||
+        url.pathname.startsWith('/configure')
     ) {
         // Network First for APIs and OAuth endpoints, with valid Response fallback
         event.respondWith(

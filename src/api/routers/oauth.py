@@ -18,9 +18,6 @@ from api.auth import (
     DATA_DIR,
     get_base_url,
     require_web_login,
-    security_basic,
-    verify_basic,
-    verify_session_cookie,
 )
 
 logger = logging.getLogger("api.oauth")
@@ -451,7 +448,7 @@ class OAuthManager:
             expected_redirect = code_info.get("redirect_uri")
             safe_exp_redir = str(expected_redirect).replace("\r", "").replace("\n", "")[:256]
             safe_recv_redir = str(redirect_uri).replace("\r", "").replace("\n", "")[:256]
-            if expected_redirect and redirect_uri != expected_redirect:
+            if redirect_uri and expected_redirect and redirect_uri != expected_redirect:
                 logger.warning(
                     "[OAuth-Token] redirect_uri mismatch. Expected: '%s', Received: '%s'",
                     safe_exp_redir,
@@ -704,7 +701,17 @@ async def register_oauth_client(request: Request):
 
 
 @router.get("/oauth/authorize", include_in_schema=False)
-async def oauth_authorize_page():
+async def oauth_authorize_page(request: Request):
+    client_ip = getattr(getattr(request, "client", None), "host", "unknown")
+    safe_ip = str(client_ip).replace("\r", "").replace("\n", "")[:64]
+    safe_cid = str(request.query_params.get("client_id", "")).replace("\r", "").replace("\n", "")[:64]
+    safe_redir = str(request.query_params.get("redirect_uri", "")).replace("\r", "").replace("\n", "")[:256]
+    logger.info(
+        "[OAuth-Authorize] Serving authorization page to %s (client_id='%s', redirect_uri='%s')",
+        safe_ip,
+        safe_cid,
+        safe_redir,
+    )
     static_dir = os.path.join(os.path.dirname(__file__), "..", "..", "static")
     return FileResponse(
         os.path.join(static_dir, "oauth_authorize.html"),
@@ -779,7 +786,7 @@ async def oauth_authorize_submit(request: Request):
     safe_req_id = str(created.get("request_id", "")).replace("\r", "").replace("\n", "")[:64]
     safe_ucode = str(created.get("user_code", "")).replace("\r", "").replace("\n", "")[:64]
     logger.info(
-        "[OAuth-Authorize] Authorization request from %s: user='%s', client_id='%s', redirect_uri='%s', scope='%s' -> request_id='%s', user_code='%s'",
+        "[OAuth-Authorize] Pending approval created from %s: user='%s', client_id='%s', redirect_uri='%s', scope='%s' -> request_id='%s', user_code='%s'",
         safe_ip,
         safe_user,
         safe_cid,
@@ -788,25 +795,6 @@ async def oauth_authorize_submit(request: Request):
         safe_req_id,
         safe_ucode,
     )
-    if params.get("auto_approve"):
-        is_admin = False
-        session = verify_session_cookie(request.cookies.get("dash_session"))
-        if session:
-            csrf_hdr = request.headers.get("x-csrf-token", "")
-            if csrf_hdr and secrets.compare_digest(
-                str(csrf_hdr), str(session.get("csrf", ""))
-            ):
-                is_admin = True
-        else:
-            creds = await security_basic(request)
-            if creds and verify_basic(creds):
-                is_admin = True
-        if is_admin:
-            oauth_manager.approve_request(created["request_id"])
-            status_data = oauth_manager.get_request_status(
-                created["request_id"], created["poll_token"]
-            )
-            created.update(status_data)
 
     return JSONResponse(
         status_code=200,

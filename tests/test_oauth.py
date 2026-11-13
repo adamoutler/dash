@@ -117,6 +117,7 @@ def test_authorize_page_and_validation():
     )
     assert page_res.status_code == 200
     assert "Dash MCP Authorization" in page_res.text
+    assert "/api/" not in page_res.text
 
     # Missing username
     res1 = client.post(
@@ -660,7 +661,7 @@ def test_oauth_security_hardening_invariants():
     ).json()
     code = parse_qs(urlparse(poll["redirect_url"]).query)["code"][0]
 
-    # Missing redirect_uri in /oauth/token must fail with 400
+    # Mismatched redirect_uri in /oauth/token must fail with 400
     assert (
         client.post(
             "/oauth/token",
@@ -668,6 +669,7 @@ def test_oauth_security_hardening_invariants():
                 "grant_type": "authorization_code",
                 "code": code,
                 "client_id": cid,
+                "redirect_uri": "http://localhost:8080/wrong",
                 "code_verifier": verifier,
             },
         ).status_code
