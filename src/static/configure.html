@@ -37,12 +37,19 @@
 </head>
 <body>
     <div class="header-top">
-        <h1 style="margin: 0;">Dash Configuration</h1>
+        <div style="display: flex; align-items: center; gap: 14px;">
+            <a href="/" class="nav-back-link" title="Return to Dashboard Home" aria-label="Return to Dashboard Home">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" style="flex-shrink: 0;">
+                    <path fill-rule="evenodd" d="M7.78 12.53a.75.75 0 01-1.06 0L2.47 8.28a.75.75 0 010-1.06l4.25-4.25a.75.75 0 011.06 1.06L4.81 7h8.44a.75.75 0 010 1.5H4.81l2.97 2.97a.75.75 0 010 1.06z"></path>
+                </svg>
+                <span>Dashboard</span>
+            </a>
+            <h1 style="margin: 0; font-size: 1.6rem;">Dash Configuration</h1>
+        </div>
         <div>
-            <button class="theme-toggle-btn" style="background:none; border:none; font-size:20px; padding:0; color:var(--text-primary); transition: transform 0.2s ease; opacity: 0.8;" onclick="toggleTheme()" title="Toggle Dark Mode" onmouseover="this.style.opacity='1'; this.style.transform='scale(1.1)'" onmouseout="this.style.opacity='0.8'; this.style.transform='none'">
+            <button class="theme-toggle-btn" style="background:none; border:none; font-size:20px; padding:0; color:var(--text-primary); transition: transform 0.2s ease; opacity: 0.8; cursor: pointer;" onclick="toggleTheme()" title="Toggle Dark Mode" onmouseover="this.style.opacity='1'; this.style.transform='scale(1.1)'" onmouseout="this.style.opacity='0.8'; this.style.transform='none'">
                 <span id="themeIcon">☀️</span>
             </button>
-            <a href="/" style="margin-left: 15px; text-decoration: none;">🏠 Back</a>
         </div>
     </div>
 

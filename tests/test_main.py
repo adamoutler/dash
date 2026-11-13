@@ -29,6 +29,8 @@ def test_read_index():
     )
     assert '<body data-authenticated="false">' in response.text
     assert 'body:not([data-authenticated="true"]) .edit-btn' in response.text
+    assert 'id="repoModal"' in response.text
+    assert 'class="modal-content repo-modal-card"' in response.text
     assert (
         'window.isAuthenticated ? `<button class="icon-btn edit-btn write-only"'
         in response.text

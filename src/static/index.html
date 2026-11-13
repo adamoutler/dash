@@ -96,28 +96,13 @@
     </div>
   </div>
 </div>
-<div class="container">
-    <div id="no-providers-banner" class="write-only" style="display:none; background-color: var(--bg-surface); border: 2px dashed #cb2431; padding: 20px; text-align: center; margin-bottom: 20px; border-radius: 8px;">
-        <h2 style="margin-top: 0; color: #cb2431;">No CI Providers Configured</h2>
-        <p style="color: var(--text-primary);">You haven't configured any CI providers yet. Please configure at least one provider to start adding repositories.</p>
-        <a href="/configure" style="display: inline-block; padding: 10px 20px; background-color: #0366d6; color: white; text-decoration: none; border-radius: 4px; font-weight: bold; margin-top: 10px;">Go to Configuration</a>
+<div id="repoModal" class="modal write-only" role="dialog" aria-modal="true" aria-labelledby="repoModalTitle">
+  <div class="modal-content repo-modal-card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+      <h2 id="repoModalTitle" style="margin: 0; font-size: 1.25rem;">Add Repository</h2>
+      <span class="close-modal" tabindex="0" onclick="closeRepoModal()" onkeydown="if(event.key==='Enter') closeRepoModal()" title="Close dialog">&times;</span>
     </div>
-    <div class="header">
-        <h1>Dash</h1>
-        <div class="header-right">
-            <button id="installAppBtn" style="display:none;" class="add-btn">Install App</button>
-            <button class="theme-toggle-btn" onclick="toggleTheme()" title="Toggle Dark Mode">
-                <span id="themeIcon">☀️</span>
-            </button>
-            <button class="add-btn write-only" onclick="toggleForm()" id="addRepoBtn" style="display:none;">+ Add Repository</button>
-            <a href="/configure" class="nav-btn write-only" id="configBtn" style="display:none;">⚙️ Configure</a>
-            <span id="userBadge" class="user-badge write-only" style="display:none;"></span>
-            <button class="login-btn" id="loginBtn" onclick="openLoginModal()">🔒 Login</button>
-            <button class="logout-btn write-only" id="logoutBtn" style="display:none;" onclick="logoutWebsite()">Logout</button>
-        </div>
-    </div>
-
-    <div class="add-form write-only" id="addForm">
+    <div class="add-form write-only" id="addForm" style="display: block; border: none; padding: 0; margin-bottom: 0;">
         <div style="display: flex; gap: 10px; margin-bottom: 10px;">
             <select id="provider" style="flex: 1; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; background-color: var(--bg-surface); color: var(--text-primary);">
                 <option value="github">GitHub</option>
@@ -137,8 +122,31 @@
             <!-- Dynamic links go here -->
         </div>
         <button type="button" class="add-link-btn" onclick="addLinkRow()">+ Add custom link (e.g. Prod, Jenkins, Docs)</button>
-        <div style="margin-top: 15px;">
+        <div style="margin-top: 15px; display: flex; justify-content: flex-end; gap: 10px;">
+            <button type="button" class="nav-btn" onclick="closeRepoModal()" style="padding: 8px 16px; border-radius: 6px; cursor: pointer; border: 1px solid var(--border-color); background: var(--bg-surface); color: var(--text-primary);">Cancel</button>
             <button class="add-btn" id="submitBtn" onclick="addRepo()">Add</button>
+        </div>
+    </div>
+  </div>
+</div>
+<div class="container">
+    <div id="no-providers-banner" class="write-only" style="display:none; background-color: var(--bg-surface); border: 2px dashed #cb2431; padding: 20px; text-align: center; margin-bottom: 20px; border-radius: 8px;">
+        <h2 style="margin-top: 0; color: #cb2431;">No CI Providers Configured</h2>
+        <p style="color: var(--text-primary);">You haven't configured any CI providers yet. Please configure at least one provider to start adding repositories.</p>
+        <a href="/configure" style="display: inline-block; padding: 10px 20px; background-color: #0366d6; color: white; text-decoration: none; border-radius: 4px; font-weight: bold; margin-top: 10px;">Go to Configuration</a>
+    </div>
+    <div class="header">
+        <h1>Dash</h1>
+        <div class="header-right">
+            <button id="installAppBtn" style="display:none;" class="add-btn">Install App</button>
+            <button class="theme-toggle-btn" onclick="toggleTheme()" title="Toggle Dark Mode">
+                <span id="themeIcon">☀️</span>
+            </button>
+            <button class="add-btn write-only" onclick="toggleForm()" id="addRepoBtn" style="display:none;">+ Add Repository</button>
+            <a href="/configure" class="nav-btn write-only" id="configBtn" style="display:none;">⚙️ Configure</a>
+            <span id="userBadge" class="user-badge write-only" style="display:none;"></span>
+            <button class="login-btn" id="loginBtn" onclick="openLoginModal()">🔒 Login</button>
+            <button class="logout-btn write-only" id="logoutBtn" style="display:none;" onclick="logoutWebsite()">Logout</button>
         </div>
     </div>
 
@@ -211,8 +219,7 @@
                     if (addBtn) addBtn.style.display = 'none';
                     const noProvidersBanner = document.getElementById('no-providers-banner');
                     if (noProvidersBanner) noProvidersBanner.style.display = 'none';
-                    const addForm = document.getElementById('addForm');
-                    if (addForm) addForm.style.display = 'none';
+                    if (typeof closeRepoModal === 'function') closeRepoModal();
                     document.querySelectorAll('.edit-btn, .delete-btn').forEach(el => {
                         el.style.display = 'none';
                     });
@@ -588,14 +595,37 @@
         container.appendChild(row);
     }
 
+    function closeRepoModal() {
+        const modal = document.getElementById('repoModal');
+        if (modal) modal.style.display = 'none';
+        window.editingRepo = null;
+        const prov = document.getElementById('provider');
+        if (prov) prov.disabled = false;
+        const submitBtn = document.getElementById('submitBtn');
+        if (submitBtn) submitBtn.innerText = 'Add';
+        const branchInput = document.getElementById('branchInput');
+        if (branchInput) branchInput.value = '';
+        const links = document.getElementById('linksContainer');
+        if (links) links.innerHTML = '';
+        if (pathBrowser) pathBrowser.reset();
+        const addBtn = document.getElementById('addRepoBtn');
+        if (addBtn) {
+            addBtn.innerHTML = '+ Add Repository';
+            addBtn.style.backgroundColor = '';
+            addBtn.style.padding = '';
+        }
+    }
+
     function toggleForm(isEdit = false, provider = 'github', owner = '', repo = '', customLinksRaw = '', workflowId = '', workflowName = '', branch = '') {
         if (!window.isAuthenticated) {
             openLoginModal();
             return;
         }
-        const form = document.getElementById('addForm');
-        const addBtn = document.getElementById('addRepoBtn');
-        document.getElementById('linksContainer').innerHTML = ''; // clear links
+        const modal = document.getElementById('repoModal');
+        const modalTitle = document.getElementById('repoModalTitle');
+        const submitBtn = document.getElementById('submitBtn');
+        const linksContainer = document.getElementById('linksContainer');
+        if (linksContainer) linksContainer.innerHTML = ''; // clear links
 
         if (!pathBrowser) {
             pathBrowser = new CascadingPathBrowser('cascadingBrowser', 'provider');
@@ -616,38 +646,30 @@
             };
             document.getElementById('provider').value = provider;
             document.getElementById('provider').disabled = true;
-            document.getElementById('submitBtn').innerText = 'Update';
+            if (submitBtn) submitBtn.innerText = 'Update';
+            if (modalTitle) modalTitle.innerText = 'Edit Repository';
             document.getElementById('branchInput').value = branch;
 
             pathBrowser.setEditMode(owner, repo, workflowId, workflowName);
 
             customLinks.forEach(link => addLinkRow(link.name, link.url));
 
-            form.style.display = 'block';
-            addBtn.innerHTML = '✕';
-            addBtn.style.backgroundColor = '#b74b4b'; // non-alerting red
-            addBtn.style.padding = '8px 12px';
-            window.scrollTo({ top: 0, behavior: 'smooth' });
+            if (modal) modal.style.display = 'block';
         } else {
-            window.editingRepo = null;
-            if (form.style.display === 'block' && document.getElementById('submitBtn').innerText !== 'Update') {
-                form.style.display = 'none';
-                addBtn.innerHTML = '+ Add Repository';
-                addBtn.style.backgroundColor = '';
-                addBtn.style.padding = '';
-            } else {
-                document.getElementById('provider').value = 'github';
-                document.getElementById('provider').disabled = false;
-                document.getElementById('submitBtn').innerText = 'Add';
-                document.getElementById('branchInput').value = '';
-
-                pathBrowser.reset();
-
-                form.style.display = 'block';
-                addBtn.innerHTML = '✕';
-                addBtn.style.backgroundColor = '#b74b4b'; // non-alerting red
-                addBtn.style.padding = '8px 12px';
+            if (modal && modal.style.display === 'block' && (!submitBtn || submitBtn.innerText !== 'Update')) {
+                closeRepoModal();
+                return;
             }
+            window.editingRepo = null;
+            document.getElementById('provider').value = 'github';
+            document.getElementById('provider').disabled = false;
+            if (submitBtn) submitBtn.innerText = 'Add';
+            if (modalTitle) modalTitle.innerText = 'Add Repository';
+            document.getElementById('branchInput').value = '';
+
+            pathBrowser.reset();
+
+            if (modal) modal.style.display = 'block';
         }
     }
 
@@ -702,18 +724,7 @@
             return;
         }
 
-        window.editingRepo = null;
-        document.getElementById('submitBtn').innerText = 'Add';
-        document.getElementById('provider').disabled = false;
-        document.getElementById('linksContainer').innerHTML = '';
-
-        document.getElementById('addForm').style.display = 'none';
-        const addBtn = document.getElementById('addRepoBtn');
-        addBtn.innerHTML = '+ Add Repository';
-        addBtn.style.backgroundColor = '';
-        addBtn.style.padding = '';
-
-        if (pathBrowser) pathBrowser.reset();
+        closeRepoModal();
         fetchStatuses();
     }
 
@@ -1000,7 +1011,7 @@
                 if (availableProviders.length === 0) {
                     document.getElementById('no-providers-banner').style.display = window.isAuthenticated ? 'block' : 'none';
                     document.getElementById('addRepoBtn').style.display = 'none';
-                    document.getElementById('addForm').style.display = 'none';
+                    if (typeof closeRepoModal === 'function') closeRepoModal();
                 } else {
                     document.getElementById('no-providers-banner').style.display = 'none';
                     document.getElementById('addRepoBtn').style.display = window.isAuthenticated ? 'inline-block' : 'none';
@@ -1077,13 +1088,28 @@
     window.onclick = function(event) {
         const logModal = document.getElementById('logModal');
         const loginModal = document.getElementById('loginModal');
+        const repoModal = document.getElementById('repoModal');
         if (event.target == logModal) {
             logModal.style.display = "none";
         }
         if (event.target == loginModal) {
             closeLoginModal();
         }
+        if (event.target == repoModal) {
+            closeRepoModal();
+        }
     }
+
+    window.addEventListener('keydown', function(event) {
+        if (event.key === 'Escape') {
+            const logModal = document.getElementById('logModal');
+            const loginModal = document.getElementById('loginModal');
+            const repoModal = document.getElementById('repoModal');
+            if (repoModal && repoModal.style.display === 'block') closeRepoModal();
+            else if (logModal && logModal.style.display === 'block') logModal.style.display = "none";
+            else if (loginModal && loginModal.style.display === 'block') closeLoginModal();
+        }
+    });
 
     // PWA Service Worker Registration & Installation
     if ('serviceWorker' in navigator) {

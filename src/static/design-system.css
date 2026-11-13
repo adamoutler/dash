@@ -210,11 +210,33 @@ h1 { margin: 0; }
 .custom-link { text-decoration: none; color: var(--link-color); font-size: 13px; font-weight: bold; background: var(--link-bg); padding: 2px 6px; border-radius: 10px; transition: background-color 0.2s, color 0.2s; }
 .custom-link:hover { background: var(--link-bg-hover); }
 
-.modal { display: none; position: fixed; z-index: 1; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: var(--modal-backdrop); }
+.modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: var(--modal-backdrop); }
 .modal-content { background-color: var(--modal-bg); margin: 5% auto; padding: 20px; border: 1px solid var(--modal-border); width: 80%; border-radius: 8px; box-shadow: 0 4px 8px var(--modal-shadow); transition: background-color 0.3s ease, border-color 0.3s ease; }
+.repo-modal-card { max-width: 600px; width: 90%; margin: 5% auto; padding: 24px; background-color: var(--modal-bg); border: 1px solid var(--modal-border); border-radius: 8px; box-shadow: 0 8px 24px var(--modal-shadow); box-sizing: border-box; }
 .close-modal { color: var(--text-secondary); float: right; font-size: 28px; font-weight: bold; cursor: pointer; }
 .close-modal:hover, .close-modal:focus { color: var(--text-primary); text-decoration: none; cursor: pointer; }
 .log-container { background: var(--log-bg); color: var(--log-color); padding: 15px; border-radius: 6px; height: 400px; overflow-y: scroll; font-family: monospace; white-space: pre-wrap; font-size: 13px; }
+
+.nav-back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background-color: var(--bg-surface);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+.nav-back-link:hover {
+    background-color: var(--link-bg);
+    border-color: var(--link-color);
+    color: var(--link-color);
+    text-decoration: none;
+}
 
 .theme-toggle-btn { background: none; border: none; font-size: 20px; cursor: pointer; padding: 0 10px; color: var(--text-primary); transition: transform 0.2s ease; opacity: 0.8; }
 .theme-toggle-btn:hover { transform: scale(1.1); opacity: 1; }

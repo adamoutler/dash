@@ -21,6 +21,9 @@ def test_get_configure_page_auth():
     response = client.get("/configure", auth=("testuser", "testpass"))
     assert response.status_code == 200
     assert "Dash Configuration" in response.text
+    assert 'class="nav-back-link"' in response.text
+    assert 'href="/"' in response.text
+    assert "Dashboard" in response.text
     assert 'id="github-icon"' in response.text
     assert 'id="gitea-forgejo-icon"' in response.text
     assert 'id="jenkins-icon"' in response.text
