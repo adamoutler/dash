@@ -1,5 +1,9 @@
-import pytest
+from unittest.mock import AsyncMock, patch
 
+import pytest
+from httpx import Response
+
+from api.explore import ProviderPathNotFoundError
 from api.providers.forgejo import ForgejoProvider
 
 
@@ -75,9 +79,6 @@ async def test_fetch_status_no_url():
 
 @pytest.mark.asyncio
 async def test_forgejo_fetch_branches(forgejo_provider):
-    from unittest.mock import AsyncMock, patch
-    from httpx import Response
-
     # Invalid input
     assert await forgejo_provider.fetch_branches("bad/owner", "repo") == []
 
@@ -99,9 +100,6 @@ async def test_forgejo_fetch_branches(forgejo_provider):
 
 @pytest.mark.asyncio
 async def test_forgejo_get_workflows(forgejo_provider):
-    from unittest.mock import AsyncMock, patch
-    from httpx import Response
-
     # Invalid input
     assert await forgejo_provider.get_workflows("bad/owner", "repo") == []
 
@@ -141,9 +139,6 @@ async def test_forgejo_get_workflows(forgejo_provider):
 
 @pytest.mark.asyncio
 async def test_forgejo_fetch_artifacts_extended(forgejo_provider):
-    from unittest.mock import AsyncMock, patch
-    from httpx import Response
-
     # Valid run + 200 artifacts
     with patch("httpx.AsyncClient.get", new_callable=AsyncMock) as mock_get:
         mock_get.side_effect = [
@@ -180,10 +175,6 @@ async def test_forgejo_fetch_artifacts_extended(forgejo_provider):
 
 @pytest.mark.asyncio
 async def test_forgejo_explore_extended(forgejo_provider):
-    from unittest.mock import AsyncMock, patch
-    from httpx import Response
-    from api.explore import ProviderPathNotFoundError
-
     # Root exploration
     with patch("httpx.AsyncClient.get", new_callable=AsyncMock) as mock_get:
         mock_get.side_effect = [

@@ -332,9 +332,11 @@ Recommendations:
                                         and item.get("type") == "file"
                                     ):
                                         fname = str(item.get("name") or "")
-                                        if fname.endswith((".yaml", ".yml")):
-                                            if fname not in workflows:
-                                                workflows[fname] = fname
+                                        if (
+                                            fname.endswith((".yaml", ".yml"))
+                                            and fname not in workflows
+                                        ):
+                                            workflows[fname] = fname
                     except PROVIDER_EXC:
                         pass
                 return [{"id": k, "name": v} for k, v in workflows.items()]
@@ -439,9 +441,11 @@ Recommendations:
                                 and item.get("type") == "file"
                             ):
                                 fname = str(item.get("name") or "")
-                                if fname.endswith((".yaml", ".yml")):
-                                    if fname not in workflows:
-                                        workflows[fname] = fname
+                                if (
+                                    fname.endswith((".yaml", ".yml"))
+                                    and fname not in workflows
+                                ):
+                                    workflows[fname] = fname
             except PROVIDER_EXC:
                 pass
 
