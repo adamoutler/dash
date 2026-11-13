@@ -663,6 +663,21 @@ async def require_mcp_oauth(request: Request) -> str:
                 safe_path,
             )
             return user_name
+
+        # Also accept static API Bearer tokens for programmatic MCP clients (e.g. Antigravity)
+        api_rec = token_manager.validate_api_token(param)
+        if api_rec is not None:
+            token_name = str(api_rec.get("name") or "api_token")
+            safe_name = token_name.replace("\r", "").replace("\n", "")[:64]
+            logger.info(
+                "[MCP-Auth] API token verified for MCP client '%s' from %s (%s %s)",
+                safe_name,
+                safe_ip,
+                safe_method,
+                safe_path,
+            )
+            return safe_name
+
         logger.warning(
             "[MCP-Auth] Bearer token validation failed (invalid, expired, or non-OAuth domain) from %s (%s %s)",
             safe_ip,

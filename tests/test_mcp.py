@@ -58,7 +58,7 @@ def test_mcp_rejects_basic_auth(setup_env):
     assert 'rel="oauth-protected-resource"' in response.headers["Link"]
 
 
-def test_mcp_rejects_static_api_token(setup_env):
+def test_mcp_accepts_static_api_token(setup_env):
     _, tm = setup_env
     static_api_token = tm.create_token("ci-api-token", 3600, oauth=False)
     response = client.post(
@@ -66,11 +66,7 @@ def test_mcp_rejects_static_api_token(setup_env):
         json={"jsonrpc": "2.0", "method": "tools/list", "id": 1},
         headers={"Authorization": f"Bearer {static_api_token}"},
     )
-    assert response.status_code == 401
-    assert "WWW-Authenticate" in response.headers
-    assert "resource_metadata=" in response.headers["WWW-Authenticate"]
-    assert "Link" in response.headers
-    assert 'rel="oauth-protected-resource"' in response.headers["Link"]
+    assert response.status_code == 200
 
 
 def test_mcp_unknown_method(setup_env):
