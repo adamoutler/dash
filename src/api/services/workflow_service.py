@@ -52,7 +52,9 @@ def get_log_filename(
         suffix_parts.append(f"sha_{_sanitize_slug_part(norm_sha, 64)}")
     suffix = "_".join(suffix_parts) if suffix_parts else "latest"
 
-    return f"{safe_provider}_{safe_owner}_{safe_repo}{safe_branch}{safe_wf}_{suffix}.log"
+    return (
+        f"{safe_provider}_{safe_owner}_{safe_repo}{safe_branch}{safe_wf}_{suffix}.log"
+    )
 
 
 def get_candidate_log_filenames(

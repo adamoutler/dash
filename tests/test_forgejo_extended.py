@@ -84,7 +84,9 @@ async def test_forgejo_fetch_branches(forgejo_provider):
 
     # Successful fetch
     with patch("httpx.AsyncClient.get", new_callable=AsyncMock) as mock_get:
-        mock_get.return_value = Response(200, json=[{"name": "main"}, {"name": "develop"}])
+        mock_get.return_value = Response(
+            200, json=[{"name": "main"}, {"name": "develop"}]
+        )
         branches = await forgejo_provider.fetch_branches("owner", "repo")
         assert branches == ["main", "develop"]
 
@@ -124,7 +126,12 @@ async def test_forgejo_get_workflows(forgejo_provider):
         gitea_wf_resp = Response(404, json={})
         github_wf_resp = Response(404, json={})
 
-        mock_get.side_effect = [runs_resp, forgejo_wf_resp, gitea_wf_resp, github_wf_resp]
+        mock_get.side_effect = [
+            runs_resp,
+            forgejo_wf_resp,
+            gitea_wf_resp,
+            github_wf_resp,
+        ]
 
         wfs = await forgejo_provider.get_workflows("owner", "repo", branch="main")
         wf_ids = [w["id"] for w in wfs]
@@ -145,7 +152,9 @@ async def test_forgejo_fetch_artifacts_extended(forgejo_provider):
             Response(200, json={"workflow_runs": [{"id": 42, "name": "build"}]}),
             Response(200, json=[{"name": "artifact1"}]),
         ]
-        res = await forgejo_provider.fetch_artifacts("owner", "repo", workflow_id="build", branch="main")
+        res = await forgejo_provider.fetch_artifacts(
+            "owner", "repo", workflow_id="build", branch="main"
+        )
         assert res == [{"name": "artifact1"}]
 
     # 404 artifacts endpoint
@@ -199,7 +208,10 @@ async def test_forgejo_explore_extended(forgejo_provider):
     # Repo exploration returns Any Workflow + runs + files
     with patch("httpx.AsyncClient.get", new_callable=AsyncMock) as mock_get:
         mock_get.side_effect = [
-            Response(200, json={"workflow_runs": [{"workflow_id": "test.yml", "name": "Test"}]}),
+            Response(
+                200,
+                json={"workflow_runs": [{"workflow_id": "test.yml", "name": "Test"}]},
+            ),
             Response(200, json=[{"name": "prod.yaml", "type": "file"}]),
             Response(404, json={}),
             Response(404, json={}),

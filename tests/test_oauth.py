@@ -532,7 +532,7 @@ def test_root_mcp_probes_and_session_deletion():
     # 4. Authenticated root / MCP discovery and JSON-RPC
     root_get = client.get("/", headers={"Authorization": f"Bearer {access_token}"})
     assert root_get.status_code == 200
-    assert "data:image/svg+xml;base64," in root_get.json()["serverInfo"]["icon"]
+    assert "data:image/png;base64," in root_get.json()["serverInfo"]["icon"]
 
     root_post = client.post(
         "/",
@@ -545,7 +545,8 @@ def test_root_mcp_probes_and_session_deletion():
     # 5. Configure data lists oauth_sessions with opaque IDs and allows deletion
     cfg_data = client.get("/configure/data", auth=admin_auth).json()
     charlie_sess = next(
-        s for s in cfg_data["oauth_sessions"]
+        s
+        for s in cfg_data["oauth_sessions"]
         if s["username"] == "charlie" and s["token"].startswith("tok_")
     )
     opaque_tok = charlie_sess["token"]
@@ -554,9 +555,7 @@ def test_root_mcp_probes_and_session_deletion():
     del_res = client.delete(f"/api/oauth/sessions/{opaque_tok}", auth=admin_auth)
     assert del_res.status_code == 200
     assert (
-        client.delete(
-            f"/api/oauth/sessions/{opaque_tok}", auth=admin_auth
-        ).status_code
+        client.delete(f"/api/oauth/sessions/{opaque_tok}", auth=admin_auth).status_code
         == 404
     )
 
@@ -922,7 +921,9 @@ def test_oauth_repeated_attempts_and_reconnect_with_dynamic_google_redirect():
     assert attempt2_data["request_id"] != attempt1["request_id"]
 
     pending = client.get("/api/oauth/pending", auth=admin_auth).json()["pending"]
-    adam_pending = [p for p in pending if p["username"] == "adam" and p["client_id"] == cid]
+    adam_pending = [
+        p for p in pending if p["username"] == "adam" and p["client_id"] == cid
+    ]
     assert len(adam_pending) == 1
     assert adam_pending[0]["id"] == attempt2_data["request_id"]
 
@@ -970,9 +971,7 @@ def test_oauth_repeated_attempts_and_reconnect_with_dynamic_google_redirect():
             "code_challenge_method": "S256",
         },
     ).json()
-    client.post(
-        f"/api/oauth/pending/{attempt3['request_id']}/approve", auth=admin_auth
-    )
+    client.post(f"/api/oauth/pending/{attempt3['request_id']}/approve", auth=admin_auth)
     poll3 = client.get(
         f"/oauth/authorize/status/{attempt3['request_id']}",
         params={"poll_token": attempt3["poll_token"]},
@@ -993,7 +992,9 @@ def test_oauth_repeated_attempts_and_reconnect_with_dynamic_google_redirect():
 
     # Verify only 1 active OAuth session exists for (adam, cid)
     sessions = client.get("/api/oauth/pending", auth=admin_auth).json()["sessions"]
-    adam_sessions = [s for s in sessions if s.get("username") == "adam" and s.get("client_id") == cid]
+    adam_sessions = [
+        s for s in sessions if s.get("username") == "adam" and s.get("client_id") == cid
+    ]
     assert len(adam_sessions) == 1
 
 
@@ -1061,7 +1062,9 @@ def test_oauth_client_identity_callback_and_permissions_visibility(isolated_oaut
     assert auth_data["redirect_uri"] == "https://gemini.google.com/oauth/cb"
     assert auth_data["scope"] == "mcp:access"
 
-    client.post(f"/api/oauth/pending/{auth_data['request_id']}/approve", auth=admin_auth)
+    client.post(
+        f"/api/oauth/pending/{auth_data['request_id']}/approve", auth=admin_auth
+    )
     from urllib.parse import parse_qs, urlparse
 
     poll = client.get(

@@ -215,7 +215,9 @@ async def test_exact_build_sha_and_run_id_targeting(setup_env, tmp_path, monkeyp
     monkeypatch.setattr("api.routers.workflows.LOGS_DIR", str(tmp_path))
 
     # 1. Exact log filename & isolation from _latest.log
-    fname = get_log_filename("github", "adamoutler", "dash", sha="deadbeef", run_id="42")
+    fname = get_log_filename(
+        "github", "adamoutler", "dash", sha="deadbeef", run_id="42"
+    )
     assert "_run_42_sha_deadbeef.log" in fname
     candidates = get_candidate_log_filenames(
         "github", "adamoutler", "dash", sha="deadbeef", run_id="42"
@@ -243,12 +245,7 @@ async def test_exact_build_sha_and_run_id_targeting(setup_env, tmp_path, monkeyp
         ).status_code
         == 400
     )
-    assert (
-        client.get(
-            "/api/status?run_id=bad_id!"
-        ).status_code
-        == 400
-    )
+    assert client.get("/api/status?run_id=bad_id!").status_code == 400
 
     # 2. GitHubProvider fetch_status pinning by sha and run_id
     gh = GitHubProvider(token="tok")
@@ -346,7 +343,9 @@ async def test_exact_build_sha_and_run_id_targeting(setup_env, tmp_path, monkeyp
                 "timestamp": 1700000000000,
                 "estimatedDuration": 10000,
                 "actions": [{"lastBuiltRevision": {"SHA1": "deadbeef0001"}}],
-                "changeSets": [{"items": [{"msg": "fix ci", "commitId": "deadbeef0001"}]}],
+                "changeSets": [
+                    {"items": [{"msg": "fix ci", "commitId": "deadbeef0001"}]}
+                ],
             }
         ],
     }

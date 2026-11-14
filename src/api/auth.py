@@ -269,10 +269,7 @@ class TokenManager:
                         stored_rt_hash
                         and secrets.compare_digest(stored_rt_hash, target_hash)
                     )
-                    or (
-                        client_id
-                        and secrets.compare_digest(str(client_id), token)
-                    )
+                    or (client_id and secrets.compare_digest(str(client_id), token))
                     or (
                         token.startswith("tok_")
                         and len(token) > 4
@@ -546,7 +543,9 @@ async def require_api_token(
 
 
 def require_basic_auth(
-    credentials: Annotated[HTTPBasicCredentials | None, Security(security_basic)] = None,
+    credentials: Annotated[
+        HTTPBasicCredentials | None, Security(security_basic)
+    ] = None,
     request: Request = None,  # type: ignore[assignment]
     _cookie_session: Annotated[str | None, Security(security_cookie)] = None,
 ) -> str:

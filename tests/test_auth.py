@@ -640,7 +640,9 @@ def test_session_signing_and_optional_web_login_edge_cases(monkeypatch, tmp_path
     )
 
 
-def test_require_auth_for_reads_and_oauth_allowed_emails_fallback(monkeypatch, tmp_path):
+def test_require_auth_for_reads_and_oauth_allowed_emails_fallback(
+    monkeypatch, tmp_path
+):
     from fastapi.testclient import TestClient
 
     from api.auth import (
@@ -665,9 +667,7 @@ def test_require_auth_for_reads_and_oauth_allowed_emails_fallback(monkeypatch, t
     assert client.get("/api/providers").status_code == 401
     assert client.get("/api/status").status_code == 401
     assert (
-        client.get(
-            "/api/logs?provider=github&owner=adamoutler&repo=dash"
-        ).status_code
+        client.get("/api/logs?provider=github&owner=adamoutler&repo=dash").status_code
         == 401
     )
 

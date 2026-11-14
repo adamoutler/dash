@@ -225,7 +225,9 @@ async def get_logs(
                             == real_logs_dir
                             and os.path.dirname(real_entry_path) == real_logs_dir
                         ):
-                            matched_logs.append((entry.stat().st_mtime, real_entry_path))
+                            matched_logs.append(
+                                (entry.stat().st_mtime, real_entry_path)
+                            )
         except OSError:
             pass
 

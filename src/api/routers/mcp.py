@@ -1,6 +1,8 @@
 import asyncio
+import base64
 import json
 import logging
+import os
 import urllib.parse
 from typing import Annotated, Any
 
@@ -380,7 +382,73 @@ async def _wait_generator(
             break
 
 
-def _get_tools_list_response(req_id: Any) -> dict:
+DASH_SVG_ICON = (
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">'
+    '<rect width="100" height="100" rx="20" fill="#1f2937"/>'
+    '<path d="M25 52 L42 69 L75 34" stroke="#22c55e" stroke-width="10" '
+    'fill="none" stroke-linecap="round" stroke-linejoin="round"/>'
+    "</svg>"
+)
+
+
+def _load_base64_png() -> str:
+    static_dir = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "static"
+    )
+    for name in (
+        "img/icon-48.png",
+        "img/icon-64.png",
+        "img/icon-192.png",
+        "favicon.png",
+        "icon.png",
+    ):
+        p = os.path.join(static_dir, name)
+        if os.path.exists(p):
+            try:
+                with open(p, "rb") as f:
+                    data = f.read()
+                    if len(data) <= 32768 and data.startswith(b"\x89PNG\r\n\x1a\n"):
+                        return "data:image/png;base64," + base64.b64encode(data).decode(
+                            "ascii"
+                        )
+            except OSError:
+                continue
+    return "data:image/svg+xml;base64," + base64.b64encode(
+        DASH_SVG_ICON.encode("utf-8")
+    ).decode("ascii")
+
+
+DASH_PNG_DATA_URI = _load_base64_png()
+
+
+def _build_brand_icons(base_url: str = "") -> list[dict[str, Any]]:
+    icons: list[dict[str, Any]] = [
+        {
+            "src": DASH_PNG_DATA_URI,
+            "mimeType": "image/png",
+            "sizes": ["48x48"],
+        }
+    ]
+    if base_url:
+        icons.extend(
+            [
+                {
+                    "src": f"{base_url}/icon.png",
+                    "mimeType": "image/png",
+                    "sizes": ["192x192"],
+                },
+                {
+                    "src": f"{base_url}/icon.svg",
+                    "mimeType": "image/svg+xml",
+                    "sizes": ["any"],
+                },
+            ]
+        )
+    return icons
+
+
+def _get_tools_list_response(req_id: Any, base_url: str = "") -> dict:
+    brand_icons = _build_brand_icons(base_url)
     return {
         "jsonrpc": "2.0",
         "id": req_id,
@@ -410,6 +478,7 @@ def _get_tools_list_response(req_id: Any) -> dict:
                         },
                         "required": ["repo"],
                     },
+                    "icons": brand_icons,
                 },
                 {
                     "name": "get_logs",
@@ -435,6 +504,7 @@ def _get_tools_list_response(req_id: Any) -> dict:
                         },
                         "required": ["repo"],
                     },
+                    "icons": brand_icons,
                 },
                 {
                     "name": "get_branches",
@@ -453,6 +523,7 @@ def _get_tools_list_response(req_id: Any) -> dict:
                         },
                         "required": ["repo"],
                     },
+                    "icons": brand_icons,
                 },
                 {
                     "name": "wait",
@@ -479,6 +550,7 @@ def _get_tools_list_response(req_id: Any) -> dict:
                         },
                         "required": ["repo"],
                     },
+                    "icons": brand_icons,
                 },
             ]
         },
@@ -847,36 +919,18 @@ async def _handle_mcp_routing(
     }
 
 
-DASH_SVG_ICON = (
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">'
-    '<rect width="100" height="100" rx="20" fill="#1f2937"/>'
-    '<path d="M25 52 L42 69 L75 34" stroke="#22c55e" stroke-width="10" '
-    'fill="none" stroke-linecap="round" stroke-linejoin="round"/>'
-    "</svg>"
-)
-
-
 def _build_server_info(request: Request) -> dict[str, Any]:
-    import base64
-
     from api.auth import get_base_url
 
     base_url = get_base_url(request)
-    icon_url = f"{base_url}/mcp/icon.png"
-    svg_url = f"{base_url}/mcp/icon.svg"
-    icon_data_uri = "data:image/svg+xml;base64," + base64.b64encode(
-        DASH_SVG_ICON.encode("utf-8")
-    ).decode("ascii")
+    icon_url = f"{base_url}/icon.png"
     return {
         "name": "dashboard-mcp",
         "title": "Dash CI/CD Monitor MCP",
         "version": "1.0.0",
-        "icon": icon_data_uri,
+        "icon": DASH_PNG_DATA_URI,
         "iconUrl": icon_url,
-        "icons": [
-            {"src": icon_url, "mimeType": "image/png", "sizes": ["192x192"]},
-            {"src": svg_url, "mimeType": "image/svg+xml", "sizes": ["any"]},
-        ],
+        "icons": _build_brand_icons(base_url),
     }
 
 
@@ -895,9 +949,25 @@ async def mcp_discovery_probe(
     request: Request,
     user: Annotated[str, Depends(require_mcp_oauth)],
 ):
-    safe_ip = str(getattr(getattr(request, "client", None), "host", "unknown")).replace("\r", "").replace("\n", "")[:64]
-    safe_ua = str(request.headers.get("user-agent", "-") if hasattr(request, "headers") else "-").replace("\r", "").replace("\n", "")[:128]
-    safe_path = str(getattr(getattr(request, "url", None), "path", "/")).replace("\r", "").replace("\n", "")[:128]
+    safe_ip = (
+        str(getattr(getattr(request, "client", None), "host", "unknown"))
+        .replace("\r", "")
+        .replace("\n", "")[:64]
+    )
+    safe_ua = (
+        str(
+            request.headers.get("user-agent", "-")
+            if hasattr(request, "headers")
+            else "-"
+        )
+        .replace("\r", "")
+        .replace("\n", "")[:128]
+    )
+    safe_path = (
+        str(getattr(getattr(request, "url", None), "path", "/"))
+        .replace("\r", "")
+        .replace("\n", "")[:128]
+    )
     safe_method = str(request.method).replace("\r", "").replace("\n", "")[:16]
     safe_user = str(user).replace("\r", "").replace("\n", "")[:64]
     logger.info(
@@ -940,7 +1010,9 @@ def _build_initialize_response(req: JsonRpcRequest, request: Request) -> dict[st
         if isinstance(client_ver, str) and client_ver.startswith("202"):
             requested_version = client_ver
     client_ip = getattr(getattr(request, "client", None), "host", "unknown")
-    client_info = req.params.get("clientInfo", {}) if isinstance(req.params, dict) else {}
+    client_info = (
+        req.params.get("clientInfo", {}) if isinstance(req.params, dict) else {}
+    )
     c_name = client_info.get("name", "unknown")
     c_ver = client_info.get("version", "")
     safe_cname = str(c_name).replace("\r", "").replace("\n", "")[:64]
@@ -987,9 +1059,25 @@ async def mcp_endpoint(
     )
     if response is not None and hasattr(response, "headers"):
         response.headers["Mcp-Session-Id"] = session_id
-    safe_ip = str(getattr(getattr(request, "client", None), "host", "unknown")).replace("\r", "").replace("\n", "")[:64]
-    safe_ua = str(request.headers.get("user-agent", "-") if hasattr(request, "headers") else "-").replace("\r", "").replace("\n", "")[:128]
-    safe_path = str(getattr(getattr(request, "url", None), "path", "/")).replace("\r", "").replace("\n", "")[:128]
+    safe_ip = (
+        str(getattr(getattr(request, "client", None), "host", "unknown"))
+        .replace("\r", "")
+        .replace("\n", "")[:64]
+    )
+    safe_ua = (
+        str(
+            request.headers.get("user-agent", "-")
+            if hasattr(request, "headers")
+            else "-"
+        )
+        .replace("\r", "")
+        .replace("\n", "")[:128]
+    )
+    safe_path = (
+        str(getattr(getattr(request, "url", None), "path", "/"))
+        .replace("\r", "")
+        .replace("\n", "")[:128]
+    )
     safe_method = str(request.method).replace("\r", "").replace("\n", "")[:16]
     safe_rpc_method = str(req.method).replace("\r", "").replace("\n", "")[:64]
     safe_rpc_id = str(req.id).replace("\r", "").replace("\n", "")[:64]
@@ -1027,7 +1115,9 @@ async def mcp_endpoint(
             return {"jsonrpc": "2.0", "id": req.id, "result": {}}
 
         if req.method == "tools/list":
-            return _get_tools_list_response(req.id)
+            from api.auth import get_base_url
+
+            return _get_tools_list_response(req.id, get_base_url(request))
 
         if req.method == "resources/list":
             return {"jsonrpc": "2.0", "id": req.id, "result": {"resources": []}}

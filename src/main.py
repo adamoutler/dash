@@ -132,6 +132,7 @@ async def custom_http_exception_handler(
         headers=headers,
     )
 
+
 # Include Routers
 app.include_router(explore_router)
 app.include_router(settings_router)
@@ -212,11 +213,28 @@ async def read_manifest():
     return FileResponse(os.path.join(STATIC_DIR, "manifest.json"))
 
 
+STATIC_HEADER_PNG = {
+    "Cache-Control": "public, max-age=604800, must-revalidate",
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+    "X-Content-Type-Options": "nosniff",
+}
+
+
 @app.api_route("/favicon.ico", methods=["GET", "HEAD"], include_in_schema=False)
 async def read_favicon():
+    ico_path = os.path.join(STATIC_DIR, "favicon.ico")
+    if not os.path.exists(ico_path):
+        ico_path = os.path.join(os.path.dirname(__file__), "favicon.ico")
     return FileResponse(
-        os.path.join(os.path.dirname(__file__), "favicon.ico"),
-        headers={"Access-Control-Allow-Origin": "*"},
+        ico_path,
+        media_type="image/x-icon",
+        headers={
+            "Cache-Control": "public, max-age=604800, must-revalidate",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+            "X-Content-Type-Options": "nosniff",
+        },
     )
 
 
@@ -224,10 +242,39 @@ async def read_favicon():
 @app.api_route("/favicon.png", methods=["GET", "HEAD"], include_in_schema=False)
 @app.api_route("/mcp/icon.png", methods=["GET", "HEAD"], include_in_schema=False)
 @app.api_route("/oauth/icon.png", methods=["GET", "HEAD"], include_in_schema=False)
-async def read_icon_png():
+@app.api_route("/icon-192.png", methods=["GET", "HEAD"], include_in_schema=False)
+@app.api_route("/icon-512.png", methods=["GET", "HEAD"], include_in_schema=False)
+@app.api_route("/icon-48.png", methods=["GET", "HEAD"], include_in_schema=False)
+@app.api_route("/icon-64.png", methods=["GET", "HEAD"], include_in_schema=False)
+@app.api_route(
+    "/apple-touch-icon.png", methods=["GET", "HEAD"], include_in_schema=False
+)
+@app.api_route(
+    "/apple-touch-icon-precomposed.png",
+    methods=["GET", "HEAD"],
+    include_in_schema=False,
+)
+async def read_icon_png(request: Request):
+    path = request.url.path.rstrip("/")
+    if path.endswith("favicon.png"):
+        target_path = os.path.join(STATIC_DIR, "favicon.png")
+    elif path.endswith("icon-48.png"):
+        target_path = os.path.join(IMG_DIR, "icon-48.png")
+    elif path.endswith("icon-64.png"):
+        target_path = os.path.join(IMG_DIR, "icon-64.png")
+    elif path.endswith("icon-512.png"):
+        target_path = os.path.join(IMG_DIR, "icon-512.png")
+    else:
+        target_path = os.path.join(IMG_DIR, "icon-192.png")
+        if not os.path.exists(target_path):
+            target_path = os.path.join(STATIC_DIR, "icon.png")
+        if not os.path.exists(target_path):
+            target_path = os.path.join(STATIC_DIR, "favicon.png")
+
     return FileResponse(
-        os.path.join(STATIC_DIR, "favicon.png"),
-        headers={"Access-Control-Allow-Origin": "*"},
+        target_path,
+        media_type="image/png",
+        headers=STATIC_HEADER_PNG,
     )
 
 
@@ -238,7 +285,12 @@ async def read_icon_svg():
     return Response(
         content=DASH_SVG_ICON,
         media_type="image/svg+xml",
-        headers={"Access-Control-Allow-Origin": "*"},
+        headers={
+            "Cache-Control": "public, max-age=604800, must-revalidate",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+            "X-Content-Type-Options": "nosniff",
+        },
     )
 
 

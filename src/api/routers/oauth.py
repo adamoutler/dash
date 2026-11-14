@@ -480,8 +480,12 @@ class OAuthManager:
                 )
                 return None
             expected_redirect = code_info.get("redirect_uri")
-            safe_exp_redir = str(expected_redirect).replace("\r", "").replace("\n", "")[:256]
-            safe_recv_redir = str(redirect_uri).replace("\r", "").replace("\n", "")[:256]
+            safe_exp_redir = (
+                str(expected_redirect).replace("\r", "").replace("\n", "")[:256]
+            )
+            safe_recv_redir = (
+                str(redirect_uri).replace("\r", "").replace("\n", "")[:256]
+            )
             if redirect_uri and expected_redirect and redirect_uri != expected_redirect:
                 logger.warning(
                     "[OAuth-Token] redirect_uri mismatch. Expected: '%s', Received: '%s'",
@@ -490,7 +494,9 @@ class OAuthManager:
                 )
                 return None
             expected_client = code_info.get("client_id")
-            safe_exp_client = str(expected_client).replace("\r", "").replace("\n", "")[:64]
+            safe_exp_client = (
+                str(expected_client).replace("\r", "").replace("\n", "")[:64]
+            )
             safe_recv_client = str(client_id).replace("\r", "").replace("\n", "")[:64]
             if client_id and expected_client and client_id != expected_client:
                 logger.warning(
@@ -499,7 +505,11 @@ class OAuthManager:
                     safe_recv_client,
                 )
                 return None
-            ccm = str(code_info.get("code_challenge_method", "S256")).replace("\r", "").replace("\n", "")[:16]
+            ccm = (
+                str(code_info.get("code_challenge_method", "S256"))
+                .replace("\r", "")
+                .replace("\n", "")[:16]
+            )
             if ccm != "S256":
                 logger.warning(
                     "[OAuth-Token] Unsupported code_challenge_method '%s'",
@@ -514,7 +524,11 @@ class OAuthManager:
                     safe_exp_client,
                 )
                 return None
-            safe_u = str(code_info.get("username", "")).replace("\r", "").replace("\n", "")[:64]
+            safe_u = (
+                str(code_info.get("username", ""))
+                .replace("\r", "")
+                .replace("\n", "")[:64]
+            )
             logger.info(
                 "[OAuth-Token] Auth code successfully validated for client_id='%s', user='%s'",
                 safe_exp_client,
@@ -588,7 +602,11 @@ def _build_protected_resource_metadata(
     base_url = get_base_url(request)
     clean_sub = subpath.strip("/")
     resource_url = f"{base_url}/{clean_sub}" if clean_sub else f"{base_url}/mcp"
-    safe_ip = str(getattr(getattr(request, "client", None), "host", "unknown")).replace("\r", "").replace("\n", "")[:64]
+    safe_ip = (
+        str(getattr(getattr(request, "client", None), "host", "unknown"))
+        .replace("\r", "")
+        .replace("\n", "")[:64]
+    )
     logger.info(
         "[OAuth-Discovery] Protected resource metadata request from %s",
         safe_ip,
@@ -605,7 +623,11 @@ def _build_protected_resource_metadata(
 
 def _build_auth_server_metadata(request: Request) -> dict[str, Any]:
     base_url = get_base_url(request)
-    safe_ip = str(getattr(getattr(request, "client", None), "host", "unknown")).replace("\r", "").replace("\n", "")[:64]
+    safe_ip = (
+        str(getattr(getattr(request, "client", None), "host", "unknown"))
+        .replace("\r", "")
+        .replace("\n", "")[:64]
+    )
     logger.info(
         "[OAuth-Discovery] Authorization server metadata request from %s -> issuer='%s'",
         safe_ip,
@@ -797,8 +819,16 @@ def _read_oauth_authorize_html() -> str:
 async def oauth_authorize_page(request: Request):
     client_ip = getattr(getattr(request, "client", None), "host", "unknown")
     safe_ip = str(client_ip).replace("\r", "").replace("\n", "")[:64]
-    safe_cid = str(request.query_params.get("client_id", "")).replace("\r", "").replace("\n", "")[:64]
-    safe_redir = str(request.query_params.get("redirect_uri", "")).replace("\r", "").replace("\n", "")[:256]
+    safe_cid = (
+        str(request.query_params.get("client_id", ""))
+        .replace("\r", "")
+        .replace("\n", "")[:64]
+    )
+    safe_redir = (
+        str(request.query_params.get("redirect_uri", ""))
+        .replace("\r", "")
+        .replace("\n", "")[:256]
+    )
     logger.info(
         "[OAuth-Authorize] Serving authorization page to %s (client_id='%s', redirect_uri='%s')",
         safe_ip,
@@ -876,8 +906,12 @@ async def oauth_authorize_submit(request: Request):
     safe_cid = str(client_id).replace("\r", "").replace("\n", "")[:64]
     safe_redir = str(redirect_uri).replace("\r", "").replace("\n", "")[:256]
     safe_scope = str(scope).replace("\r", "").replace("\n", "")[:64]
-    safe_req_id = str(created.get("request_id", "")).replace("\r", "").replace("\n", "")[:64]
-    safe_ucode = str(created.get("user_code", "")).replace("\r", "").replace("\n", "")[:64]
+    safe_req_id = (
+        str(created.get("request_id", "")).replace("\r", "").replace("\n", "")[:64]
+    )
+    safe_ucode = (
+        str(created.get("user_code", "")).replace("\r", "").replace("\n", "")[:64]
+    )
     logger.info(
         "[OAuth-Authorize] Pending approval created from %s: user='%s', client_id='%s', redirect_uri='%s', scope='%s' -> request_id='%s', user_code='%s'",
         safe_ip,
@@ -1004,7 +1038,9 @@ def _handle_refresh_token_grant(params: dict[str, Any]) -> JSONResponse:
     safe_cid = str(client_id).replace("\r", "").replace("\n", "")[:64]
     logger.info("[OAuth-Token] Refresh token request for client_id='%s'", safe_cid)
     if not refresh_token:
-        logger.warning("[OAuth-Token] Missing refresh_token in refresh_token grant request")
+        logger.warning(
+            "[OAuth-Token] Missing refresh_token in refresh_token grant request"
+        )
         return JSONResponse(
             status_code=400,
             content={
@@ -1196,7 +1232,9 @@ async def approve_pending_oauth(
         raise HTTPException(
             status_code=404, detail="Pending OAuth request not found or expired"
         )
-    safe_redir = str(result.get("redirect_url", "")).replace("\r", "").replace("\n", "")[:256]
+    safe_redir = (
+        str(result.get("redirect_url", "")).replace("\r", "").replace("\n", "")[:256]
+    )
     logger.info(
         "[OAuth-Approval] Admin '%s' approved request_id='%s' -> redirect_url='%s'",
         safe_user,

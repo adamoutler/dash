@@ -373,3 +373,64 @@ def test_mcp_tools_list_and_sha_run_id_targeting(mock_fetch, setup_env):
     )
     assert bad_res.status_code == 200
     assert bad_res.json()["error"]["code"] == -32602
+
+
+def test_mcp_icons_metadata_and_static_routes(setup_env):
+    headers, _ = setup_env
+
+    # 1. initialize returns PNG data URI in serverInfo.icon and serverInfo.icons[0]
+    init_res = client.post(
+        "/mcp",
+        json={"jsonrpc": "2.0", "method": "initialize", "id": 100},
+        headers=headers,
+    )
+    assert init_res.status_code == 200
+    server_info = init_res.json()["result"]["serverInfo"]
+    assert server_info["icon"].startswith("data:image/png;base64,")
+    assert len(server_info["icons"]) >= 3
+    assert server_info["icons"][0]["src"].startswith("data:image/png;base64,")
+    assert server_info["icons"][0]["mimeType"] == "image/png"
+    assert "/icon.png" in server_info["icons"][1]["src"]
+
+    # 2. tools/list includes brand icons on each tool definition
+    tools_res = client.post(
+        "/mcp",
+        json={"jsonrpc": "2.0", "method": "tools/list", "id": 101},
+        headers=headers,
+    )
+    assert tools_res.status_code == 200
+    tools = tools_res.json()["result"]["tools"]
+    assert len(tools) >= 4
+    for tool in tools:
+        assert "icons" in tool
+        assert tool["icons"][0]["src"].startswith("data:image/png;base64,")
+        assert tool["icons"][0]["mimeType"] == "image/png"
+
+    # 3. Static icon routes return HTTP 200, correct media types, and CORS headers
+    for path in [
+        "/icon.png",
+        "/mcp/icon.png",
+        "/oauth/icon.png",
+        "/icon-192.png",
+        "/icon-48.png",
+        "/icon-64.png",
+        "/apple-touch-icon.png",
+        "/apple-touch-icon-precomposed.png",
+    ]:
+        res = client.get(path)
+        assert res.status_code == 200
+        assert "image/png" in res.headers["content-type"]
+        assert res.headers["access-control-allow-origin"] == "*"
+
+    fav_res = client.get("/favicon.ico")
+    assert fav_res.status_code == 200
+    assert (
+        "image/x-icon" in fav_res.headers["content-type"]
+        or "image/vnd.microsoft.icon" in fav_res.headers["content-type"]
+    )
+    assert fav_res.headers["access-control-allow-origin"] == "*"
+
+    svg_res = client.get("/icon.svg")
+    assert svg_res.status_code == 200
+    assert "image/svg+xml" in svg_res.headers["content-type"]
+    assert svg_res.headers["access-control-allow-origin"] == "*"

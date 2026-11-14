@@ -312,7 +312,8 @@ Recommendations:
                     target_run_id = str(run["id"])
 
                 artifacts_resp = await client.get(
-                    f"{base_url}/actions/runs/{target_run_id}/artifacts", headers=headers
+                    f"{base_url}/actions/runs/{target_run_id}/artifacts",
+                    headers=headers,
                 )
                 if artifacts_resp.status_code == 200:
                     return artifacts_resp.json()
@@ -491,10 +492,7 @@ Recommendations:
                     data = wf_resp.json()
                     if isinstance(data, list):
                         for item in data:
-                            if (
-                                isinstance(item, dict)
-                                and item.get("type") == "file"
-                            ):
+                            if isinstance(item, dict) and item.get("type") == "file":
                                 fname = str(item.get("name") or "")
                                 if (
                                     fname.endswith((".yaml", ".yml"))
