@@ -5,10 +5,12 @@ from typing import Annotated
 
 from fastapi import Depends, FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from api.auth import (
+    get_base_url,
     optional_web_login,
     require_mcp_oauth,
     require_web_login,
@@ -100,6 +102,35 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["Mcp-Session-Id", "WWW-Authenticate", "Link"],
 )
+
+
+@app.exception_handler(StarletteHTTPException)
+async def custom_http_exception_handler(
+    request: Request, exc: StarletteHTTPException
+) -> Response:
+    headers = dict(exc.headers or {})
+    www_auth = headers.get("WWW-Authenticate", "")
+    if exc.status_code == 401 and "resource_metadata=" in www_auth:
+        if request.method == "HEAD":
+            return Response(status_code=401, headers=headers)
+        resource_meta = f"{get_base_url(request)}/.well-known/oauth-protected-resource"
+        return JSONResponse(
+            status_code=401,
+            content={
+                "detail": exc.detail,
+                "error": "unauthorized",
+                "error_description": "Authentication required. See resource_metadata for OAuth 2.0 discovery.",
+                "resource_metadata": resource_meta,
+            },
+            headers=headers,
+        )
+    if request.method == "HEAD":
+        return Response(status_code=exc.status_code, headers=headers)
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail},
+        headers=headers,
+    )
 
 # Include Routers
 app.include_router(explore_router)

@@ -46,6 +46,14 @@ def test_mcp_unauthenticated_returns_rfc9728_headers():
         )
         assert "Link" in res.headers
         assert 'rel="oauth-protected-resource"' in res.headers["Link"]
+        if method == "HEAD":
+            assert res.content == b""
+        else:
+            body = res.json()
+            assert body.get("error") == "unauthorized"
+            assert "/.well-known/oauth-protected-resource" in body.get(
+                "resource_metadata", ""
+            )
 
 
 def test_well_known_discovery_endpoints():
@@ -73,6 +81,8 @@ def test_well_known_discovery_endpoints():
     assert as_root.status_code == 200
     as_data = as_root.json()
     assert "S256" in as_data["code_challenge_methods_supported"]
+    assert "client_id_metadata_document_supported" not in as_data
+    assert "ui_locales_supported" in as_data
     assert as_data["authorization_endpoint"].endswith("/oauth/authorize")
     assert as_data["token_endpoint"].endswith("/oauth/token")
     assert as_data["registration_endpoint"].endswith("/oauth/register")
@@ -307,6 +317,7 @@ def test_full_oauth_approval_and_mcp_access_flow():
     )
     assert init_mcp.status_code == 200
     assert init_mcp.json()["result"]["protocolVersion"] == "2025-03-26"
+    assert "Mcp-Session-Id" in init_mcp.headers
 
     notif_mcp = client.post(
         "/mcp",
@@ -880,7 +891,7 @@ def test_oauth_repeated_attempts_and_reconnect_with_dynamic_google_redirect():
         },
     ).json()
     cid = reg["client_id"]
-    assert "client_secret" in reg
+    assert "client_secret" not in reg
 
     # 2. Submit two consecutive authorization attempts for the same (username, client_id);
     # the second attempt must supersede the first so only 1 pending request remains.
@@ -937,6 +948,15 @@ def test_oauth_repeated_attempts_and_reconnect_with_dynamic_google_redirect():
         headers={"Content-Type": "application/x-www-form-urlencoded"},
     ).json()
     assert "access_token" in tok2
+
+    # Trailing status poll after code consumption must still return 200 approved
+    trailing_poll = client.get(
+        f"/oauth/authorize/status/{attempt2_data['request_id']}",
+        params={"poll_token": attempt2_data["poll_token"]},
+    )
+    assert trailing_poll.status_code == 200
+    assert trailing_poll.json()["status"] == "approved"
+    assert trailing_poll.json()["redirect_url"] == poll2["redirect_url"]
 
     # 4. Reconnect with same (username, client_id) and a third dynamic Google redirect_uri
     attempt3 = client.post(

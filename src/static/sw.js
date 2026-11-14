@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ci-dashboard-v11';
+const CACHE_NAME = 'ci-dashboard-v12';
 const STATIC_ASSETS = [
     '/',
     '/static/design-system.css',

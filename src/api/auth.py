@@ -226,21 +226,13 @@ class TokenManager:
                     self._save_nolock(data)
                 return None
 
-            expected_cid = matched_info.get("client_id")
-            if (
-                client_id is not None
-                and expected_cid
-                and not secrets.compare_digest(str(expected_cid), str(client_id))
-            ):
-                if pruned:
-                    self._save_nolock(data)
-                return None
-
             del data[matched_key]
             new_token = secrets.token_hex(32)
             new_refresh = secrets.token_hex(32)
             new_entry = dict(matched_info)
             new_entry.pop("refresh_token", None)
+            if client_id:
+                new_entry["client_id"] = client_id
             new_entry["id"] = f"tok_{secrets.token_hex(8)}"
             new_entry["expires_at"] = now + expires_in_sec
             new_entry["refresh_token_hash"] = _hash_token(new_refresh)

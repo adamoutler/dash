@@ -10,7 +10,7 @@ from typing import Annotated, Any
 from urllib.parse import parse_qsl, unquote, urlencode, urlparse, urlunparse
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from filelock import FileLock
 from pydantic import BaseModel
 
@@ -72,38 +72,16 @@ def _is_valid_redirect_uri(uri: str) -> bool:
     )
 
 
-def _is_google_redirect_host(hostname: str | None) -> bool:
-    if not hostname:
-        return False
-    host = hostname.lower()
-    return host in ("google.com", "googleusercontent.com") or host.endswith(
-        (".google.com", ".googleusercontent.com")
-    )
-
-
 def _is_compatible_redirect_uri(redirect_uri: str, registered_uris: list[str]) -> bool:
     if not registered_uris or redirect_uri in registered_uris:
         return True
+    if not _is_valid_redirect_uri(redirect_uri):
+        return False
     try:
         parsed = urlparse(redirect_uri)
     except ValueError:
         return False
-    if parsed.scheme != "https" or not parsed.netloc:
-        return False
-    for reg_uri in registered_uris:
-        try:
-            reg_parsed = urlparse(reg_uri)
-        except ValueError:
-            continue
-        if reg_parsed.scheme != "https":
-            continue
-        if reg_parsed.netloc == parsed.netloc:
-            return True
-        if _is_google_redirect_host(parsed.hostname) and _is_google_redirect_host(
-            reg_parsed.hostname
-        ):
-            return True
-    return False
+    return parsed.scheme == "https" and bool(parsed.netloc)
 
 
 def _verify_pkce_s256(code_verifier: str, code_challenge: str) -> bool:
@@ -233,19 +211,16 @@ class OAuthManager:
                 for cid in sorted_ids[: len(clients_map) - MAX_REGISTERED_CLIENTS + 1]:
                     del clients_map[cid]
             client_id = f"mcp_{secrets.token_hex(16)}"
-            auth_method = token_endpoint_auth_method or "none"
             client_record: dict[str, Any] = {
                 "client_id": client_id,
                 "client_name": client_name or "MCP OAuth Client",
                 "redirect_uris": redirect_uris[:MAX_REDIRECT_URIS_PER_CLIENT],
                 "grant_types": grant_types or ["authorization_code", "refresh_token"],
                 "response_types": response_types or ["code"],
-                "token_endpoint_auth_method": auth_method,
+                "token_endpoint_auth_method": token_endpoint_auth_method or "none",
                 "client_id_issued_at": now,
                 "client_secret_expires_at": 0,
             }
-            if auth_method in ("client_secret_basic", "client_secret_post"):
-                client_record["client_secret"] = f"secret_{secrets.token_urlsafe(24)}"
             clients_map[client_id] = client_record
             self._save_nolock(data)
             return client_record
@@ -287,6 +262,7 @@ class OAuthManager:
                     "client_name": client_id,
                     "redirect_uris": [redirect_uri],
                 }
+                data["clients"][client_id] = client_info
 
             # Supersede any older pending requests for the same (username, client_id)
             # so repeated connection attempts never pile up duplicate approval cards.
@@ -487,8 +463,6 @@ class OAuthManager:
             self._prune_nolock(data, now)
             code_hash = _hash_secret(raw_code)
             code_info = data["codes"].pop(code_hash, None)
-            if code_info and code_info.get("req_id"):
-                data["requests"].pop(code_info["req_id"], None)
             self._save_nolock(data)
 
             safe_code_hash = str(code_hash[:12]).replace("\r", "").replace("\n", "")
@@ -653,7 +627,7 @@ def _build_auth_server_metadata(request: Request) -> dict[str, Any]:
             "client_secret_basic",
         ],
         "code_challenge_methods_supported": ["S256"],
-        "client_id_metadata_document_supported": True,
+        "ui_locales_supported": ["en-US", "en"],
         "logo_uri": f"{base_url}/oauth/icon.png",
     }
 
@@ -773,9 +747,23 @@ async def register_oauth_client(request: Request):
 
     client_name = str(body.get("client_name") or "Google Gemini MCP")[:120]
     auth_method = str(body.get("token_endpoint_auth_method") or "none")[:64]
+    raw_grants = body.get("grant_types")
+    grant_types = (
+        [str(g)[:64] for g in raw_grants if isinstance(g, str)][:10]
+        if isinstance(raw_grants, list) and raw_grants
+        else None
+    )
+    raw_responses = body.get("response_types")
+    response_types = (
+        [str(r)[:64] for r in raw_responses if isinstance(r, str)][:10]
+        if isinstance(raw_responses, list) and raw_responses
+        else None
+    )
     record = oauth_manager.register_client(
         client_name=client_name,
         redirect_uris=valid_uris,
+        grant_types=grant_types,
+        response_types=response_types,
         token_endpoint_auth_method=auth_method,
     )
     client_ip = getattr(getattr(request, "client", None), "host", "unknown")
@@ -798,6 +786,13 @@ async def register_oauth_client(request: Request):
     )
 
 
+def _read_oauth_authorize_html() -> str:
+    static_dir = os.path.join(os.path.dirname(__file__), "..", "..", "static")
+    html_path = os.path.join(static_dir, "oauth_authorize.html")
+    with open(html_path, "r", encoding="utf-8") as f:
+        return f.read()
+
+
 @router.get("/oauth/authorize", include_in_schema=False)
 async def oauth_authorize_page(request: Request):
     client_ip = getattr(getattr(request, "client", None), "host", "unknown")
@@ -810,12 +805,12 @@ async def oauth_authorize_page(request: Request):
         safe_cid,
         safe_redir,
     )
-    static_dir = os.path.join(os.path.dirname(__file__), "..", "..", "static")
-    return FileResponse(
-        os.path.join(static_dir, "oauth_authorize.html"),
+    return HTMLResponse(
+        content=_read_oauth_authorize_html(),
         headers={
             "X-Frame-Options": "DENY",
-            "Cache-Control": "no-store",
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
         },
     )
 

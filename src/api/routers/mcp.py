@@ -937,7 +937,7 @@ def _build_initialize_response(req: JsonRpcRequest, request: Request) -> dict[st
     requested_version = "2024-11-05"
     if isinstance(req.params, dict):
         client_ver = req.params.get("protocolVersion")
-        if client_ver in ("2025-06-18", "2025-03-26", "2024-11-05"):
+        if isinstance(client_ver, str) and client_ver.startswith("202"):
             requested_version = client_ver
     client_ip = getattr(getattr(request, "client", None), "host", "unknown")
     client_info = req.params.get("clientInfo", {}) if isinstance(req.params, dict) else {}
@@ -975,8 +975,18 @@ def _build_initialize_response(req: JsonRpcRequest, request: Request) -> dict[st
 async def mcp_endpoint(
     req: JsonRpcRequest,
     request: Request,
+    response: Response,
     user: Annotated[str, Depends(require_mcp_oauth)],
 ):
+    import secrets
+
+    session_id = (
+        request.headers.get("mcp-session-id")
+        if hasattr(request, "headers") and request.headers.get("mcp-session-id")
+        else f"mcp_sess_{secrets.token_hex(12)}"
+    )
+    if response is not None and hasattr(response, "headers"):
+        response.headers["Mcp-Session-Id"] = session_id
     safe_ip = str(getattr(getattr(request, "client", None), "host", "unknown")).replace("\r", "").replace("\n", "")[:64]
     safe_ua = str(request.headers.get("user-agent", "-") if hasattr(request, "headers") else "-").replace("\r", "").replace("\n", "")[:128]
     safe_path = str(getattr(getattr(request, "url", None), "path", "/")).replace("\r", "").replace("\n", "")[:128]
@@ -1011,7 +1021,7 @@ async def mcp_endpoint(
             return _build_initialize_response(req, request)
 
         if req.method.startswith("notifications/"):
-            return Response(status_code=202)
+            return Response(status_code=202, headers={"Mcp-Session-Id": session_id})
 
         if req.method == "ping":
             return {"jsonrpc": "2.0", "id": req.id, "result": {}}
