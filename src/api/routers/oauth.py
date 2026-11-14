@@ -19,7 +19,6 @@ from api.auth import (
     get_base_url,
     require_web_login,
 )
-from api.routers.mcp import DASH_PNG_DATA_URI
 
 logger = logging.getLogger("api.oauth")
 
@@ -619,7 +618,6 @@ def _build_protected_resource_metadata(
         "scopes_supported": ["mcp:access", "openid", "profile"],
         "resource_documentation": f"{base_url}/oauth/llms.txt",
         "resource_name": "Dash CI CD Monitor MCP",
-        "logo_uri": DASH_PNG_DATA_URI,
     }
 
 
@@ -652,7 +650,6 @@ def _build_auth_server_metadata(request: Request) -> dict[str, Any]:
         ],
         "code_challenge_methods_supported": ["S256"],
         "ui_locales_supported": ["en-US", "en"],
-        "logo_uri": DASH_PNG_DATA_URI,
     }
 
 
