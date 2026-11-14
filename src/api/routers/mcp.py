@@ -422,29 +422,21 @@ DASH_PNG_DATA_URI = _load_base64_png()
 
 
 def _build_brand_icons(base_url: str = "") -> list[dict[str, Any]]:
-    icons: list[dict[str, Any]] = [
+    # Base64 data URIs for light and dark themes without external HTTP URLs,
+    # matching the GitHub MCP Server pattern to prevent CSP blocking in Gemini App.
+    # Sizes omitted for backward compatibility with clients expecting string vs array.
+    return [
         {
             "src": DASH_PNG_DATA_URI,
             "mimeType": "image/png",
-            "sizes": ["48x48"],
-        }
+            "theme": "light",
+        },
+        {
+            "src": DASH_PNG_DATA_URI,
+            "mimeType": "image/png",
+            "theme": "dark",
+        },
     ]
-    if base_url:
-        icons.extend(
-            [
-                {
-                    "src": f"{base_url}/icon.png",
-                    "mimeType": "image/png",
-                    "sizes": ["192x192"],
-                },
-                {
-                    "src": f"{base_url}/icon.svg",
-                    "mimeType": "image/svg+xml",
-                    "sizes": ["any"],
-                },
-            ]
-        )
-    return icons
 
 
 def _get_tools_list_response(req_id: Any, base_url: str = "") -> dict:
@@ -923,13 +915,11 @@ def _build_server_info(request: Request) -> dict[str, Any]:
     from api.auth import get_base_url
 
     base_url = get_base_url(request)
-    icon_url = f"{base_url}/icon.png"
     return {
-        "name": "dashboard-mcp",
-        "title": "Dash CI/CD Monitor MCP",
+        "name": "dash",
+        "title": "Dash CI CD Monitor MCP",
         "version": "1.0.0",
         "icon": DASH_PNG_DATA_URI,
-        "iconUrl": icon_url,
         "icons": _build_brand_icons(base_url),
     }
 

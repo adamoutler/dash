@@ -61,7 +61,8 @@ def test_well_known_discovery_endpoints():
     assert pr_root.status_code == 200
     assert "authorization_servers" in pr_root.json()
     assert pr_root.json()["resource"].endswith("/mcp")
-    assert pr_root.json()["logo_uri"].endswith("/oauth/icon.png")
+    assert pr_root.json()["resource_name"] == "Dash CI CD Monitor MCP"
+    assert "logo_uri" not in pr_root.json()
     assert pr_root.json()["resource_documentation"].endswith("/oauth/llms.txt")
 
     assert client.get("/oauth/llms.txt").status_code == 200

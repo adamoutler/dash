@@ -617,7 +617,7 @@ def _build_protected_resource_metadata(
         "bearer_methods_supported": ["header"],
         "scopes_supported": ["mcp:access", "openid", "profile"],
         "resource_documentation": f"{base_url}/oauth/llms.txt",
-        "logo_uri": f"{base_url}/oauth/icon.png",
+        "resource_name": "Dash CI CD Monitor MCP",
     }
 
 
@@ -650,7 +650,6 @@ def _build_auth_server_metadata(request: Request) -> dict[str, Any]:
         ],
         "code_challenge_methods_supported": ["S256"],
         "ui_locales_supported": ["en-US", "en"],
-        "logo_uri": f"{base_url}/oauth/icon.png",
     }
 
 

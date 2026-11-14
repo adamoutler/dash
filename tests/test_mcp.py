@@ -387,10 +387,11 @@ def test_mcp_icons_metadata_and_static_routes(setup_env):
     assert init_res.status_code == 200
     server_info = init_res.json()["result"]["serverInfo"]
     assert server_info["icon"].startswith("data:image/png;base64,")
-    assert len(server_info["icons"]) >= 3
+    assert len(server_info["icons"]) == 2
     assert server_info["icons"][0]["src"].startswith("data:image/png;base64,")
     assert server_info["icons"][0]["mimeType"] == "image/png"
-    assert "/icon.png" in server_info["icons"][1]["src"]
+    assert server_info["icons"][0]["theme"] in ("light", "dark")
+    assert server_info["icons"][1]["theme"] in ("light", "dark")
 
     # 2. tools/list includes brand icons on each tool definition
     tools_res = client.post(
