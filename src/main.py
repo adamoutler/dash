@@ -169,10 +169,10 @@ def _is_mcp_probe_request(request: Request) -> bool:
     auth_header = request.headers.get("authorization", "").lower()
     if auth_header.startswith("bearer "):
         return True
+    accept = request.headers.get("accept", "").lower()
     user_agent = request.headers.get("user-agent", "").lower()
     if "googleother" in user_agent or "mcp" in user_agent:
-        return True
-    accept = request.headers.get("accept", "").lower()
+        return "text/html" not in accept
     return "text/html" not in accept and (
         "text/event-stream" in accept or "application/json" in accept
     )
@@ -213,11 +213,18 @@ async def read_manifest():
     return FileResponse(os.path.join(STATIC_DIR, "manifest.json"))
 
 
+@app.get("/robots.txt", include_in_schema=False)
+async def read_robots():
+    robots_path = os.path.join(STATIC_DIR, "robots.txt")
+    return FileResponse(robots_path, media_type="text/plain")
+
+
 STATIC_HEADER_PNG = {
     "Cache-Control": "public, max-age=604800, must-revalidate",
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
     "X-Content-Type-Options": "nosniff",
+    "Cross-Origin-Resource-Policy": "cross-origin",
 }
 
 
@@ -234,6 +241,7 @@ async def read_favicon():
             "Access-Control-Allow-Origin": "*",
             "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
             "X-Content-Type-Options": "nosniff",
+            "Cross-Origin-Resource-Policy": "cross-origin",
         },
     )
 
@@ -242,6 +250,9 @@ async def read_favicon():
 @app.api_route("/favicon.png", methods=["GET", "HEAD"], include_in_schema=False)
 @app.api_route("/mcp/icon.png", methods=["GET", "HEAD"], include_in_schema=False)
 @app.api_route("/oauth/icon.png", methods=["GET", "HEAD"], include_in_schema=False)
+@app.api_route("/icon-32.png", methods=["GET", "HEAD"], include_in_schema=False)
+@app.api_route("/mcp/icon-32.png", methods=["GET", "HEAD"], include_in_schema=False)
+@app.api_route("/oauth/icon-32.png", methods=["GET", "HEAD"], include_in_schema=False)
 @app.api_route("/icon-192.png", methods=["GET", "HEAD"], include_in_schema=False)
 @app.api_route("/icon-512.png", methods=["GET", "HEAD"], include_in_schema=False)
 @app.api_route("/icon-48.png", methods=["GET", "HEAD"], include_in_schema=False)
@@ -256,14 +267,29 @@ async def read_favicon():
 )
 async def read_icon_png(request: Request):
     path = request.url.path.rstrip("/")
-    if path.endswith("favicon.png"):
-        target_path = os.path.join(STATIC_DIR, "favicon.png")
-    elif path.endswith("icon-48.png"):
+    size_param = (
+        str(request.query_params.get("size") or request.query_params.get("sz") or "")
+        .strip()
+        .lower()
+    )
+
+    if path.endswith(("icon-32.png", "favicon.png")) or size_param in ("32", "32x32"):
+        target_path = os.path.join(IMG_DIR, "icon-32.png")
+        if not os.path.exists(target_path):
+            target_path = os.path.join(STATIC_DIR, "favicon.png")
+    elif path.endswith("icon-48.png") or size_param in ("48", "48x48"):
         target_path = os.path.join(IMG_DIR, "icon-48.png")
-    elif path.endswith("icon-64.png"):
+    elif path.endswith("icon-64.png") or size_param in ("64", "64x64"):
         target_path = os.path.join(IMG_DIR, "icon-64.png")
-    elif path.endswith("icon-512.png"):
+    elif path.endswith("icon-512.png") or size_param in ("512", "512x512"):
         target_path = os.path.join(IMG_DIR, "icon-512.png")
+    elif path.endswith("icon-192.png") or size_param in ("192", "192x192"):
+        target_path = os.path.join(IMG_DIR, "icon-192.png")
+    elif path.endswith(("oauth/icon.png", "mcp/icon.png")):
+        # Default to 32x32 for OAuth/MCP client icon requests unless explicitly overridden
+        target_path = os.path.join(IMG_DIR, "icon-32.png")
+        if not os.path.exists(target_path):
+            target_path = os.path.join(IMG_DIR, "icon-192.png")
     else:
         target_path = os.path.join(IMG_DIR, "icon-192.png")
         if not os.path.exists(target_path):
@@ -290,6 +316,7 @@ async def read_icon_svg():
             "Access-Control-Allow-Origin": "*",
             "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
             "X-Content-Type-Options": "nosniff",
+            "Cross-Origin-Resource-Policy": "cross-origin",
         },
     )
 

@@ -406,14 +406,17 @@ def test_mcp_icons_metadata_and_static_routes(setup_env):
         assert tool["icons"][0]["src"].startswith("data:image/png;base64,")
         assert tool["icons"][0]["mimeType"] == "image/png"
 
-    # 3. Static icon routes return HTTP 200, correct media types, and CORS headers
+    # 3. Static icon routes return HTTP 200, correct media types, and CORS/CORP headers
     for path in [
         "/icon.png",
         "/mcp/icon.png",
         "/oauth/icon.png",
-        "/icon-192.png",
+        "/icon-32.png",
+        "/mcp/icon-32.png",
+        "/oauth/icon-32.png",
         "/icon-48.png",
         "/icon-64.png",
+        "/icon-192.png",
         "/apple-touch-icon.png",
         "/apple-touch-icon-precomposed.png",
     ]:
@@ -421,6 +424,24 @@ def test_mcp_icons_metadata_and_static_routes(setup_env):
         assert res.status_code == 200
         assert "image/png" in res.headers["content-type"]
         assert res.headers["access-control-allow-origin"] == "*"
+        assert res.headers["cross-origin-resource-policy"] == "cross-origin"
+
+    # Test 32x32 sizing via query parameter and dedicated routes
+    import struct
+
+    for path in [
+        "/icon-32.png",
+        "/oauth/icon-32.png",
+        "/mcp/icon-32.png",
+        "/oauth/icon.png?size=32",
+        "/icon.png?size=32",
+    ]:
+        img_res = client.get(path)
+        assert img_res.status_code == 200
+        content = img_res.content
+        assert content.startswith(b"\x89PNG\r\n\x1a\n")
+        width, height = struct.unpack(">II", content[16:24])
+        assert (width, height) == (32, 32)
 
     fav_res = client.get("/favicon.ico")
     assert fav_res.status_code == 200
@@ -429,8 +450,27 @@ def test_mcp_icons_metadata_and_static_routes(setup_env):
         or "image/vnd.microsoft.icon" in fav_res.headers["content-type"]
     )
     assert fav_res.headers["access-control-allow-origin"] == "*"
+    assert fav_res.headers["cross-origin-resource-policy"] == "cross-origin"
 
     svg_res = client.get("/icon.svg")
     assert svg_res.status_code == 200
     assert "image/svg+xml" in svg_res.headers["content-type"]
     assert svg_res.headers["access-control-allow-origin"] == "*"
+    assert svg_res.headers["cross-origin-resource-policy"] == "cross-origin"
+
+    # 4. Robots.txt and crawler indexing routes
+    robots_res = client.get("/robots.txt")
+    assert robots_res.status_code == 200
+    assert "text/plain" in robots_res.headers["content-type"]
+    assert "User-agent: *" in robots_res.text
+
+    # Google crawler with text/html gets index.html (200), not 401 MCP probe
+    html_crawl = client.get(
+        "/",
+        headers={
+            "User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        },
+    )
+    assert html_crawl.status_code == 200
+    assert 'sizes="32x32"' in html_crawl.text

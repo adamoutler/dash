@@ -2,10 +2,11 @@
 
 ## Overview
 Contains graphical assets and icons used by the frontend UI, manifest, and MCP/OAuth endpoints:
-- `icon-192.png`: 192x192 high-resolution brand logo.
-- `icon-512.png`: 512x512 high-resolution brand logo.
+- `icon-32.png`: 32x32 compact brand logo and favicon.
 - `icon-48.png`: 48x48 compact brand logo for inlining into MCP `serverInfo.icons` and `tools/list` definitions.
 - `icon-64.png`: 64x64 compact brand logo.
+- `icon-192.png`: 192x192 high-resolution brand logo.
+- `icon-512.png`: 512x512 high-resolution brand logo.
 - `maskable-icon.png`: Maskable icon for PWA web manifest.
 - `jenkins.svg`: Official Jenkins SVG icon used in UI.
 

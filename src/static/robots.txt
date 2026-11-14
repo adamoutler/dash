@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Allow: /favicon.ico
+Allow: /icon*.png
+Allow: /oauth/icon*.png
+Allow: /static/
