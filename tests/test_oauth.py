@@ -62,7 +62,7 @@ def test_well_known_discovery_endpoints():
     assert "authorization_servers" in pr_root.json()
     assert pr_root.json()["resource"].endswith("/mcp")
     assert pr_root.json()["resource_name"] == "Dash CI CD Monitor MCP"
-    assert "logo_uri" not in pr_root.json()
+    assert pr_root.json()["logo_uri"].startswith("data:image/png;base64,")
     assert pr_root.json()["resource_documentation"].endswith("/oauth/llms.txt")
 
     assert client.get("/oauth/llms.txt").status_code == 200
@@ -84,6 +84,7 @@ def test_well_known_discovery_endpoints():
     assert "S256" in as_data["code_challenge_methods_supported"]
     assert "client_id_metadata_document_supported" not in as_data
     assert "ui_locales_supported" in as_data
+    assert as_data["logo_uri"].startswith("data:image/png;base64,")
     assert as_data["authorization_endpoint"].endswith("/oauth/authorize")
     assert as_data["token_endpoint"].endswith("/oauth/token")
     assert as_data["registration_endpoint"].endswith("/oauth/register")

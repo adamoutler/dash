@@ -396,6 +396,7 @@ def _load_base64_png() -> str:
         os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "static"
     )
     for name in (
+        "img/icon-32.png",
         "img/icon-48.png",
         "img/icon-64.png",
         "img/icon-192.png",
