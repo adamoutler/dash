@@ -38,6 +38,7 @@ FILE_LOCK_TIMEOUT = 5
 MAX_STATE_LENGTH = 4096
 MAX_SCOPE_LENGTH = 1024
 MAX_CLIENT_ID_LENGTH = 256
+GCS_LOGO_URI = "https://storage.googleapis.com/dash-hackedyour-info-assets/icon-32.png"
 MAX_REDIRECT_URI_LENGTH = 2048
 
 
@@ -618,6 +619,7 @@ def _build_protected_resource_metadata(
         "scopes_supported": ["mcp:access", "openid", "profile"],
         "resource_documentation": f"{base_url}/oauth/llms.txt",
         "resource_name": "Dash CI CD Monitor MCP",
+        "logo_uri": GCS_LOGO_URI,
     }
 
 
@@ -650,6 +652,7 @@ def _build_auth_server_metadata(request: Request) -> dict[str, Any]:
         ],
         "code_challenge_methods_supported": ["S256"],
         "ui_locales_supported": ["en-US", "en"],
+        "logo_uri": GCS_LOGO_URI,
     }
 
 
